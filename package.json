@@ -53,5 +53,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/joshpuckett/dialkit"
+  },
+  "dependencies": {
+    "dialkit": "^0.1.1"
   }
 }

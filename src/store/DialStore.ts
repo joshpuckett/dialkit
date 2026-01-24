@@ -50,6 +50,9 @@ export type PanelConfig = {
 type Listener = () => void;
 type ActionListener = (action: string) => void;
 
+// Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
+const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
+
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
   private listeners: Map<string, Set<Listener>> = new Map();
@@ -107,7 +110,8 @@ class DialStoreClass {
 
   getValues(panelId: string): Record<string, DialValue> {
     // Return the snapshot for useSyncExternalStore compatibility
-    return this.snapshots.get(panelId) ?? {};
+    // Use stable EMPTY_VALUES to avoid infinite loop in React 19
+    return this.snapshots.get(panelId) ?? EMPTY_VALUES;
   }
 
   getPanels(): PanelConfig[] {
