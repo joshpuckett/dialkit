@@ -410,7 +410,6 @@ export function Slider({
             style={{ cursor: isValueEditable ? 'text' : 'default' }}
           >
             {displayValue}
-            {unit}
           </span>
         )}
       </motion.div>

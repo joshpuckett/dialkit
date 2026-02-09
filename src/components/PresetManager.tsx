@@ -38,25 +38,26 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
     <div ref={containerRef} className="dialkit-preset-manager">
       <button
         className="dialkit-preset-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => presets.length > 0 && setIsOpen(!isOpen)}
         data-open={String(isOpen)}
         data-has-preset={String(!!activePreset)}
+        data-disabled={String(presets.length === 0)}
       >
         <span className="dialkit-preset-label">
-          {activePreset ? activePreset.name : 'Default'}
+          {activePreset ? activePreset.name : 'Version 1'}
         </span>
         <motion.svg
-          className="dialkit-preset-chevron"
+          className="dialkit-select-chevron"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ type: 'spring', visualDuration: 0.2, bounce: 0.15 }}
         >
-          <polyline points="6 9 12 15 18 9" />
+          <path d="M6 9.5L12 15.5L18 9.5" />
         </motion.svg>
       </button>
 
@@ -64,9 +65,9 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
         {isOpen && (
           <motion.div
             className="dialkit-preset-dropdown"
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ type: 'spring', visualDuration: 0.15, bounce: 0 }}
           >
             {/* Default option */}
@@ -78,7 +79,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
                 setIsOpen(false);
               }}
             >
-              <span className="dialkit-preset-name">Default</span>
+              <span className="dialkit-preset-name">Version 1</span>
             </div>
 
             {presets.map((preset) => (

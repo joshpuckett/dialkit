@@ -51,13 +51,13 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ type: 'spring', visualDuration: 0.2, bounce: 0.15 }}
           >
-            <polyline points="6 9 12 15 18 9" />
+            <path d="M6 9.5L12 15.5L18 9.5" />
           </motion.svg>
         </div>
       </button>
