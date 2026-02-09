@@ -127,9 +127,12 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
                     onClick={(e) => handleDelete(e, preset.id)}
                     title="Delete preset"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 6.5L5.80734 18.2064C5.91582 19.7794 7.22348 21 8.80023 21H15.1998C16.7765 21 18.0842 19.7794 18.1927 18.2064L19 6.5" />
+                      <path d="M10 11V16" />
+                      <path d="M14 11V16" />
+                      <path d="M3.5 6H20.5" />
+                      <path d="M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621" />
                     </svg>
                   </button>
                 </div>
