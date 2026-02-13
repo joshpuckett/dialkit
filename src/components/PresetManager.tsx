@@ -99,7 +99,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
           {isOpen && (
             <motion.div
               ref={dropdownRef}
-              className="dialkit-preset-dropdown"
+              className="dialkit-root dialkit-preset-dropdown"
               style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
