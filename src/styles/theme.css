@@ -6,9 +6,12 @@
   --dial-surface-active: rgba(255, 255, 255, 0.11);
 
   /* Text hierarchy - 3 levels */
-  --dial-text-root: #FFFFFF;   /* Root title */
-  --dial-text-section: rgba(255, 255, 255, 0.7); /* Section titles + carets */
-  --dial-text-label: rgba(255, 255, 255, 0.7);   /* Input labels */
+  --dial-text-root: #FFFFFF;
+  /* Root title */
+  --dial-text-section: rgba(255, 255, 255, 0.7);
+  /* Section titles + carets */
+  --dial-text-label: rgba(255, 255, 255, 0.7);
+  /* Input labels */
 
   /* Legacy aliases */
   --dial-text-primary: rgba(255, 255, 255, 0.95);
@@ -225,24 +228,24 @@
 }
 
 /* Adjacent non-root folders collapse gap and share a single divider */
-.dialkit-folder:not(.dialkit-folder-root) + .dialkit-folder:not(.dialkit-folder-root) {
+.dialkit-folder:not(.dialkit-folder-root)+.dialkit-folder:not(.dialkit-folder-root) {
   margin-top: -10px;
   border-top: none;
 }
 
 /* Non-root folder header - match row height */
-.dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header {
+.dialkit-folder:not(.dialkit-folder-root)>.dialkit-folder-header {
   height: var(--dial-row-height);
   padding: 0;
 }
 
-.dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header > .dialkit-folder-header-top {
+.dialkit-folder:not(.dialkit-folder-root)>.dialkit-folder-header>.dialkit-folder-header-top {
   padding: 0;
   height: 100%;
 }
 
 /* Root folder inner needs no extra bottom padding */
-.dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner {
+.dialkit-folder-root>.dialkit-folder-content>.dialkit-folder-inner {
   padding-bottom: 0;
 }
 
@@ -671,6 +674,36 @@
 
 .dialkit-text-input::placeholder {
   color: var(--dial-text-tertiary);
+}
+
+/* Monitor Control (read-only value display) */
+.dialkit-monitor-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--dial-row-height);
+  padding: 0 12px;
+  border-radius: var(--dial-radius);
+}
+
+.dialkit-monitor-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  flex-shrink: 0;
+}
+
+.dialkit-monitor-value {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  color: var(--dial-text-label);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* Select Control - Full-width row */

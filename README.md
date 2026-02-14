@@ -30,7 +30,7 @@ export default function Layout({ children }) {
 import { useDialKit } from 'dialkit';
 
 function Card() {
-  const p = useDialKit('Card', {
+  const { params } = useDialKit('Card', {
     blur: [24, 0, 100],
     scale: 1.2,
     color: '#ff5500',
@@ -39,10 +39,10 @@ function Card() {
 
   return (
     <div style={{
-      filter: `blur(${p.blur}px)`,
-      transform: `scale(${p.scale})`,
-      color: p.color,
-      opacity: p.visible ? 1 : 0,
+      filter: `blur(${params.blur}px)`,
+      transform: `scale(${params.scale})`,
+      color: params.color,
+      opacity: params.visible ? 1 : 0,
     }}>
       ...
     </div>
@@ -55,7 +55,7 @@ function Card() {
 ## useDialKit
 
 ```tsx
-const params = useDialKit(name, config, options?)
+const { params, setParams } = useDialKit(name, config, options?)
 ```
 
 | Param | Type | Description |
@@ -64,7 +64,10 @@ const params = useDialKit(name, config, options?)
 | `config` | `DialConfig` | Parameter definitions (see Control Types below) |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
 
-Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
+Returns `{ params, setParams }`:
+
+- **`params`** — A fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values. The reference is stable (shallow-compared) to prevent unnecessary re-renders.
+- **`setParams(path, value)`** — Update a value programmatically. The path is type-safe — only valid config keys are accepted.
 
 ---
 
@@ -169,12 +172,12 @@ Creates a visual spring editor with a live animation curve preview. The editor s
 The returned config object is passed directly to Motion's `transition` prop:
 
 ```tsx
-const p = useDialKit('Card', {
+const { params } = useDialKit('Card', {
   spring: { type: 'spring', visualDuration: 0.5, bounce: 0.04 },
   x: [0, -200, 200],
 });
 
-<motion.div animate={{ x: p.x }} transition={p.spring} />
+<motion.div animate={{ x: params.x }} transition={params.spring} />
 ```
 
 **Returns:** `SpringConfig` (pass directly to Motion)
@@ -182,7 +185,7 @@ const p = useDialKit('Card', {
 ### Action
 
 ```tsx
-const p = useDialKit('Controls', {
+const { params } = useDialKit('Controls', {
   shuffle: { type: 'action' },
   reset: { type: 'action', label: 'Reset All' },
 }, {
@@ -194,6 +197,23 @@ const p = useDialKit('Controls', {
 ```
 
 Action buttons trigger callbacks without storing any value. The `label` defaults to the formatted key name (camelCase becomes Title Case). Multiple adjacent actions are grouped vertically.
+
+### Monitor
+
+```tsx
+const { params, setParams } = useDialKit('Debug', {
+  fps: { type: 'monitor' },
+  renderCount: { type: 'monitor', defaultValue: 0 },
+});
+
+// Update from anywhere
+setParams('fps', 60);
+setParams('renderCount', count);
+```
+
+Monitors display read-only values in the panel. They're useful for exposing runtime data (FPS, counts, status) without a control. Use `setParams()` to push values programmatically. The `defaultValue` is shown before any `setParams()` call.
+
+**Returns:** `string | number | boolean | undefined`
 
 ### Folder
 
@@ -244,7 +264,7 @@ import { useDialKit } from 'dialkit';
 import { motion } from 'motion/react';
 
 function PhotoStack() {
-  const p = useDialKit('Photo Stack', {
+  const { params, setParams } = useDialKit('Photo Stack', {
     // Text inputs
     title: 'Japan',
     subtitle: { type: 'text', default: 'December 2025', placeholder: 'Enter subtitle...' },
@@ -270,6 +290,9 @@ function PhotoStack() {
     // Toggle
     darkMode: false,
 
+    // Read-only monitor
+    fps: { type: 'monitor' },
+
     // Action buttons
     next: { type: 'action' },
     previous: { type: 'action' },
@@ -280,14 +303,17 @@ function PhotoStack() {
     },
   });
 
+  // Programmatically update monitor values
+  setParams('fps', 60);
+
   return (
     <motion.div
-      animate={{ x: p.backPhoto.offsetX }}
-      transition={p.transitionSpring}
-      style={{ color: p.accentColor }}
+      animate={{ x: params.backPhoto.offsetX }}
+      transition={params.transitionSpring}
+      style={{ color: params.accentColor }}
     >
-      <h1>{p.title}</h1>
-      <p>{p.subtitle}</p>
+      <h1>{params.title}</h1>
+      <p>{params.subtitle}</p>
     </motion.div>
   );
 }
@@ -306,16 +332,18 @@ import type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  MonitorConfig,
   DialConfig,
   DialValue,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
   Preset,
+  UseDialResult,
 } from 'dialkit';
 ```
 
-Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc.
+Return values are fully typed: `params.blur` infers as `number`, `params.color` as `string`, `params.spring` as `SpringConfig`, `params.shadow` as a nested object, etc. The `setParams` function is also type-safe — it only accepts valid config paths.
 
 ---
 

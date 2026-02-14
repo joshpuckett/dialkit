@@ -31,7 +31,12 @@ export type TextConfig = {
   placeholder?: string;
 };
 
-export type DialValue = number | boolean | string | SpringConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig;
+export type MonitorConfig = {
+  type: 'monitor';
+  defaultValue?: string | number | boolean;
+};
+
+export type DialValue = number | boolean | string | SpringConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig | MonitorConfig;
 
 export type DialConfig = {
   [key: string]: DialValue | [number, number, number] | DialConfig;
@@ -39,22 +44,24 @@ export type DialConfig = {
 
 export type ResolvedValues<T extends DialConfig> = {
   [K in keyof T]: T[K] extends [number, number, number]
-    ? number
-    : T[K] extends SpringConfig
-      ? SpringConfig
-      : T[K] extends SelectConfig
-        ? string
-        : T[K] extends ColorConfig
-          ? string
-          : T[K] extends TextConfig
-            ? string
-            : T[K] extends DialConfig
-              ? ResolvedValues<T[K]>
-              : T[K];
+  ? number
+  : T[K] extends SpringConfig
+  ? SpringConfig
+  : T[K] extends SelectConfig
+  ? string
+  : T[K] extends ColorConfig
+  ? string
+  : T[K] extends TextConfig
+  ? string
+  : T[K] extends MonitorConfig
+  ? string | number | boolean | undefined
+  : T[K] extends DialConfig
+  ? ResolvedValues<T[K]>
+  : T[K];
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'toggle' | 'spring' | 'folder' | 'action' | 'select' | 'color' | 'text';
+  type: 'slider' | 'toggle' | 'spring' | 'folder' | 'action' | 'select' | 'color' | 'text' | 'monitor';
   path: string;
   label: string;
   min?: number;
@@ -93,6 +100,12 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  // Per-path subscriptions for granular re-renders
+  private pathListeners: Map<string, Set<Listener>> = new Map();
+  private pathSnapshots: Map<string, DialValue | undefined> = new Map();
+  // Preset subscriptions — separate from value updates
+  private presetListeners: Map<string, Set<Listener>> = new Map();
+  private presetSnapshots: Map<string, { presets: Preset[]; activeId: string | null }> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig): void {
     const controls = this.parseConfig(config, '');
@@ -108,6 +121,15 @@ class DialStoreClass {
     this.panels.delete(id);
     this.listeners.delete(id);
     this.snapshots.delete(id);
+    // Clean up per-path subscriptions
+    for (const key of this.pathListeners.keys()) {
+      if (key.startsWith(`${id}:`)) {
+        this.pathListeners.delete(key);
+        this.pathSnapshots.delete(key);
+      }
+    }
+    this.presetListeners.delete(id);
+    this.presetSnapshots.delete(id);
     this.notifyGlobal();
   }
 
@@ -130,6 +152,10 @@ class DialStoreClass {
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
+    // Update per-path snapshot and notify path listeners
+    const pathKey = `${panelId}:${path}`;
+    this.pathSnapshots.set(pathKey, value);
+    this.notifyPath(pathKey);
     this.notify(panelId);
   }
 
@@ -185,6 +211,27 @@ class DialStoreClass {
     return () => this.globalListeners.delete(listener);
   }
 
+  subscribePath(panelId: string, path: string, listener: Listener): () => void {
+    const key = `${panelId}:${path}`;
+    if (!this.pathListeners.has(key)) {
+      this.pathListeners.set(key, new Set());
+    }
+    this.pathListeners.get(key)!.add(listener);
+    return () => {
+      this.pathListeners.get(key)?.delete(listener);
+    };
+  }
+
+  getValueSnapshot(panelId: string, path: string): DialValue | undefined {
+    const key = `${panelId}:${path}`;
+    if (this.pathSnapshots.has(key)) {
+      return this.pathSnapshots.get(key);
+    }
+    // Initialize from panel values
+    const panel = this.panels.get(panelId);
+    return panel?.values[path];
+  }
+
   subscribeActions(panelId: string, listener: ActionListener): () => void {
     if (!this.actionListeners.has(panelId)) {
       this.actionListeners.set(panelId, new Set());
@@ -217,7 +264,12 @@ class DialStoreClass {
 
     // Force re-render by creating new snapshot reference
     this.snapshots.set(panelId, { ...panel.values });
+    this.presetSnapshots.set(panelId, {
+      presets: [...(this.presets.get(panelId) ?? [])],
+      activeId: id,
+    });
     this.notify(panelId);
+    this.notifyPresets(panelId);
 
     return id;
   }
@@ -234,7 +286,13 @@ class DialStoreClass {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.presetSnapshots.set(panelId, {
+      presets: [...(this.presets.get(panelId) ?? [])],
+      activeId: presetId,
+    });
+    this.notifyAllPaths(panelId);
     this.notify(panelId);
+    this.notifyPresets(panelId);
   }
 
   deletePreset(panelId: string, presetId: string): void {
@@ -251,7 +309,12 @@ class DialStoreClass {
     if (panel) {
       this.snapshots.set(panelId, { ...panel.values });
     }
+    this.presetSnapshots.set(panelId, {
+      presets: [...(this.presets.get(panelId) ?? [])],
+      activeId: this.activePreset.get(panelId) ?? null,
+    });
     this.notify(panelId);
+    this.notifyPresets(panelId);
   }
 
   getPresets(panelId: string): Preset[] {
@@ -270,15 +333,64 @@ class DialStoreClass {
       this.snapshots.set(panelId, { ...panel.values });
     }
     this.activePreset.set(panelId, null);
+    this.presetSnapshots.set(panelId, {
+      presets: [...(this.presets.get(panelId) ?? [])],
+      activeId: null,
+    });
+    this.notifyAllPaths(panelId);
     this.notify(panelId);
+    this.notifyPresets(panelId);
+  }
+
+  subscribePresets(panelId: string, listener: Listener): () => void {
+    if (!this.presetListeners.has(panelId)) {
+      this.presetListeners.set(panelId, new Set());
+    }
+    this.presetListeners.get(panelId)!.add(listener);
+    return () => {
+      this.presetListeners.get(panelId)?.delete(listener);
+    };
+  }
+
+  getPresetSnapshot(panelId: string): { presets: Preset[]; activeId: string | null } {
+    if (!this.presetSnapshots.has(panelId)) {
+      // Initialize and cache — must return stable reference for useSyncExternalStore
+      this.presetSnapshots.set(panelId, {
+        presets: this.presets.get(panelId) ?? [],
+        activeId: this.activePreset.get(panelId) ?? null,
+      });
+    }
+    return this.presetSnapshots.get(panelId)!;
   }
 
   private notify(panelId: string): void {
     this.listeners.get(panelId)?.forEach(fn => fn());
   }
 
+  private notifyPath(pathKey: string): void {
+    this.pathListeners.get(pathKey)?.forEach(fn => fn());
+  }
+
   private notifyGlobal(): void {
     this.globalListeners.forEach(fn => fn());
+  }
+
+  private notifyPresets(panelId: string): void {
+    this.presetListeners.get(panelId)?.forEach(fn => fn());
+  }
+
+  // Notify all per-path listeners for a panel (used when all values change at once, e.g. preset load)
+  private notifyAllPaths(panelId: string): void {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    const prefix = `${panelId}:`;
+    for (const key of this.pathListeners.keys()) {
+      if (key.startsWith(prefix)) {
+        const path = key.slice(prefix.length);
+        this.pathSnapshots.set(key, panel.values[path]);
+        this.pathListeners.get(key)?.forEach(fn => fn());
+      }
+    }
   }
 
   private parseConfig(config: DialConfig, prefix: string): ControlMeta[] {
@@ -314,6 +426,8 @@ class DialStoreClass {
         controls.push({ type: 'color', path, label });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
+      } else if (this.isMonitorConfig(value)) {
+        controls.push({ type: 'monitor', path, label });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text
         if (this.isHexColor(value)) {
@@ -359,6 +473,11 @@ class DialStoreClass {
         values[path] = value.default ?? '#000000';
       } else if (this.isTextConfig(value)) {
         values[path] = value.default ?? '';
+      } else if (this.isMonitorConfig(value)) {
+        // Monitor fields use default if provided
+        if (value.defaultValue !== undefined) {
+          values[path] = value.defaultValue;
+        }
       } else if (typeof value === 'object' && value !== null) {
         Object.assign(values, this.flattenValues(value as DialConfig, path));
       }
@@ -411,6 +530,15 @@ class DialStoreClass {
       value !== null &&
       'type' in value &&
       (value as TextConfig).type === 'text'
+    );
+  }
+
+  private isMonitorConfig(value: unknown): value is MonitorConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as MonitorConfig).type === 'monitor'
     );
   }
 

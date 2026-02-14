@@ -1,6 +1,6 @@
 // Main hook
 export { useDialKit } from './hooks/useDialKit';
-export type { UseDialOptions } from './hooks/useDialKit';
+export type { UseDialOptions, UseDialResult } from './hooks/useDialKit';
 
 // Root component (user mounts once)
 export { DialRoot } from './components/DialRoot';
@@ -16,6 +16,7 @@ export { SpringVisualization } from './components/SpringVisualization';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
+export { MonitorControl } from './components/MonitorControl';
 export { PresetManager } from './components/PresetManager';
 
 // Store (for advanced usage)
@@ -26,6 +27,7 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  MonitorConfig,
   Preset,
   DialValue,
   DialConfig,
