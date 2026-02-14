@@ -1,15 +1,32 @@
-import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
-import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig } from '../store/DialStore';
+import { useEffect, useId, useSyncExternalStore, useRef, useCallback, useMemo } from 'react';
+import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig, MonitorConfig } from '../store/DialStore';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
+}
+
+// Typed configs are leaf nodes — don't recurse into their internal fields
+type TypedConfig = MonitorConfig | ActionConfig | SpringConfig | SelectConfig | ColorConfig | TextConfig;
+
+// Recursively extract dot-separated paths for all config fields
+type ConfigPaths<T extends DialConfig, Prefix extends string = ''> = {
+  [K in keyof T & string]: T[K] extends TypedConfig
+  ? Prefix extends '' ? K : `${Prefix}.${K}`
+  : T[K] extends DialConfig
+  ? ConfigPaths<T[K], Prefix extends '' ? K : `${Prefix}.${K}`>
+  : Prefix extends '' ? K : `${Prefix}.${K}`;
+}[keyof T & string];
+
+export interface UseDialResult<T extends DialConfig> {
+  params: ResolvedValues<T>;
+  setParams: (path: ConfigPaths<T>, value: string | number | boolean) => void;
 }
 
 export function useDialKit<T extends DialConfig>(
   name: string,
   config: T,
   options?: UseDialOptions
-): ResolvedValues<T> {
+): UseDialResult<T> {
   const instanceId = useId();
   const panelId = `${name}-${instanceId}`;
   const configRef = useRef(config);
@@ -37,8 +54,23 @@ export function useDialKit<T extends DialConfig>(
     () => DialStore.getValues(panelId)
   );
 
-  // Build resolved values object
-  return buildResolvedValues(config, values, '') as ResolvedValues<T>;
+  // Setter — scoped to this panel
+  const setParams = useCallback(
+    (path: string, value: string | number | boolean) => {
+      DialStore.updateValue(panelId, path, value);
+    },
+    [panelId]
+  );
+
+  // Build resolved values with shallow comparison for stable reference
+  const prevResolved = useRef<ResolvedValues<T> | null>(null);
+  const nextResolved = buildResolvedValues(config, values, '') as ResolvedValues<T>;
+
+  if (!prevResolved.current || !shallowEqual(prevResolved.current, nextResolved)) {
+    prevResolved.current = nextResolved;
+  }
+
+  return useMemo(() => ({ params: prevResolved.current!, setParams }), [prevResolved.current, setParams]);
 }
 
 function buildResolvedValues(
@@ -70,6 +102,9 @@ function buildResolvedValues(
     } else if (isTextConfig(configValue)) {
       // Text config resolves to string value
       result[key] = flatValues[path] ?? configValue.default ?? '';
+    } else if (isMonitorConfig(configValue)) {
+      // Monitor config resolves to whatever was set externally, or default
+      result[key] = flatValues[path] ?? configValue.defaultValue;
     } else if (typeof configValue === 'object' && configValue !== null) {
       // Nested object
       result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
@@ -103,7 +138,21 @@ function isTextConfig(value: unknown): value is TextConfig {
   return hasType(value, 'text');
 }
 
+function isMonitorConfig(value: unknown): value is MonitorConfig {
+  return hasType(value, 'monitor');
+}
+
 function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
   const first = options[0];
   return typeof first === 'string' ? first : first.value;
+}
+
+function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
