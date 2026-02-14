@@ -16,10 +16,10 @@ const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
 
-function roundValue(val: number, step: number): number {
-  const decimals = step >= 1 ? 0 : 2;
-  const factor = 10 ** decimals;
-  return Math.round(val * factor) / factor;
+// With step=0.01, this is mathematically equivalent to the current 2-decimal rounding. 
+// With step=2, it correctly snaps to 0, 2, 4, etc. No conditional needed.
+function roundValue(val: number, step: number) {
+  return Math.round(val / step) * step;
 }
 
 function snapToDecile(rawValue: number, min: number, max: number): number {
@@ -195,9 +195,14 @@ export function Slider({
       if (!isInteracting) return;
 
       if (isClickRef.current) {
-        // Click — snap to decile and spring animate
+        // When steps are coarse (≤20 positions), click snaps to the nearest step. 
+        // Otherwise, the original decile-magnetic behavior is preserved
         const rawValue = positionToValue(e.clientX);
-        const snappedValue = snapToDecile(rawValue, min, max);
+        const discreteSteps = (max - min) / step;
+        const snappedValue = discreteSteps <= 20
+          ? Math.max(min, Math.min(max, min + Math.round((rawValue - min) / step) * step))
+          : snapToDecile(rawValue, min, max);
+
         const newPct = percentFromValue(snappedValue);
 
         if (animRef.current) {
@@ -334,16 +339,31 @@ export function Slider({
     ? 'rgba(255, 255, 255, 0.15)'
     : 'rgba(255, 255, 255, 0.11)';
 
-  const hashMarks = Array.from({ length: 9 }, (_, i) => {
-    const pct = (i + 1) * 10;
-    return (
-      <div
-        key={i}
-        className="dialkit-slider-hashmark"
-        style={{ left: `${pct}%` }}
-      />
-    );
-  });
+  // The ≤ 20 threshold cleanly separates discrete sliders
+  // (like step=2 on a 0–10 range → 5 steps) from continuous ones 
+  // (like step=0.01 on 0–1 → 100 steps), keeping original behavior intact for the latter. 
+  const discreteSteps = (max - min) / step;
+  const hashMarks = discreteSteps <= 20
+    ? Array.from({ length: discreteSteps - 1 }, (_, i) => {
+        const pct = ((i + 1) * step) / (max - min) * 100;
+        return (
+          <div
+            key={i}
+            className="dialkit-slider-hashmark"
+            style={{ left: `${pct}%` }}
+          />
+        );
+      })
+    : Array.from({ length: 9 }, (_, i) => {
+        const pct = (i + 1) * 10;
+        return (
+          <div
+            key={i}
+            className="dialkit-slider-hashmark"
+            style={{ left: `${pct}%` }}
+          />
+        );
+      });
 
   return (
     <div ref={wrapperRef} className="dialkit-slider-wrapper">

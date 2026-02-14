@@ -34,11 +34,11 @@ export type TextConfig = {
 export type DialValue = number | boolean | string | SpringConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig;
 
 export type DialConfig = {
-  [key: string]: DialValue | [number, number, number] | DialConfig;
+  [key: string]: DialValue | [number, number, number, number?] | DialConfig;
 };
 
 export type ResolvedValues<T extends DialConfig> = {
-  [K in keyof T]: T[K] extends [number, number, number]
+  [K in keyof T]: T[K] extends [number, number, number, number?]
     ? number
     : T[K] extends SpringConfig
       ? SpringConfig
@@ -288,7 +288,7 @@ class DialStoreClass {
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
 
-      if (Array.isArray(value) && value.length === 3 && typeof value[0] === 'number') {
+      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         // Range tuple: [default, min, max]
         controls.push({
           type: 'slider',
@@ -296,7 +296,7 @@ class DialStoreClass {
           label,
           min: value[1],
           max: value[2],
-          step: this.inferStep(value[1], value[2]),
+          step: value[3] ?? this.inferStep(value[1], value[2]),
         });
       } else if (typeof value === 'number') {
         // Single number - auto-infer range
@@ -341,7 +341,7 @@ class DialStoreClass {
     for (const [key, value] of Object.entries(config)) {
       const path = prefix ? `${prefix}.${key}` : key;
 
-      if (Array.isArray(value) && value.length === 3 && typeof value[0] === 'number') {
+      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         values[path] = value[0]; // Default value
       } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
         values[path] = value;

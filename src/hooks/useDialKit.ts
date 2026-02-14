@@ -51,7 +51,7 @@ function buildResolvedValues(
   for (const [key, configValue] of Object.entries(config)) {
     const path = prefix ? `${prefix}.${key}` : key;
 
-    if (Array.isArray(configValue) && configValue.length === 3 && typeof configValue[0] === 'number') {
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
       // Range tuple
       result[key] = flatValues[path] ?? configValue[0];
     } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
