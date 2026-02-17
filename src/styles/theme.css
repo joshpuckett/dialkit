@@ -738,21 +738,27 @@
 
 /* Select Dropdown */
 .dialkit-select-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
   border-radius: var(--dial-radius);
   padding: 4px;
-  z-index: 100;
+  z-index: 10000;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: 240px;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.dialkit-select-dropdown::-webkit-scrollbar {
+  display: none;
 }
 
 .dialkit-select-option {
   display: block;
   width: 100%;
+  height: 33px;
+  box-sizing: border-box;
   padding: 8px 10px;
   font-family: inherit;
   font-size: 13px;
