@@ -12,15 +12,19 @@ export function useDialKit<T extends DialConfig>(
 ): ResolvedValues<T> {
   const instanceId = useId();
   const panelId = `${name}-${instanceId}`;
-  const configRef = useRef(config);
   const onActionRef = useRef(options?.onAction);
   onActionRef.current = options?.onAction;
 
   // Register panel on mount
   useEffect(() => {
-    DialStore.registerPanel(panelId, name, configRef.current);
+    DialStore.registerPanel(panelId, name, config);
     return () => DialStore.unregisterPanel(panelId);
-  }, [panelId, name]);
+  }, [panelId]);
+
+  // Keep panel metadata and controls in sync with config/name changes.
+  useEffect(() => {
+    DialStore.updatePanel(panelId, name, config);
+  }, [panelId, name, config]);
 
   // Subscribe to action events
   useEffect(() => {

@@ -127,21 +127,8 @@ Apply these values as the new defaults in the useDialKit call.`;
           />
         );
 
-      default:
-        return null;
-    }
-  };
-
-  // Group consecutive actions together
-  const renderControls = () => {
-    const result: React.ReactNode[] = [];
-    let i = 0;
-
-    while (i < panel.controls.length) {
-      const control = panel.controls[i];
-
-      if (control.type === 'action') {
-        result.push(
+      case 'action':
+        return (
           <button
             key={control.path}
             className="dialkit-button"
@@ -150,14 +137,14 @@ Apply these values as the new defaults in the useDialKit call.`;
             {control.label}
           </button>
         );
-      } else {
-        result.push(renderControl(control));
-      }
 
-      i++;
+      default:
+        return null;
     }
+  };
 
-    return result;
+  const renderControls = () => {
+    return panel.controls.map(renderControl);
   };
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };

@@ -94,14 +94,72 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  private configSignatures: Map<string, string> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig): void {
     const controls = this.parseConfig(config, '');
     const values = this.flattenValues(config, '');
+    const signature = this.serializeConfig(config);
 
     this.panels.set(id, { id, name, controls, values });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
+    this.configSignatures.set(id, signature);
+    this.notifyGlobal();
+  }
+
+  updatePanel(id: string, name: string, config: DialConfig): void {
+    const existing = this.panels.get(id);
+    if (!existing) {
+      this.registerPanel(id, name, config);
+      return;
+    }
+
+    const signature = this.serializeConfig(config);
+    const previousSignature = this.configSignatures.get(id);
+    if (existing.name === name && previousSignature === signature) {
+      return;
+    }
+
+    const controls = this.parseConfig(config, '');
+    const defaultValues = this.flattenValues(config, '');
+    const nextValues: Record<string, DialValue> = {};
+
+    for (const [path, defaultValue] of Object.entries(defaultValues)) {
+      if (path in existing.values) {
+        nextValues[path] = existing.values[path];
+      } else {
+        nextValues[path] = defaultValue;
+      }
+    }
+
+    for (const [path, mode] of Object.entries(existing.values)) {
+      if (!path.endsWith('.__mode')) {
+        continue;
+      }
+      const springPath = path.slice(0, -'__mode'.length - 1);
+      if (springPath in defaultValues) {
+        nextValues[path] = mode;
+      }
+    }
+
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues };
+    this.panels.set(id, nextPanel);
+    this.snapshots.set(id, { ...nextValues });
+
+    const previousBaseValues = this.baseValues.get(id) ?? {};
+    const nextBaseValues: Record<string, DialValue> = {};
+    for (const [path, defaultValue] of Object.entries(defaultValues)) {
+      if (path in previousBaseValues) {
+        nextBaseValues[path] = previousBaseValues[path];
+      } else {
+        nextBaseValues[path] = defaultValue;
+      }
+    }
+    this.baseValues.set(id, nextBaseValues);
+
+    this.configSignatures.set(id, signature);
+    this.notify(id);
     this.notifyGlobal();
   }
 
@@ -109,6 +167,9 @@ class DialStoreClass {
     this.panels.delete(id);
     this.listeners.delete(id);
     this.snapshots.delete(id);
+    this.actionListeners.delete(id);
+    this.baseValues.delete(id);
+    this.configSignatures.delete(id);
     this.notifyGlobal();
   }
 
@@ -453,6 +514,22 @@ class DialStoreClass {
     if (range <= 10) return 0.1;
     if (range <= 100) return 1;
     return 10;
+  }
+
+  private serializeConfig(config: DialConfig): string {
+    const sortObject = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map(sortObject);
+      }
+      if (value && typeof value === 'object') {
+        const sortedEntries = Object.entries(value as Record<string, unknown>)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, nested]) => [key, sortObject(nested)]);
+        return Object.fromEntries(sortedEntries);
+      }
+      return value;
+    };
+    return JSON.stringify(sortObject(config));
   }
 }
 
