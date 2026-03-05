@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { DialStore } from '../../store/DialStore';
-  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from '../../store/DialStore';
+  import { DialStore } from 'dialkit/store';
+  import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from 'dialkit/store';
   import Slider from './Slider.svelte';
   import Toggle from './Toggle.svelte';
   import Folder from './Folder.svelte';

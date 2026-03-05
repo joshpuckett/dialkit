@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Spring } from 'svelte/motion';
-  import { DialStore } from '../../store/DialStore';
-  import type { DialValue, PanelConfig, Preset } from '../../store/DialStore';
+  import { DialStore } from 'dialkit/store';
+  import type { DialValue, PanelConfig, Preset } from 'dialkit/store';
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';

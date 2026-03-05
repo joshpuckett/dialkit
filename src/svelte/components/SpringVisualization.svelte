@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SpringConfig } from '../../store/DialStore';
+  import type { SpringConfig } from 'dialkit/store';
 
   let { spring, isSimpleMode } = $props<{ spring: SpringConfig; isSimpleMode: boolean }>();
 

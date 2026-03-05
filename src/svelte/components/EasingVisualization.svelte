@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EasingConfig } from '../../store/DialStore';
+  import type { EasingConfig } from 'dialkit/store';
 
   let { easing } = $props<{ easing: EasingConfig }>();
 

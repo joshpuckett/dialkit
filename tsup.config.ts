@@ -2,6 +2,15 @@ import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
 export default defineConfig([
+  // Store build (shared across all framework entries)
+  {
+    entry: { index: 'src/store/DialStore.ts' },
+    outDir: 'dist/store',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+  },
   // React build
   {
     entry: ['src/index.ts'],
@@ -9,7 +18,6 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    clean: true,
     external: ['react', 'react-dom', 'motion'],
     esbuildOptions(options) {
       options.banner = {

@@ -1,4 +1,4 @@
-import { DialStore } from '../store/DialStore';
+import { DialStore } from 'dialkit/store';
 import type {
   ActionConfig,
   ColorConfig,
@@ -9,7 +9,7 @@ import type {
   SelectConfig,
   SpringConfig,
   TextConfig,
-} from '../store/DialStore';
+} from 'dialkit/store';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;

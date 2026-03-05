@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { DialStore } from '../../store/DialStore';
-  import type { PanelConfig } from '../../store/DialStore';
+  import { DialStore } from 'dialkit/store';
+  import type { PanelConfig } from 'dialkit/store';
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
   import Panel from './Panel.svelte';

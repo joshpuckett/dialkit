@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { DialStore } from '../../store/DialStore';
-  import type { SpringConfig } from '../../store/DialStore';
+  import { DialStore } from 'dialkit/store';
+  import type { SpringConfig } from 'dialkit/store';
   import Folder from './Folder.svelte';
   import Slider from './Slider.svelte';
   import SegmentedControl from './SegmentedControl.svelte';

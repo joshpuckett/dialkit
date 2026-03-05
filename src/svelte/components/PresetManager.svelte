@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Spring } from 'svelte/motion';
   import Portal from '../Portal.svelte';
-  import { DialStore } from '../../store/DialStore';
-  import type { Preset } from '../../store/DialStore';
+  import { DialStore } from 'dialkit/store';
+  import type { Preset } from 'dialkit/store';
   import { dropdownTransition } from './transitions';
 
   let { panelId, presets, activePresetId } = $props<{
