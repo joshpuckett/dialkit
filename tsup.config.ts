@@ -24,7 +24,7 @@ export default defineConfig([
         js: '"use client";',
       };
     },
-    onSuccess: 'cp src/styles/theme.css dist/styles.css',
+    publicDir: 'src/styles',
   },
   // Solid build
   {

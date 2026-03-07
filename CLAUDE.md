@@ -2,7 +2,7 @@
 
 ## Build
 
-- After editing styles in `src/styles/theme.css`, run `npm run build` — the CSS is copied to `dist/styles.css` via tsup's `onSuccess` hook, not hot-reloaded.
+- Styles live in `src/styles/styles.css` and are copied to `dist/styles.css` via tsup's `publicDir`. Changes are picked up automatically during `npm run dev`.
 - The example app (`example/photostack`) imports `dialkit/styles.css` which resolves to `dist/styles.css`.
 
 ## Style Rules
