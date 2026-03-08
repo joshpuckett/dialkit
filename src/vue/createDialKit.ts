@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, shallowRef, type ComputedRef } from 'vue';
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch, type ComputedRef } from 'vue';
 import { DialStore } from '../store/DialStore';
 import type {
   ActionConfig,
@@ -25,7 +25,10 @@ export function createDialKit<T extends DialConfig>(
 ): ComputedRef<ResolvedValues<T>> {
   const panelId = `${name}-${++dialKitInstance}`;
   const configRef = shallowRef(config);
+  const onActionRef = ref(options?.onAction);
   const values = ref<Record<string, DialValue>>(DialStore.getValues(panelId));
+  const mounted = ref(false);
+  const serializedConfig = computed(() => JSON.stringify(config));
 
   let unsubscribeValues: (() => void) | undefined;
   let unsubscribeActions: (() => void) | undefined;
@@ -38,12 +41,27 @@ export function createDialKit<T extends DialConfig>(
       values.value = DialStore.getValues(panelId);
     });
 
-    unsubscribeActions = options?.onAction
-      ? DialStore.subscribeActions(panelId, options.onAction)
-      : undefined;
+    unsubscribeActions = DialStore.subscribeActions(panelId, (action) => {
+      onActionRef.value?.(action);
+    });
   };
 
+  watch(() => options?.onAction, (next) => {
+    onActionRef.value = next;
+  });
+
+  watch(serializedConfig, () => {
+    configRef.value = config;
+    if (mounted.value) {
+      DialStore.updatePanel(panelId, name, configRef.value);
+      values.value = DialStore.getValues(panelId);
+    }
+  });
+
   onMounted(register);
+  onMounted(() => {
+    mounted.value = true;
+  });
 
   onUnmounted(() => {
     unsubscribeValues?.();

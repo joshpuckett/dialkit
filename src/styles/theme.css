@@ -795,6 +795,19 @@
   cursor: pointer;
 }
 
+.dialkit-dropdown-item-with-delete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialkit-dropdown-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dialkit-dropdown-item:hover {
   background: var(--dial-surface-hover);
 }
@@ -802,6 +815,30 @@
 .dialkit-dropdown-item[data-active="true"] {
   color: var(--dial-text-primary);
   background: var(--dial-surface-active);
+}
+
+.dialkit-preset-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dial-text-tertiary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.dialkit-preset-delete:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--dial-text-label);
+}
+
+.dialkit-preset-delete svg {
+  width: 13px;
+  height: 13px;
 }
 
 .dialkit-select-native:focus {

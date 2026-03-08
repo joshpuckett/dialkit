@@ -144,11 +144,26 @@ export const Panel = defineComponent({
     };
 
     const toolbar = () => h('div', { class: 'dialkit-panel-toolbar-inner' }, [
+      h('button', { class: 'dialkit-toolbar-add', onClick: handleAddPreset, title: 'Add preset' }, [
+        h('svg', {
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '2.5',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+        }, [
+          h('path', { d: 'M4 6H20' }),
+          h('path', { d: 'M4 12H10' }),
+          h('path', { d: 'M15 15L21 15' }),
+          h('path', { d: 'M18 12V18' }),
+          h('path', { d: 'M4 18H10' }),
+        ]),
+      ]),
       h(PresetManager, {
         panelId: props.panel.id,
         presets: presets.value,
         activePresetId: activePresetId.value,
-        onAdd: handleAddPreset,
       }),
       h('button', { class: 'dialkit-toolbar-copy', onClick: handleCopy, title: 'Copy parameters' }, copied.value ? 'Copied' : 'Copy'),
     ]);
