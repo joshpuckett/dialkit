@@ -508,15 +508,15 @@ const params = useDialKit('Card', {
 
 `useDialKit` returns a Vue `computed` object with resolved values. Read values directly in templates (`params.blur`) or in script via `params.value`.
 
-If you prefer directive-style mounting, use `vDialkit`:
+If you prefer directive-style mounting, use `vDialKit`:
 
 ```vue
 <script setup lang="ts">
-import { vDialkit } from 'dialkit/vue';
+import { vDialKit } from 'dialkit/vue';
 </script>
 
 <template>
-  <div v-dialkit="{ mode: 'inline', defaultOpen: true }" />
+  <div v-dial-kit="{ mode: 'inline', defaultOpen: true }" />
 </template>
 ```
 

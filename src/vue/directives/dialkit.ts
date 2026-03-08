@@ -62,7 +62,7 @@ function unmountDialRoot(el: HTMLElement) {
   states.delete(el);
 }
 
-export const vDialkit: ObjectDirective<HTMLElement, DialKitDirectiveValue> = {
+export const vDialKit: ObjectDirective<HTMLElement, DialKitDirectiveValue> = {
   mounted(el, binding) {
     mountDialRoot(el, binding.value);
   },

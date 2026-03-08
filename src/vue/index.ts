@@ -1,6 +1,6 @@
 export { useDialKit } from './useDialKit';
 export type { UseDialOptions } from './useDialKit';
-export { vDialkit } from './directives/dialkit';
+export { vDialKit } from './directives/dialkit';
 export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directives/dialkit';
 
 export { DialRoot } from './components/DialRoot';
