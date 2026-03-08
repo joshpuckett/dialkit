@@ -1,6 +1,6 @@
 # dialkit
 
-Real-time parameter tweaking for React, Solid, and Svelte.
+Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
 ## Quick Start
 
@@ -446,6 +446,67 @@ npm install dialkit
 ```
 
 `createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
+
+---
+
+## Vue
+
+DialKit works with Vue 3. Import from `dialkit/vue` and mount `DialRoot` once in your app shell.
+
+```bash
+npm install dialkit vue
+```
+
+```ts
+// main.ts
+import { createApp } from 'vue';
+import App from './App.vue';
+import 'dialkit/styles.css';
+
+createApp(App).mount('#app');
+```
+
+```vue
+<!-- App.vue -->
+<script setup lang="ts">
+import { DialRoot } from 'dialkit/vue';
+import Card from './Card.vue';
+</script>
+
+<template>
+  <Card />
+  <DialRoot />
+</template>
+```
+
+```vue
+<!-- Card.vue -->
+<script setup lang="ts">
+import { createDialKit } from 'dialkit/vue';
+
+const params = createDialKit('Card', {
+  blur: [24, 0, 100],
+  scale: 1.2,
+  color: '#ff5500',
+  visible: true,
+});
+</script>
+
+<template>
+  <div
+    :style="{
+      filter: `blur(${params.blur}px)`,
+      transform: `scale(${params.scale})`,
+      color: params.color,
+      opacity: params.visible ? 1 : 0
+    }"
+  >
+    ...
+  </div>
+</template>
+```
+
+`createDialKit` returns a Vue `computed` object with resolved values. Read values directly in templates (`params.blur`) or in script via `params.value`.
 
 ---
 

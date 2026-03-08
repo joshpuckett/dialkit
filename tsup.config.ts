@@ -43,4 +43,15 @@ export default defineConfig([
     tsconfig: 'tsconfig.solid.json',
     esbuildPlugins: [solidPlugin()],
   },
+  // Vue build
+  {
+    entry: { index: 'src/vue/index.ts' },
+    outDir: 'dist/vue',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    external: ['vue'],
+    tsconfig: 'tsconfig.vue.json',
+  },
 ]);

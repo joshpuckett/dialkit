@@ -414,6 +414,7 @@
   border-radius: 6px;
   z-index: 0;
   pointer-events: none;
+  transition: left 180ms cubic-bezier(0.22, 1, 0.36, 1), width 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dialkit-segmented-button {
@@ -605,6 +606,13 @@
   margin-bottom: 6px;
 }
 
+.dialkit-panel-toolbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
 .dialkit-toolbar-add {
   display: flex;
   align-items: center;
@@ -711,6 +719,107 @@
 
 /* Select Control - Full-width row */
 .dialkit-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--dial-row-height);
+  padding: 0 12px;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+}
+
+.dialkit-select-native-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dialkit-select-native {
+  height: 28px;
+  min-width: 124px;
+  padding: 0 24px 0 10px;
+  border: 1px solid var(--dial-border);
+  border-radius: 8px;
+  background: var(--dial-surface-active);
+  color: var(--dial-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dialkit-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dialkit-dropdown-trigger[data-open="true"] {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dialkit-dropdown-wrap {
+  position: relative;
+}
+
+.dialkit-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--dial-glass-bg);
+  border: 1px solid var(--dial-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  animation: dialkit-dropdown-in 0.16s ease-out;
+}
+
+.dialkit-dropdown-item {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--dial-text-label);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dialkit-dropdown-item:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-dropdown-item[data-active="true"] {
+  color: var(--dial-text-primary);
+  background: var(--dial-surface-active);
+}
+
+.dialkit-select-native:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.dialkit-select-native-chevron {
+  display: inline-block;
+  margin-left: auto;
+  color: var(--dial-text-label);
+  font-size: 10px;
+  pointer-events: none;
+  transition: transform 140ms ease;
+}
+
+.dialkit-dropdown-trigger[data-open="true"] .dialkit-select-native-chevron {
+  transform: rotate(180deg);
 }
 
 .dialkit-select-trigger {
@@ -885,6 +994,14 @@
 .dialkit-preset-manager {
   position: relative;
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialkit-preset-native-wrap {
+  position: relative;
+  flex: 1;
 }
 
 .dialkit-preset-trigger {
@@ -925,6 +1042,104 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dialkit-preset-native {
+  width: 100%;
+  padding-right: 10px;
+}
+
+.dialkit-slider-native-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--dial-surface);
+  border-radius: var(--dial-radius);
+}
+
+.dialkit-slider-native-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialkit-slider-native-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+}
+
+.dialkit-slider-native-value {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  color: var(--dial-text-primary);
+}
+
+.dialkit-slider-native {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(255, 255, 255, 0.75) var(--dial-slider-pct),
+    rgba(255, 255, 255, 0.14) var(--dial-slider-pct),
+    rgba(255, 255, 255, 0.14) 100%
+  );
+  outline: none;
+}
+
+.dialkit-slider-native::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.dialkit-slider-native::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.dialkit-slider-native::-moz-range-track {
+  height: 16px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.dialkit-folder-collapse-enter-active,
+.dialkit-folder-collapse-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.dialkit-folder-collapse-enter-from,
+.dialkit-folder-collapse-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@keyframes dialkit-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 
