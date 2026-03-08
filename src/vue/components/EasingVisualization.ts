@@ -10,16 +10,38 @@ export const EasingVisualization = defineComponent({
     },
   },
   setup(props) {
-    const width = 256;
-    const height = 140;
+    const size = 200;
+    const pad = 10;
+    const inner = size - pad * 2;
+    const unit = inner / 2;
 
     const curve = computed(() => {
       const [x1, y1, x2, y2] = props.easing.ease;
-      return `M 0 ${height} C ${x1 * width} ${height - y1 * height}, ${x2 * width} ${height - y2 * height}, ${width} 0`;
+      const toSvg = (nx: number, ny: number) => ({
+        x: pad + (nx + 0.5) * unit,
+        y: pad + (1.5 - ny) * unit,
+      });
+      const start = toSvg(0, 0);
+      const end = toSvg(1, 1);
+      const p1 = toSvg(x1, y1);
+      const p2 = toSvg(x2, y2);
+      return `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
     });
 
-    return () => h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'dialkit-spring-viz' }, [
-      h('line', { x1: 0, y1: height, x2: width, y2: 0, stroke: 'rgba(255, 255, 255, 0.12)', 'stroke-width': 1, 'stroke-dasharray': '4,4' }),
+    return () => h('svg', {
+      viewBox: `0 0 ${size} ${size}`,
+      preserveAspectRatio: 'xMidYMid slice',
+      class: 'dialkit-spring-viz dialkit-easing-viz',
+    }, [
+      h('line', {
+        x1: pad + (0 + 0.5) * unit,
+        y1: pad + (1.5 - 0) * unit,
+        x2: pad + (1 + 0.5) * unit,
+        y2: pad + (1.5 - 1) * unit,
+        stroke: 'rgba(255, 255, 255, 0.15)',
+        'stroke-width': 1,
+        'stroke-dasharray': '4,4',
+      }),
       h('path', {
         d: curve.value,
         fill: 'none',
