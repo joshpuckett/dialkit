@@ -451,7 +451,7 @@ npm install dialkit
 
 ## Vue
 
-DialKit works with Vue 3. Import from `dialkit/vue` and mount `DialRoot` once in your app shell.
+DialKit works with Vue 3. The primary API is the `useDialKit` composable. Mount `DialRoot` once in your app shell.
 
 ```bash
 npm install dialkit vue
@@ -482,9 +482,9 @@ import Card from './Card.vue';
 ```vue
 <!-- Card.vue -->
 <script setup lang="ts">
-import { createDialKit } from 'dialkit/vue';
+import { useDialKit } from 'dialkit/vue';
 
-const params = createDialKit('Card', {
+const params = useDialKit('Card', {
   blur: [24, 0, 100],
   scale: 1.2,
   color: '#ff5500',
@@ -506,7 +506,19 @@ const params = createDialKit('Card', {
 </template>
 ```
 
-`createDialKit` returns a Vue `computed` object with resolved values. Read values directly in templates (`params.blur`) or in script via `params.value`.
+`useDialKit` returns a Vue `computed` object with resolved values. Read values directly in templates (`params.blur`) or in script via `params.value`.
+
+If you prefer directive-style mounting, use `vDialkit`:
+
+```vue
+<script setup lang="ts">
+import { vDialkit } from 'dialkit/vue';
+</script>
+
+<template>
+  <div v-dialkit="{ mode: 'inline', defaultOpen: true }" />
+</template>
+```
 
 ---
 

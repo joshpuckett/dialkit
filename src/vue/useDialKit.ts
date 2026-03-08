@@ -12,16 +12,16 @@ import type {
   TextConfig,
 } from '../store/DialStore';
 
-export interface CreateDialOptions {
+export interface UseDialOptions {
   onAction?: (action: string) => void;
 }
 
 let dialKitInstance = 0;
 
-export function createDialKit<T extends DialConfig>(
+export function useDialKit<T extends DialConfig>(
   name: string,
   config: T,
-  options?: CreateDialOptions
+  options?: UseDialOptions
 ): ComputedRef<ResolvedValues<T>> {
   const panelId = `${name}-${++dialKitInstance}`;
   const configRef = shallowRef(config);

@@ -130,7 +130,7 @@ export const Panel = defineComponent({
 
     const handleCopy = () => {
       const json = JSON.stringify(values.value, null, 2);
-      const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${json}\n\`\`\`\n\nApply these values as the new defaults in the createDialKit call.`;
+      const instruction = `Update the useDialKit configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${json}\n\`\`\`\n\nApply these values as the new defaults in the useDialKit call.`;
 
       try {
         if (navigator.clipboard?.writeText) {
