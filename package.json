@@ -1,7 +1,7 @@
 {
   "name": "dialkit",
   "version": "1.0.0",
-  "description": "Real-time parameter tweaking for React, Solid, Svelte, and Vue apps",
+  "description": "Real-time parameter tweaking for React, Solid, and Svelte apps",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,16 +25,6 @@
       "require": {
         "types": "./dist/solid/index.d.cts",
         "default": "./dist/solid/index.cjs"
-      }
-    },
-    "./vue": {
-      "import": {
-        "types": "./dist/vue/index.d.ts",
-        "default": "./dist/vue/index.js"
-      },
-      "require": {
-        "types": "./dist/vue/index.d.cts",
-        "default": "./dist/vue/index.cjs"
       }
     },
     "./store": {
@@ -61,15 +51,14 @@
     "build": "rm -rf dist && tsup && npm run build:svelte",
     "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json"
   },
   "peerDependencies": {
     "motion": ">=11.0.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0",
     "solid-js": ">=1.6.0",
-    "svelte": ">=5.8.0",
-    "vue": ">=3.3.0"
+    "svelte": ">=5.8.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -82,9 +71,6 @@
       "optional": true
     },
     "svelte": {
-      "optional": true
-    },
-    "vue": {
       "optional": true
     }
   },
@@ -100,15 +86,13 @@
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.3.0",
-    "vue": "^3.5.0"
+    "typescript": "^5.3.0"
   },
   "keywords": [
     "react",
     "solid",
     "solidjs",
     "svelte",
-    "vue",
     "animation",
     "tweaking",
     "parameters",

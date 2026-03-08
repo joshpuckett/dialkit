@@ -1,5 +1,5 @@
 import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { animate, motionValue } from 'motion';
+import { animate, motionValue } from 'motion-v';
 
 const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;

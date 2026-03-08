@@ -1,5 +1,5 @@
-import { defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
-import { animate } from 'motion';
+import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { AnimatePresence, motion } from 'motion-v';
 
 export const Folder = defineComponent({
   name: 'DialKitFolder',
@@ -18,242 +18,42 @@ export const Folder = defineComponent({
   setup(props, { emit, slots }) {
     const isOpen = ref(props.defaultOpen);
     const isCollapsed = ref(!props.defaultOpen);
-    const contentHeight = ref<number | undefined>(undefined);
-
-    const sectionContentMounted = ref(props.defaultOpen);
     const contentRef = ref<HTMLElement | null>(null);
-    const sectionContentRef = ref<HTMLElement | null>(null);
-    const panelRef = ref<HTMLElement | null>(null);
-    const folderChevronRef = ref<SVGElement | null>(null);
-
-    let skipFirstSectionAnim = true;
-    let rootPanelInitialized = false;
-    let lastRootOpen = isOpen.value;
-    let chevronInitialized = false;
-
-    let resizeObserver: ResizeObserver | null = null;
-    let sectionAnim: ReturnType<typeof animate> | null = null;
-    let chevronAnim: ReturnType<typeof animate> | null = null;
-    let rootPanelAnim: ReturnType<typeof animate> | null = null;
-    let panelTapAnim: ReturnType<typeof animate> | null = null;
-
-    const animateSectionOpen = (el: HTMLElement) => {
-      sectionAnim?.stop();
-      sectionAnim = animate(
-        el,
-        { height: 'auto', opacity: 1 },
-        {
-          type: 'spring',
-          visualDuration: 0.35,
-          bounce: 0.1,
-          onComplete: () => {
-            sectionAnim = null;
-          },
-        }
-      );
-    };
-
-    const animateSectionClose = (el: HTMLElement) => {
-      const currentHeight = el.getBoundingClientRect().height;
-      el.style.height = `${currentHeight}px`;
-      sectionAnim?.stop();
-      sectionAnim = animate(
-        el,
-        { height: 0, opacity: 0 },
-        {
-          type: 'spring',
-          visualDuration: 0.35,
-          bounce: 0.1,
-          onComplete: () => {
-            sectionContentMounted.value = false;
-            sectionContentRef.value = null;
-            sectionAnim = null;
-          },
-        }
-      );
-    };
-
-    const applyRootPanelState = () => {
-      if (!props.isRoot || props.inline) return;
-      const panel = panelRef.value;
-      if (!panel) return;
-
-      const open = isOpen.value;
-      const measuredOpenHeight = contentHeight.value !== undefined
-        ? contentHeight.value + 24
-        : panel.getBoundingClientRect().height;
-
-      const target = {
-        width: open ? 280 : 42,
-        height: open ? measuredOpenHeight : 42,
-        borderRadius: open ? 14 : 21,
-        boxShadow: open
-          ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-          : '0 4px 16px rgba(0, 0, 0, 0.25)',
-      };
-
-      panel.style.cursor = open ? '' : 'pointer';
-      panel.style.overflow = open ? '' : 'hidden';
-
-      if (!rootPanelInitialized) {
-        panel.style.width = `${target.width}px`;
-        panel.style.height = `${target.height}px`;
-        panel.style.borderRadius = `${target.borderRadius}px`;
-        panel.style.boxShadow = target.boxShadow;
-        rootPanelInitialized = true;
-        lastRootOpen = open;
-        return;
-      }
-
-      if (open !== lastRootOpen) {
-        rootPanelAnim?.stop();
-        rootPanelAnim = animate(panel, target, {
-          type: 'spring',
-          visualDuration: 0.15,
-          bounce: 0.3,
-          onComplete: () => {
-            rootPanelAnim = null;
-          },
-        });
-        lastRootOpen = open;
-        return;
-      }
-
-      if (open) {
-        panel.style.height = `${target.height}px`;
-      }
-    };
+    const contentHeight = ref<number | undefined>(undefined);
 
     const handleToggle = () => {
       if (props.inline && props.isRoot) return;
-
       const next = !isOpen.value;
       isOpen.value = next;
-
-      if (next) {
-        isCollapsed.value = false;
-
-        if (!props.isRoot) {
-          const section = sectionContentRef.value;
-          if (section) {
-            animateSectionOpen(section);
-          } else {
-            sectionContentMounted.value = true;
-          }
-        }
-      } else {
-        isCollapsed.value = true;
-
-        if (!props.isRoot) {
-          const section = sectionContentRef.value;
-          if (section) {
-            animateSectionClose(section);
-          } else {
-            sectionContentMounted.value = false;
-          }
-        }
-      }
-
+      isCollapsed.value = !next;
       emit('openChange', next);
     };
 
-    const handleCollapsedTapStart = () => {
-      if (isOpen.value) return;
-      const panel = panelRef.value;
-      if (!panel) return;
-      panelTapAnim?.stop();
-      panelTapAnim = animate(panel, { scale: 0.9 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-    };
-
-    const handleCollapsedTapEnd = () => {
-      if (isOpen.value) return;
-      const panel = panelRef.value;
-      if (!panel) return;
-      panelTapAnim?.stop();
-      panelTapAnim = animate(panel, { scale: 1 }, { type: 'spring', visualDuration: 0.15, bounce: 0.3 });
-    };
-
-    watch(isOpen, (open) => {
-      if (props.isRoot) return;
-      const chevron = folderChevronRef.value;
-      if (!chevron) return;
-
-      chevronAnim?.stop();
-      if (!chevronInitialized) {
-        chevron.style.transform = `rotate(${open ? 0 : 180}deg)`;
-        chevronInitialized = true;
-        return;
-      }
-
-      chevronAnim = animate(
-        chevron,
-        { rotate: open ? 0 : 180 },
-        { type: 'spring', visualDuration: 0.35, bounce: 0.15 }
-      );
-    });
-
-    watch(sectionContentMounted, async (mounted, wasMounted) => {
-      if (props.isRoot || !mounted || wasMounted) return;
-
-      await nextTick();
-      const section = sectionContentRef.value;
-      if (!section) return;
-
-      if (skipFirstSectionAnim) {
-        skipFirstSectionAnim = false;
-        return;
-      }
-
-      sectionAnim?.stop();
-      section.style.height = '0px';
-      section.style.opacity = '0';
-      animateSectionOpen(section);
-    });
-
-    watch(
-      () => [isOpen.value, contentHeight.value],
-      () => {
-        nextTick(() => {
-          applyRootPanelState();
-        });
-      },
-      { flush: 'post' }
-    );
+    let ro: ResizeObserver | null = null;
 
     onMounted(() => {
-      skipFirstSectionAnim = false;
+      if (!props.isRoot || typeof ResizeObserver === 'undefined') return;
+      const el = contentRef.value;
+      if (!el) return;
 
-      if (!props.isRoot && folderChevronRef.value) {
-        folderChevronRef.value.style.transform = `rotate(${isOpen.value ? 0 : 180}deg)`;
-        chevronInitialized = true;
-      }
-
-      if (props.isRoot && contentRef.value && typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(() => {
-          if (!isOpen.value || !contentRef.value) return;
-          const nextHeight = contentRef.value.offsetHeight;
-          if (contentHeight.value !== nextHeight) {
-            contentHeight.value = nextHeight;
-          }
-        });
-        resizeObserver.observe(contentRef.value);
-
+      ro = new ResizeObserver(() => {
         if (isOpen.value) {
-          contentHeight.value = contentRef.value.offsetHeight;
+          const next = el.offsetHeight;
+          if (contentHeight.value !== next) {
+            contentHeight.value = next;
+          }
         }
-      }
-
-      nextTick(() => {
-        applyRootPanelState();
       });
+
+      ro.observe(el);
+
+      if (isOpen.value) {
+        contentHeight.value = el.offsetHeight;
+      }
     });
 
     onUnmounted(() => {
-      resizeObserver?.disconnect();
-      sectionAnim?.stop();
-      chevronAnim?.stop();
-      rootPanelAnim?.stop();
-      panelTapAnim?.stop();
+      ro?.disconnect();
     });
 
     const renderHeader = () => h('div', {
@@ -262,9 +62,11 @@ export const Folder = defineComponent({
     }, [
       h('div', { class: 'dialkit-folder-header-top' }, [
         props.isRoot
-          ? (isOpen.value ? h('div', { class: 'dialkit-folder-title-row' }, [
-            h('span', { class: 'dialkit-folder-title dialkit-folder-title-root' }, props.title),
-          ]) : null)
+          ? (isOpen.value
+              ? h('div', { class: 'dialkit-folder-title-row' }, [
+                h('span', { class: 'dialkit-folder-title dialkit-folder-title-root' }, props.title),
+              ])
+              : null)
           : h('div', { class: 'dialkit-folder-title-row' }, [
             h('span', { class: 'dialkit-folder-title' }, props.title),
           ]),
@@ -281,8 +83,7 @@ export const Folder = defineComponent({
           ])
           : null,
         !props.isRoot
-          ? h('svg', {
-            ref: folderChevronRef,
+          ? h(motion.svg, {
             class: 'dialkit-folder-icon',
             viewBox: '0 0 24 24',
             fill: 'none',
@@ -290,6 +91,9 @@ export const Folder = defineComponent({
             'stroke-width': '2.5',
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round',
+            initial: false,
+            animate: { rotate: isOpen.value ? 0 : 180 },
+            transition: { type: 'spring', visualDuration: 0.35, bounce: 0.15 },
           }, [h('path', { d: 'M6 9.5L12 15.5L18 9.5' })])
           : null,
       ]),
@@ -298,47 +102,72 @@ export const Folder = defineComponent({
         : null,
     ]);
 
-    const renderContent = () => h('div', {
-      ref: contentRef,
+    const renderChildren = () => h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []);
+
+    const renderContent = () => {
+      if (props.isRoot) {
+        return isOpen.value
+          ? h('div', { class: 'dialkit-folder-content' }, [renderChildren()])
+          : null;
+      }
+
+      return h(AnimatePresence, { initial: false }, {
+        default: () => isOpen.value
+          ? [h(motion.div, {
+            key: 'dialkit-folder-content',
+            class: 'dialkit-folder-content',
+            initial: { height: 0, opacity: 0 },
+            animate: { height: 'auto', opacity: 1 },
+            exit: { height: 0, opacity: 0 },
+            transition: { type: 'spring', visualDuration: 0.35, bounce: 0.1 },
+            style: { clipPath: 'inset(0 -20px)' },
+          }, [renderChildren()])]
+          : [],
+      });
+    };
+
+    const folderContent = () => h('div', {
+      ref: props.isRoot ? contentRef : undefined,
       class: `dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : ''}`,
     }, [
       renderHeader(),
-      props.isRoot
-        ? (isOpen.value
-            ? h('div', { class: 'dialkit-folder-content' }, [
-              h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []),
-            ])
-            : null)
-        : (sectionContentMounted.value
-            ? h('div', {
-              ref: sectionContentRef,
-              class: 'dialkit-folder-content',
-              style: { clipPath: 'inset(0 -20px)' },
-            }, [
-              h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []),
-            ])
-            : null),
+      renderContent(),
     ]);
 
     return () => {
       if (props.isRoot) {
         if (props.inline) {
-          return h('div', { class: 'dialkit-panel-inner dialkit-panel-inline' }, [renderContent()]);
+          return h('div', { class: 'dialkit-panel-inner dialkit-panel-inline' }, [folderContent()]);
         }
 
-        return h('div', {
-          ref: panelRef,
+        const panelStyle = isOpen.value
+          ? {
+            width: 280,
+            height: contentHeight.value !== undefined ? contentHeight.value + 24 : 'auto',
+            borderRadius: 14,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+            cursor: undefined as string | undefined,
+          }
+          : {
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden',
+            cursor: 'pointer',
+          };
+
+        return h(motion.div, {
           class: 'dialkit-panel-inner',
-          'data-collapsed': String(isCollapsed.value),
+          style: panelStyle,
           onClick: !isOpen.value ? handleToggle : undefined,
-          onPointerdown: handleCollapsedTapStart,
-          onPointerup: handleCollapsedTapEnd,
-          onPointercancel: handleCollapsedTapEnd,
-          onPointerleave: handleCollapsedTapEnd,
-        }, [renderContent()]);
+          'data-collapsed': String(isCollapsed.value),
+          whilePress: !isOpen.value ? { scale: 0.9 } : undefined,
+          transition: { type: 'spring', visualDuration: 0.15, bounce: 0.3 },
+        }, [folderContent()]);
       }
 
-      return renderContent();
+      return folderContent();
     };
   },
 });
