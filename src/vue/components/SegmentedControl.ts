@@ -1,4 +1,5 @@
 import { defineComponent, h, ref, watch, nextTick, onMounted, onUnmounted, type PropType } from 'vue';
+import { animate } from 'motion';
 
 type SegmentedControlOption<T extends string> = {
   value: T;
@@ -22,8 +23,10 @@ export const SegmentedControl = defineComponent({
     const containerRef = ref<HTMLElement | null>(null);
     const pillRef = ref<HTMLElement | null>(null);
     const buttonRefs = new Map<string, HTMLElement>();
+    let hasAnimated = false;
+    let pillAnim: ReturnType<typeof animate> | null = null;
 
-    const placePill = () => {
+    const placePill = (withAnimation: boolean) => {
       const button = buttonRefs.get(props.value);
       const container = containerRef.value;
       const pill = pillRef.value;
@@ -31,8 +34,27 @@ export const SegmentedControl = defineComponent({
 
       const containerRect = container.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
-      pill.style.left = `${buttonRect.left - containerRect.left}px`;
-      pill.style.width = `${buttonRect.width}px`;
+
+      const left = buttonRect.left - containerRect.left;
+      const width = buttonRect.width;
+
+      if (!hasAnimated || !withAnimation) {
+        pillAnim?.stop();
+        pill.style.left = `${left}px`;
+        pill.style.width = `${width}px`;
+      } else {
+        pillAnim?.stop();
+        pillAnim = animate(
+          pill,
+          {
+            left: `${left}px`,
+            width: `${width}px`,
+          },
+          { type: 'spring', visualDuration: 0.2, bounce: 0.15 }
+        );
+      }
+
+      hasAnimated = true;
       pill.style.visibility = 'visible';
     };
 
@@ -40,25 +62,30 @@ export const SegmentedControl = defineComponent({
 
     onMounted(() => {
       nextTick(() => {
-        placePill();
+        placePill(false);
       });
 
       if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
-        ro = new ResizeObserver(() => placePill());
+        ro = new ResizeObserver(() => placePill(false));
         ro.observe(containerRef.value);
       }
     });
 
     onUnmounted(() => {
+      pillAnim?.stop();
       ro?.disconnect();
     });
 
     watch(() => props.value, () => {
-      nextTick(placePill);
+      nextTick(() => placePill(true));
     });
 
     return () => h('div', { ref: containerRef, class: 'dialkit-segmented' }, [
-      h('div', { ref: pillRef, class: 'dialkit-segmented-pill', style: { left: '0px', width: '0px', visibility: 'hidden' } }),
+      h('div', {
+        ref: pillRef,
+        class: 'dialkit-segmented-pill',
+        style: { left: '0px', width: '0px', visibility: 'hidden', transition: 'none' },
+      }),
       ...props.options.map((option) => h('button', {
         ref: ((el: Element | null) => {
           if (el instanceof HTMLElement) buttonRefs.set(option.value, el);
