@@ -9,6 +9,69 @@ import { EasingVisualization } from './EasingVisualization';
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
 
+function formatEase(ease: [number, number, number, number]): string {
+  return ease.map((value) => Number(value.toFixed(2))).join(', ');
+}
+
+function parseEase(value: string): [number, number, number, number] | null {
+  const parts = value.split(',').map((part) => Number.parseFloat(part.trim()));
+  if (parts.length === 4 && parts.every((part) => Number.isFinite(part))) {
+    return parts as [number, number, number, number];
+  }
+  return null;
+}
+
+const EaseTextInput = defineComponent({
+  name: 'DialKitEaseTextInput',
+  props: {
+    ease: {
+      type: Array as unknown as PropType<[number, number, number, number]>,
+      required: true,
+    },
+    onChange: {
+      type: Function as PropType<(ease: [number, number, number, number]) => void>,
+      required: true,
+    },
+  },
+  setup(props) {
+    const editing = ref(false);
+    const draft = ref('');
+
+    const handleFocus = () => {
+      draft.value = formatEase(props.ease);
+      editing.value = true;
+    };
+
+    const handleBlur = () => {
+      const parsed = parseEase(draft.value);
+      if (parsed) props.onChange(parsed);
+      editing.value = false;
+    };
+
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        (event.target as HTMLInputElement).blur();
+      }
+    };
+
+    return () => h('div', { class: 'dialkit-labeled-control' }, [
+      h('span', { class: 'dialkit-labeled-control-label' }, 'Ease'),
+      h('input', {
+        type: 'text',
+        class: 'dialkit-text-input',
+        value: editing.value ? draft.value : formatEase(props.ease),
+        spellcheck: false,
+        onInput: (event: Event) => {
+          draft.value = (event.target as HTMLInputElement).value;
+        },
+        onFocus: handleFocus,
+        onBlur: handleBlur,
+        onKeydown: handleKeydown,
+      }),
+    ]);
+  },
+});
+
 export const TransitionControl = defineComponent({
   name: 'DialKitTransitionControl',
   props: {
@@ -121,6 +184,10 @@ export const TransitionControl = defineComponent({
                   step: 0.05,
                   unit: 's',
                   onChange: (next: number) => emit('change', { ...currentEasing, duration: next }),
+                }),
+                h(EaseTextInput, {
+                  ease: currentEasing.ease,
+                  onChange: (next: [number, number, number, number]) => emit('change', { ...currentEasing, ease: next }),
                 }),
               ]
               : isSimpleSpring
