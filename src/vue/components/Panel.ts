@@ -31,28 +31,10 @@ export const Panel = defineComponent({
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
+    const copied = ref(false);
 
     let unsubscribe: (() => void) | undefined;
-
-    const setCopyVisualState = (clipboardIcon: SVGElement | null, checkIcon: SVGElement | null, isCopied: boolean) => {
-      if (!clipboardIcon || !checkIcon) return;
-
-      if (isCopied) {
-        clipboardIcon.style.opacity = '0';
-        clipboardIcon.style.transform = 'scale(0.5)';
-        clipboardIcon.style.filter = 'blur(4px)';
-        checkIcon.style.opacity = '1';
-        checkIcon.style.transform = 'scale(1)';
-        checkIcon.style.filter = 'blur(0px)';
-      } else {
-        clipboardIcon.style.opacity = '1';
-        clipboardIcon.style.transform = 'scale(1)';
-        clipboardIcon.style.filter = 'blur(0px)';
-        checkIcon.style.opacity = '0';
-        checkIcon.style.transform = 'scale(0.5)';
-        checkIcon.style.filter = 'blur(4px)';
-      }
-    };
+    let copiedTimeout: ReturnType<typeof window.setTimeout> | null = null;
 
     onMounted(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
@@ -64,6 +46,9 @@ export const Panel = defineComponent({
 
     onUnmounted(() => {
       unsubscribe?.();
+      if (copiedTimeout) {
+        window.clearTimeout(copiedTimeout);
+      }
     });
 
     const handleAddPreset = () => {
@@ -71,13 +56,9 @@ export const Panel = defineComponent({
       DialStore.savePreset(props.panel.id, `Version ${nextNum}`);
     };
 
-    const handleCopy = (event: MouseEvent) => {
+    const handleCopy = () => {
       const json = JSON.stringify(values.value, null, 2);
       const instruction = `Update the createDialKit configuration for "${props.panel.name}" with these values:\n\n\`\`\`json\n${json}\n\`\`\`\n\nApply these values as the new defaults in the createDialKit call.`;
-      const button = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-      const icons = button ? button.querySelectorAll<SVGElement>('.dialkit-toolbar-copy-icon') : null;
-      const clipboardIcon = icons?.[0] ?? null;
-      const checkIcon = icons?.[1] ?? null;
 
       try {
         if (navigator.clipboard?.writeText) {
@@ -86,9 +67,12 @@ export const Panel = defineComponent({
       } catch {
         // Ignore clipboard errors; the UI confirmation should still run.
       }
-      setCopyVisualState(clipboardIcon, checkIcon, true);
-      window.setTimeout(() => {
-        setCopyVisualState(clipboardIcon, checkIcon, false);
+      copied.value = true;
+      if (copiedTimeout) {
+        window.clearTimeout(copiedTimeout);
+      }
+      copiedTimeout = window.setTimeout(() => {
+        copied.value = false;
       }, 1500);
     };
 
@@ -227,9 +211,9 @@ export const Panel = defineComponent({
               viewBox: '0 0 24 24',
               fill: 'none',
               style: {
-                opacity: 1,
-                transform: 'scale(1)',
-                filter: 'blur(0px)',
+                opacity: copied.value ? 0 : 1,
+                transform: copied.value ? 'scale(0.5)' : 'scale(1)',
+                filter: copied.value ? 'blur(4px)' : 'blur(0px)',
                 transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
               },
             }, [
@@ -260,9 +244,9 @@ export const Panel = defineComponent({
               'stroke-linecap': 'round',
               'stroke-linejoin': 'round',
               style: {
-                opacity: 0,
-                transform: 'scale(0.5)',
-                filter: 'blur(4px)',
+                opacity: copied.value ? 1 : 0,
+                transform: copied.value ? 'scale(1)' : 'scale(0.5)',
+                filter: copied.value ? 'blur(0px)' : 'blur(4px)',
                 transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
               },
             }, [
