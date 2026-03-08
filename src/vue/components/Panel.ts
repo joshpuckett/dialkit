@@ -1,4 +1,5 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
+import { animate } from 'motion';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta, DialValue, PanelConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
@@ -32,9 +33,71 @@ export const Panel = defineComponent({
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
     const copied = ref(false);
+    const addButtonRef = ref<HTMLElement | null>(null);
+    const copyButtonRef = ref<HTMLElement | null>(null);
+    const clipboardIconRef = ref<SVGElement | null>(null);
+    const checkIconRef = ref<SVGElement | null>(null);
 
     let unsubscribe: (() => void) | undefined;
     let copiedTimeout: ReturnType<typeof window.setTimeout> | null = null;
+    const addTapAnim = { value: null as ReturnType<typeof animate> | null };
+    const copyTapAnim = { value: null as ReturnType<typeof animate> | null };
+    const clipboardIconAnim = { value: null as ReturnType<typeof animate> | null };
+    const checkIconAnim = { value: null as ReturnType<typeof animate> | null };
+
+    const applyCopyIconStyles = (isCopied: boolean) => {
+      if (!clipboardIconRef.value || !checkIconRef.value) return;
+      clipboardIconRef.value.style.opacity = isCopied ? '0' : '1';
+      clipboardIconRef.value.style.transform = isCopied ? 'scale(0.5)' : 'scale(1)';
+      clipboardIconRef.value.style.filter = isCopied ? 'blur(4px)' : 'blur(0px)';
+      checkIconRef.value.style.opacity = isCopied ? '1' : '0';
+      checkIconRef.value.style.transform = isCopied ? 'scale(1)' : 'scale(0.5)';
+      checkIconRef.value.style.filter = isCopied ? 'blur(0px)' : 'blur(4px)';
+    };
+
+    const animateCopyIcons = (isCopied: boolean) => {
+      const clipboard = clipboardIconRef.value;
+      const check = checkIconRef.value;
+      if (!clipboard || !check) return;
+
+      clipboardIconAnim.value?.stop();
+      checkIconAnim.value?.stop();
+
+      clipboardIconAnim.value = animate(
+        clipboard,
+        {
+          opacity: isCopied ? 0 : 1,
+          scale: isCopied ? 0.5 : 1,
+          filter: isCopied ? 'blur(4px)' : 'blur(0px)',
+        },
+        { type: 'spring', visualDuration: 0.3, bounce: 0.2 }
+      );
+
+      checkIconAnim.value = animate(
+        check,
+        {
+          opacity: isCopied ? 1 : 0,
+          scale: isCopied ? 1 : 0.5,
+          filter: isCopied ? 'blur(0px)' : 'blur(4px)',
+        },
+        { type: 'spring', visualDuration: 0.3, bounce: 0.2 }
+      );
+    };
+
+    const animateButtonScale = (
+      event: PointerEvent,
+      targetScale: number,
+      anim: { value: ReturnType<typeof animate> | null }
+    ) => {
+      const button = event.currentTarget as HTMLElement | null;
+      if (!button) return;
+      anim.value?.stop();
+      anim.value = animate(button, { scale: targetScale }, {
+        type: 'spring',
+        visualDuration: 0.15,
+        bounce: 0.3,
+      });
+    };
 
     onMounted(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
@@ -42,6 +105,7 @@ export const Panel = defineComponent({
         presets.value = DialStore.getPresets(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
       });
+      applyCopyIconStyles(copied.value);
     });
 
     onUnmounted(() => {
@@ -49,6 +113,14 @@ export const Panel = defineComponent({
       if (copiedTimeout) {
         window.clearTimeout(copiedTimeout);
       }
+      addTapAnim.value?.stop();
+      copyTapAnim.value?.stop();
+      clipboardIconAnim.value?.stop();
+      checkIconAnim.value?.stop();
+    });
+
+    watch(copied, (next) => {
+      animateCopyIcons(next);
     });
 
     const handleAddPreset = () => {
@@ -159,7 +231,17 @@ export const Panel = defineComponent({
 
     return () => {
       const toolbarNode = h('div', { class: 'dialkit-panel-toolbar-inner' }, [
-        h('button', { class: 'dialkit-toolbar-add', onClick: handleAddPreset, title: 'Add preset' }, [
+        h('button', {
+          ref: addButtonRef,
+          class: 'dialkit-toolbar-add',
+          onClick: handleAddPreset,
+          onPointerdown: (event: PointerEvent) => animateButtonScale(event, 0.9, addTapAnim),
+          onPointerup: (event: PointerEvent) => animateButtonScale(event, 1, addTapAnim),
+          onPointercancel: (event: PointerEvent) => animateButtonScale(event, 1, addTapAnim),
+          onPointerleave: (event: PointerEvent) => animateButtonScale(event, 1, addTapAnim),
+          title: 'Add preset',
+          style: { transform: 'scale(1)' },
+        }, [
           h('svg', {
             viewBox: '0 0 24 24',
             fill: 'none',
@@ -181,32 +263,19 @@ export const Panel = defineComponent({
           activePresetId: activePresetId.value,
         }),
         h('button', {
+          ref: copyButtonRef,
           class: 'dialkit-toolbar-copy',
           onClick: handleCopy,
-          onPointerdown: (event: PointerEvent) => {
-            const button = event.currentTarget as HTMLElement | null;
-            if (button) button.style.transform = 'scale(0.95)';
-          },
-          onPointerup: (event: PointerEvent) => {
-            const button = event.currentTarget as HTMLElement | null;
-            if (button) button.style.transform = 'scale(1)';
-          },
-          onPointercancel: (event: PointerEvent) => {
-            const button = event.currentTarget as HTMLElement | null;
-            if (button) button.style.transform = 'scale(1)';
-          },
-          onPointerleave: (event: PointerEvent) => {
-            const button = event.currentTarget as HTMLElement | null;
-            if (button) button.style.transform = 'scale(1)';
-          },
+          onPointerdown: (event: PointerEvent) => animateButtonScale(event, 0.95, copyTapAnim),
+          onPointerup: (event: PointerEvent) => animateButtonScale(event, 1, copyTapAnim),
+          onPointercancel: (event: PointerEvent) => animateButtonScale(event, 1, copyTapAnim),
+          onPointerleave: (event: PointerEvent) => animateButtonScale(event, 1, copyTapAnim),
           title: 'Copy parameters',
-          style: {
-            transform: 'scale(1)',
-            transition: 'transform 0.15s cubic-bezier(0.22, 1, 0.36, 1)',
-          },
+          style: { transform: 'scale(1)' },
         }, [
           h('span', { class: 'dialkit-toolbar-copy-icon-wrap' }, [
             h('svg', {
+              ref: clipboardIconRef,
               class: 'dialkit-toolbar-copy-icon',
               viewBox: '0 0 24 24',
               fill: 'none',
@@ -214,7 +283,6 @@ export const Panel = defineComponent({
                 opacity: copied.value ? 0 : 1,
                 transform: copied.value ? 'scale(0.5)' : 'scale(1)',
                 filter: copied.value ? 'blur(4px)' : 'blur(0px)',
-                transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
               },
             }, [
               h('path', {
@@ -236,6 +304,7 @@ export const Panel = defineComponent({
               }),
             ]),
             h('svg', {
+              ref: checkIconRef,
               class: 'dialkit-toolbar-copy-icon',
               viewBox: '0 0 24 24',
               fill: 'none',
@@ -247,7 +316,6 @@ export const Panel = defineComponent({
                 opacity: copied.value ? 1 : 0,
                 transform: copied.value ? 'scale(1)' : 'scale(0.5)',
                 filter: copied.value ? 'blur(0px)' : 'blur(4px)',
-                transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
               },
             }, [
               h('path', { d: 'M5 12.75L10 19L19 5' }),
