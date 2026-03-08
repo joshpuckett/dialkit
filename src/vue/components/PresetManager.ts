@@ -21,7 +21,6 @@ export const PresetManager = defineComponent({
     const isOpen = ref(false);
     const isMounted = ref(false);
     const pos = ref({ top: 0, left: 0, width: 0 });
-    const portalTarget = ref<HTMLElement | null>(null);
 
     const triggerRef = ref<HTMLElement | null>(null);
     const dropdownRef = ref<HTMLElement | null>(null);
@@ -123,9 +122,6 @@ export const PresetManager = defineComponent({
     };
 
     onMounted(() => {
-      const root = triggerRef.value?.closest('.dialkit-root') as HTMLElement | null;
-      portalTarget.value = root ?? document.body;
-
       if (chevronRef.value) {
         chevronRef.value.style.transform = `rotate(${isOpen.value ? 180 : 0}deg)`;
         chevronRef.value.style.opacity = String(hasPresets() ? 0.6 : 0.25);
@@ -159,8 +155,8 @@ export const PresetManager = defineComponent({
         }, [h('path', { d: 'M6 9.5L12 15.5L18 9.5' })]),
       ]),
 
-      portalTarget.value && isMounted.value
-        ? h(Teleport, { to: portalTarget.value }, h('div', {
+      isMounted.value
+        ? h(Teleport, { to: 'body' }, h('div', {
           ref: ((el: Element | null) => {
             if (!(el instanceof HTMLElement)) return;
             dropdownRef.value = el;
