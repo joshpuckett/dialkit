@@ -1,5 +1,5 @@
 import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { motion } from 'motion-v';
+import { AnimatePresence, motion } from 'motion-v';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta, DialValue, PanelConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
@@ -196,22 +196,15 @@ export const Panel = defineComponent({
           transition: { type: 'spring', visualDuration: 0.15, bounce: 0.3 },
         }, [
           h('span', { class: 'dialkit-toolbar-copy-icon-wrap' }, [
-            copied.value
-              ? h('svg', {
-                class: 'dialkit-toolbar-copy-icon',
+            h('span', {
+              class: 'dialkit-toolbar-copy-icon',
+              style: { opacity: copied.value ? 0 : 1, transition: 'opacity 120ms ease' },
+            }, [
+              h('svg', {
                 viewBox: '0 0 24 24',
                 fill: 'none',
-                stroke: 'currentColor',
-                'stroke-width': 2,
-                'stroke-linecap': 'round',
-                'stroke-linejoin': 'round',
-              }, [
-                h('path', { d: 'M5 12.75L10 19L19 5' }),
-              ])
-              : h('svg', {
-                class: 'dialkit-toolbar-copy-icon',
-                viewBox: '0 0 24 24',
-                fill: 'none',
+                width: 16,
+                height: 16,
               }, [
                 h('path', {
                   d: 'M8 6C8 4.34315 9.34315 3 11 3H13C14.6569 3 16 4.34315 16 6V7H8V6Z',
@@ -231,6 +224,30 @@ export const Panel = defineComponent({
                   'stroke-linejoin': 'round',
                 }),
               ]),
+            ]),
+            h(AnimatePresence, { initial: false, mode: 'popLayout' }, {
+              default: () => copied.value
+                ? [h(motion.span, {
+                  key: 'check',
+                  class: 'dialkit-toolbar-copy-icon',
+                  initial: { scale: 0.5, opacity: 0 },
+                  animate: { scale: 1, opacity: 1 },
+                  exit: { scale: 0.5, opacity: 0 },
+                  transition: { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+                }, [
+                  h('svg', {
+                    viewBox: '0 0 24 24',
+                    fill: 'none',
+                    stroke: 'currentColor',
+                    'stroke-width': 2,
+                    'stroke-linecap': 'round',
+                    'stroke-linejoin': 'round',
+                    width: 16,
+                    height: 16,
+                  }, [h('path', { d: 'M5 12.75L10 19L19 5' })]),
+                ])]
+                : [],
+            }),
           ]),
           'Copy',
         ]),
