@@ -33,10 +33,11 @@
   const LABEL_CSS_LEFT = 10;
   const VALUE_CSS_RIGHT = 10;
 
-  let wrapperRef: HTMLDivElement | undefined;
-  let labelRef: HTMLSpanElement | undefined;
-  let valueSpanRef: HTMLSpanElement | undefined;
-  let inputRef: HTMLInputElement | undefined;
+  let wrapperRef = $state<HTMLDivElement | null>(null);
+  let inputRef = $state<HTMLInputElement | null>(null);
+  let wrapperWidth = $state(0);
+  let labelWidth = $state(0);
+  let valueWidth = $state(0);
 
   let isInteracting = $state(false);
   let isDragging = $state(false);
@@ -119,17 +120,15 @@
   const isActive = $derived(isInteracting || isHovered);
 
   const leftThreshold = $derived.by(() => {
-    const trackWidth = wrapperRef?.offsetWidth;
-    if (trackWidth && labelRef) {
-      return ((LABEL_CSS_LEFT + labelRef.offsetWidth + HANDLE_BUFFER) / trackWidth) * 100;
+    if (wrapperWidth > 0 && labelWidth > 0) {
+      return ((LABEL_CSS_LEFT + labelWidth + HANDLE_BUFFER) / wrapperWidth) * 100;
     }
     return 30;
   });
 
   const rightThreshold = $derived.by(() => {
-    const trackWidth = wrapperRef?.offsetWidth;
-    if (trackWidth && valueSpanRef) {
-      return ((trackWidth - VALUE_CSS_RIGHT - valueSpanRef.offsetWidth - HANDLE_BUFFER) / trackWidth) * 100;
+    if (wrapperWidth > 0 && valueWidth > 0) {
+      return ((wrapperWidth - VALUE_CSS_RIGHT - valueWidth - HANDLE_BUFFER) / wrapperWidth) * 100;
     }
     return 78;
   });
@@ -267,7 +266,7 @@
   const handleStyle = $derived(`left:max(5px, calc(${fillPercent.current}% - 9px));opacity:${handleOpacityMv.current};transform:translateY(-50%) scaleX(${handleScaleXMv.current}) scaleY(${handleScaleYMv.current});`);
 </script>
 
-<div bind:this={wrapperRef} class="dialkit-slider-wrapper">
+<div bind:this={wrapperRef} bind:offsetWidth={wrapperWidth} class="dialkit-slider-wrapper">
   <div
     class={`dialkit-slider ${isActive ? 'dialkit-slider-active' : ''}`}
     style={trackStyle}
@@ -280,15 +279,15 @@
   >
     <div class="dialkit-slider-hashmarks">
       {#each hashMarks as mark (mark.key)}
-        <div class="dialkit-slider-hashmark" style:left={`${mark.left}%`} />
+        <div class="dialkit-slider-hashmark" style:left={`${mark.left}%`}></div>
       {/each}
     </div>
 
-    <div class="dialkit-slider-fill" style={fillStyle} />
+    <div class="dialkit-slider-fill" style={fillStyle}></div>
 
-    <div class="dialkit-slider-handle" style={handleStyle} />
+    <div class="dialkit-slider-handle" style={handleStyle}></div>
 
-    <span bind:this={labelRef} class="dialkit-slider-label">
+    <span bind:offsetWidth={labelWidth} class="dialkit-slider-label">
       {label}
       {#if shortcut}
         <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
@@ -317,7 +316,7 @@
       />
     {:else}
       <span
-        bind:this={valueSpanRef}
+        bind:offsetWidth={valueWidth}
         class={`dialkit-slider-value ${isValueEditable ? 'dialkit-slider-value-editable' : ''}`}
         onmouseenter={() => (isValueHovered = true)}
         onmouseleave={() => (isValueHovered = false)}
