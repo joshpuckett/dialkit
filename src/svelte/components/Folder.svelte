@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { Spring } from 'svelte/motion';
   import { slide } from 'svelte/transition';
 
@@ -23,12 +24,14 @@
     children?: Snippet;
   }>();
 
-  let isOpen = $state(defaultOpen);
-  let isCollapsed = $state(!defaultOpen);
+  const initialOpen = untrack(() => defaultOpen);
+
+  let isOpen = $state(initialOpen);
+  let isCollapsed = $derived(!isOpen);
   let contentHeight = $state<number | undefined>(undefined);
 
-  let contentRef: HTMLDivElement | undefined;
-  let panelRef: HTMLDivElement | undefined;
+  let contentRef = $state<HTMLDivElement | null>(null);
+  let panelRef = $state<HTMLDivElement | null>(null);
   let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
 
   $effect(() => {
@@ -38,10 +41,10 @@
     return () => window.removeEventListener('resize', onResize);
   });
 
-  const chevronRotation = new Spring(defaultOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
-  const panelWidth = new Spring(defaultOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelHeight = new Spring(defaultOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelRadius = new Spring(defaultOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
+  const chevronRotation = new Spring(initialOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
+  const panelWidth = new Spring(initialOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
+  const panelHeight = new Spring(initialOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
+  const panelRadius = new Spring(initialOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
   const panelScale = new Spring(1, { stiffness: 0.25, damping: 0.7 });
 
   $effect(() => {
@@ -85,7 +88,6 @@
     if (inline && isRoot) return;
     const next = !isOpen;
     isOpen = next;
-    isCollapsed = !next;
     onOpenChange?.(next);
   };
 

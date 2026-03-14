@@ -6,8 +6,8 @@
   let { panelId } = $props<{ panelId: string }>();
 
   let isOpen = $state(false);
-  let triggerEl: HTMLButtonElement | undefined;
-  let dropdownEl: HTMLDivElement | undefined;
+  let triggerEl = $state<HTMLButtonElement | null>(null);
+  let dropdownEl = $state<HTMLDivElement | null>(null);
   let pos = $state({ top: 0, right: 0 });
 
   function formatShortcutKey(sc: ShortcutConfig): string {

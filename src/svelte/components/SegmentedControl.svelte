@@ -10,7 +10,7 @@
     onChange: (value: string) => void;
   }>();
 
-  let containerRef = $state<HTMLDivElement | undefined>(undefined);
+  let containerRef = $state<HTMLDivElement | null>(null);
   let hasAnimated = false;
   let pillLeft = $state<number | null>(null);
   let pillWidth = $state<number | null>(null);

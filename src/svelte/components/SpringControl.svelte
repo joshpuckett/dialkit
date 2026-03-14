@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { DialStore } from 'dialkit/store';
   import type { SpringConfig } from 'dialkit/store';
   import Folder from './Folder.svelte';
@@ -14,13 +15,16 @@
     onChange: (spring: SpringConfig) => void;
   }>();
 
-  let mode = $state<'simple' | 'advanced'>(DialStore.getSpringMode(panelId, path));
+  let mode = $state<'simple' | 'advanced'>(untrack(() => DialStore.getSpringMode(panelId, path)));
+
+  const initialSpring = untrack(() => spring);
 
   $effect(() => {
-    const unsub = DialStore.subscribe(panelId, () => {
+    const syncMode = () => {
       mode = DialStore.getSpringMode(panelId, path);
-    });
-    return unsub;
+    };
+    syncMode();
+    return DialStore.subscribe(panelId, syncMode);
   });
 
   const isSimpleMode = $derived(mode === 'simple');
@@ -29,8 +33,8 @@
     simple: SpringConfig;
     advanced: SpringConfig;
   } = {
-    simple: spring.visualDuration !== undefined ? spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
-    advanced: spring.stiffness !== undefined ? spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+    simple: initialSpring.visualDuration !== undefined ? initialSpring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: initialSpring.stiffness !== undefined ? initialSpring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
   };
 
   const handleModeChange = (newMode: string) => {

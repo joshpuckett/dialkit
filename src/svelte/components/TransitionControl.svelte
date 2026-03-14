@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { DialStore } from 'dialkit/store';
   import type { EasingConfig, SpringConfig, TransitionConfig } from 'dialkit/store';
   import Folder from './Folder.svelte';
@@ -17,15 +18,18 @@
     onChange: (value: TransitionConfig) => void;
   }>();
 
-  let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
+  let mode = $state<CurveMode>(untrack(() => DialStore.getTransitionMode(panelId, path)));
   let editingEase = $state(false);
   let easeDraft = $state('');
 
+  const initialValue = untrack(() => value);
+
   $effect(() => {
-    const unsub = DialStore.subscribe(panelId, () => {
+    const syncMode = () => {
       mode = DialStore.getTransitionMode(panelId, path);
-    });
-    return unsub;
+    };
+    syncMode();
+    return DialStore.subscribe(panelId, syncMode);
   });
 
   const isEasing = $derived(mode === 'easing');
@@ -36,9 +40,9 @@
     simple: SpringConfig;
     advanced: SpringConfig;
   } = {
-    easing: value.type === 'easing' ? value : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
-    simple: value.type === 'spring' && value.visualDuration !== undefined ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
-    advanced: value.type === 'spring' && value.stiffness !== undefined ? value : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+    easing: initialValue.type === 'easing' ? initialValue : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
+    simple: initialValue.type === 'spring' && initialValue.visualDuration !== undefined ? initialValue : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: initialValue.type === 'spring' && initialValue.stiffness !== undefined ? initialValue : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
   };
 
   const spring = $derived<SpringConfig>(

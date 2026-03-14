@@ -16,8 +16,8 @@
   let isOpen = $state(false);
   let pos = $state<{ top: number; left: number; width: number; above: boolean } | null>(null);
   let portalTarget = $state<HTMLElement | null>(null);
-  let triggerRef: HTMLButtonElement | undefined;
-  let dropdownRef: HTMLDivElement | undefined;
+  let triggerRef = $state<HTMLButtonElement | null>(null);
+  let dropdownRef = $state<HTMLDivElement | null>(null);
 
   const chevronRotation = new Spring(0, { stiffness: 0.2, damping: 0.6 });
 

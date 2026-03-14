@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 
   let { label, value, onChange } = $props<{
@@ -8,8 +10,8 @@
   }>();
 
   let isEditing = $state(false);
-  let editValue = $state(value);
-  let colorInputRef: HTMLInputElement | undefined;
+  let editValue = $state(untrack(() => value));
+  let colorInputRef = $state<HTMLInputElement | null>(null);
 
   const expandShorthandHex = (hex: string) => {
     if (hex.length !== 4) return hex;
@@ -67,7 +69,7 @@
       onclick={() => colorInputRef?.click()}
       title="Pick color"
       aria-label={`Pick color for ${label}`}
-    />
+    ></button>
 
     <input
       bind:this={colorInputRef}
