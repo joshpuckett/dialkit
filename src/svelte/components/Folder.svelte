@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { Spring } from 'svelte/motion';
-  import { slide } from 'svelte/transition';
+  import { untrack } from "svelte";
+  import { Spring } from "svelte/motion";
+  import { slide } from "svelte/transition";
 
-  import type { Snippet } from 'svelte';
-  import { ICON_PANEL, ICON_CHEVRON } from '../../icons';
+  import type { Snippet } from "svelte";
+  import { ICON_PANEL, ICON_CHEVRON } from "../../icons";
 
   let {
     title,
@@ -23,29 +24,47 @@
     children?: Snippet;
   }>();
 
-  let isOpen = $state(defaultOpen);
-  let isCollapsed = $state(!defaultOpen);
+  const initialOpen = untrack(() => defaultOpen);
+
+  let isOpen = $state(initialOpen);
+  let isCollapsed = $derived(!isOpen);
   let contentHeight = $state<number | undefined>(undefined);
 
-  let contentRef: HTMLDivElement | undefined;
-  let panelRef: HTMLDivElement | undefined;
-  let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
+  let contentRef = $state<HTMLDivElement | null>(null);
+  let panelRef = $state<HTMLDivElement | null>(null);
+  let windowHeight = $state(
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
 
   $effect(() => {
     if (!isRoot) return;
-    const onResize = () => { windowHeight = window.innerHeight; };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const onResize = () => {
+      windowHeight = window.innerHeight;
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   });
 
-  const chevronRotation = new Spring(defaultOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
-  const panelWidth = new Spring(defaultOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelHeight = new Spring(defaultOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelRadius = new Spring(defaultOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
+  const chevronRotation = new Spring(initialOpen ? 0 : 180, {
+    stiffness: 0.2,
+    damping: 0.6,
+  });
+  const panelWidth = new Spring(initialOpen ? 280 : 42, {
+    stiffness: 0.2,
+    damping: 0.62,
+  });
+  const panelHeight = new Spring(initialOpen ? 220 : 42, {
+    stiffness: 0.2,
+    damping: 0.62,
+  });
+  const panelRadius = new Spring(initialOpen ? 14 : 21, {
+    stiffness: 0.2,
+    damping: 0.62,
+  });
   const panelScale = new Spring(1, { stiffness: 0.25, damping: 0.7 });
 
   $effect(() => {
-    if (!isRoot || !contentRef || typeof ResizeObserver === 'undefined') return;
+    if (!isRoot || !contentRef || typeof ResizeObserver === "undefined") return;
 
     const ro = new ResizeObserver(() => {
       if (!isOpen) return;
@@ -73,7 +92,8 @@
   $effect(() => {
     if (!isRoot) return;
 
-    const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
+    const measured =
+      contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
     const nextHeight = isOpen ? Math.min(measured + 10, windowHeight - 32) : 42;
 
     panelWidth.set(isOpen ? 280 : 42);
@@ -85,7 +105,6 @@
     if (inline && isRoot) return;
     const next = !isOpen;
     isOpen = next;
-    isCollapsed = !next;
     onOpenChange?.(next);
   };
 
@@ -102,19 +121,27 @@
 
   const panelStyle = $derived(
     `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
-      `box-shadow:${isOpen ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)'};` +
-      `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
-      `transform:scale(${panelScale.current});`
+      `box-shadow:${isOpen ? "var(--dial-shadow)" : "var(--dial-shadow-collapsed)"};` +
+      `cursor:${isOpen ? "" : "pointer"};overflow:${isOpen ? "hidden auto" : "hidden"};` +
+      `transform:scale(${panelScale.current});`,
   );
 </script>
 
 {#if isRoot && inline}
   <div class="dialkit-panel-inner dialkit-panel-inline">
     <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
-      <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
+      <div
+        class="dialkit-folder-header dialkit-panel-header"
+        onclick={(e) => {
+          e.stopPropagation();
+          handleToggle();
+        }}
+      >
         <div class="dialkit-folder-header-top">
           <div class="dialkit-folder-title-row">
-            <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
+            <span class="dialkit-folder-title dialkit-folder-title-root"
+              >{title}</span
+            >
           </div>
         </div>
 
@@ -140,31 +167,61 @@
     onpointerup={handleCollapsedTapEnd}
     onpointercancel={handleCollapsedTapEnd}
     onpointerleave={handleCollapsedTapEnd}
-    onclick={() => { if (!isOpen) handleToggle(); }}
+    onclick={() => {
+      if (!isOpen) handleToggle();
+    }}
   >
     <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
-      <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
+      <div
+        class="dialkit-folder-header dialkit-panel-header"
+        onclick={(e) => {
+          e.stopPropagation();
+          handleToggle();
+        }}
+      >
         <div class="dialkit-folder-header-top">
           {#if isOpen}
             <div class="dialkit-folder-title-row">
-              <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
+              <span class="dialkit-folder-title dialkit-folder-title-root"
+                >{title}</span
+              >
             </div>
           {/if}
 
           <svg class="dialkit-panel-icon" viewBox="0 0 16 16" fill="none">
-            <path
-              opacity="0.5"
-              d={ICON_PANEL.path}
+            <path opacity="0.5" d={ICON_PANEL.path} fill="currentColor" />
+            <circle
+              cx={ICON_PANEL.circles[0].cx}
+              cy={ICON_PANEL.circles[0].cy}
+              r={ICON_PANEL.circles[0].r}
               fill="currentColor"
+              stroke="currentColor"
+              stroke-width="1.25"
             />
-            <circle cx={ICON_PANEL.circles[0].cx} cy={ICON_PANEL.circles[0].cy} r={ICON_PANEL.circles[0].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-            <circle cx={ICON_PANEL.circles[1].cx} cy={ICON_PANEL.circles[1].cy} r={ICON_PANEL.circles[1].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
-            <circle cx={ICON_PANEL.circles[2].cx} cy={ICON_PANEL.circles[2].cy} r={ICON_PANEL.circles[2].r} fill="currentColor" stroke="currentColor" stroke-width="1.25" />
+            <circle
+              cx={ICON_PANEL.circles[1].cx}
+              cy={ICON_PANEL.circles[1].cy}
+              r={ICON_PANEL.circles[1].r}
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="1.25"
+            />
+            <circle
+              cx={ICON_PANEL.circles[2].cx}
+              cy={ICON_PANEL.circles[2].cy}
+              r={ICON_PANEL.circles[2].r}
+              fill="currentColor"
+              stroke="currentColor"
+              stroke-width="1.25"
+            />
           </svg>
         </div>
 
         {#if isOpen}
-          <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+          <div
+            class="dialkit-panel-toolbar"
+            onclick={(e) => e.stopPropagation()}
+          >
             {#if toolbar}{@render toolbar()}{/if}
           </div>
         {/if}
@@ -203,7 +260,11 @@
     </div>
 
     {#if isOpen}
-      <div class="dialkit-folder-content" style="clip-path: inset(0 -20px);" transition:slide={{ duration: 220 }}>
+      <div
+        class="dialkit-folder-content"
+        style="clip-path: inset(0 -20px);"
+        transition:slide={{ duration: 220 }}
+      >
         <div class="dialkit-folder-inner">
           {#if children}{@render children()}{/if}
         </div>

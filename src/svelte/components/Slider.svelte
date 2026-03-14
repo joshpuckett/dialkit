@@ -1,5 +1,5 @@
 <script lang="ts">
-   import { tick } from "svelte";
+   import { tick, untrack } from "svelte";
    import { Spring } from "svelte/motion";
    import type { ShortcutConfig } from "dialkit/store";
    import {
@@ -52,10 +52,10 @@
    let showInput = $state(false);
    let inputValue = $state("");
 
-   const fillPercent = new Spring(((value - min) / (max - min)) * 100, {
-      stiffness: 0.25,
-      damping: 0.7,
-   });
+   const fillPercent = new Spring(
+      untrack(() => ((value - min) / (max - min)) * 100),
+      { stiffness: 0.25, damping: 0.7 },
+   );
    const rubberStretchPx = new Spring(0, { stiffness: 0.2, damping: 0.65 });
    const handleOpacityMv = new Spring(0, { stiffness: 0.3, damping: 0.75 });
    const handleScaleXMv = new Spring(0.25, { stiffness: 0.2, damping: 0.6 });
