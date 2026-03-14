@@ -50,7 +50,7 @@ export function createDialKit<T extends DialConfig>(
     };
   });
 
-  return values;
+  return buildReactiveValues(config, () => values, '') as DialKitValues<ResolvedValues<T>>;
 }
 
 function buildResolvedValues(
@@ -85,6 +85,62 @@ function buildResolvedValues(
   }
 
   return result;
+}
+
+function buildReactiveValues<T extends DialConfig>(
+  config: T,
+  getValues: () => ResolvedValues<T>,
+  prefix: string
+): DialKitValues<ResolvedValues<T>> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === '_collapsed') continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (typeof configValue === 'object' && configValue !== null && !isLeafConfigValue(configValue)) {
+      const nested = buildReactiveValues(configValue as DialConfig, getValues, path);
+
+      Object.defineProperty(result, key, {
+        enumerable: true,
+        get() {
+          return nested;
+        },
+      });
+      continue;
+    }
+
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      get() {
+        return getPathValue(getValues(), path);
+      },
+    });
+  }
+
+  return result as DialKitValues<ResolvedValues<T>>;
+}
+
+function getPathValue(source: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, segment) => {
+    if (typeof value !== 'object' || value === null) return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, source);
+}
+
+function isLeafConfigValue(value: unknown): boolean {
+  return (
+    (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'string' ||
+    isSpringConfig(value) ||
+    isEasingConfig(value) ||
+    isActionConfig(value) ||
+    isSelectConfig(value) ||
+    isColorConfig(value) ||
+    isTextConfig(value)
+  );
 }
 
 function hasType(value: unknown, type: string): boolean {
