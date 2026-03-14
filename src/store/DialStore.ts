@@ -338,14 +338,24 @@ class DialStoreClass {
     const presets = this.presets.get(panelId) ?? [];
     this.presets.set(panelId, presets.filter(p => p.id !== presetId));
 
-    // Clear active if deleted
-    if (this.activePreset.get(panelId) === presetId) {
+    const wasActive = this.activePreset.get(panelId) === presetId;
+
+    // Revert to base values if the active preset is deleted so "Version 1"
+    // continues to reflect the original defaults.
+    if (wasActive) {
       this.activePreset.set(panelId, null);
     }
 
-    // Force re-render by creating new snapshot reference
     const panel = this.panels.get(panelId);
     if (panel) {
+      if (wasActive) {
+        const base = this.baseValues.get(panelId);
+        if (base) {
+          panel.values = { ...base };
+        }
+      }
+
+      // Force re-render by creating new snapshot reference
       this.snapshots.set(panelId, { ...panel.values });
     }
     this.notify(panelId);
