@@ -63,6 +63,7 @@ const params = useDialKit(name, config, options?)
 | `name` | `string` | Panel title displayed in the UI |
 | `config` | `DialConfig` | Parameter definitions (see Control Types below) |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
+| `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
 
@@ -295,6 +296,77 @@ When the panel is open, the toolbar provides:
 
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
+- **Shortcuts** — When shortcuts are configured, a keyboard icon appears in the toolbar. Click it to view all registered keyboard shortcuts for that panel.
+
+---
+
+## Keyboard Shortcuts
+
+Assign keyboard shortcuts to controls so you can adjust values without touching the panel. Pass a `shortcuts` map in the options object:
+
+```tsx
+const p = useDialKit('Card', {
+  blur: [24, 0, 100],
+  scale: 1.2,
+  opacity: [1, 0, 1],
+  darkMode: true,
+  shadow: {
+    blur: [10, 0, 50],
+  },
+}, {
+  shortcuts: {
+    blur:          { key: 'b', mode: 'fine' },
+    scale:         { key: 's', modifier: 'alt', mode: 'coarse' },
+    opacity:       { key: 'o' },
+    darkMode:      { key: 'm' },
+    'shadow.blur': { key: 'd', mode: 'fine' },
+  },
+});
+```
+
+### ShortcutConfig
+
+```tsx
+type ShortcutConfig = {
+  key: string;                          // trigger key (e.g. 'b', 's')
+  modifier?: 'alt' | 'shift' | 'meta'; // optional modifier key
+  mode?: 'fine' | 'normal' | 'coarse'; // precision level (default: 'normal')
+};
+```
+
+### Supported controls
+
+| Control | Interaction | Description |
+|---------|------------|-------------|
+| **Slider** | Hold key + scroll wheel | Increment/decrement the value |
+| **Toggle** | Press key | Flip on/off |
+
+### Precision modes
+
+For sliders, the `mode` controls how much each scroll tick changes the value:
+
+| Mode | Step multiplier | Use case |
+|------|----------------|----------|
+| `fine` | step &divide; 10 | Precision tweaking |
+| `normal` | step &times; 1 | Default behavior |
+| `coarse` | step &times; 10 | Big sweeps |
+
+### Nested paths
+
+For controls inside folders, use dot notation:
+
+```tsx
+shortcuts: {
+  'shadow.blur': { key: 'd' },
+  'shadow.opacity': { key: 'a', mode: 'fine' },
+}
+```
+
+### UI indicators
+
+Each control with a shortcut displays a pill badge next to its label showing the key combo (e.g. `B`, `⌥S`, `⇧D`). The pill highlights when the shortcut key is actively held.
+
+Shortcuts are automatically disabled when a text input is focused.
 
 ---
 
@@ -335,6 +407,11 @@ function PhotoStack() {
     next: { type: 'action' },
     previous: { type: 'action' },
   }, {
+    shortcuts: {
+      'backPhoto.offsetX': { key: 'x', mode: 'coarse' },
+      'backPhoto.scale': { key: 's', mode: 'fine' },
+      darkMode: { key: 'm' },
+    },
     onAction: (action) => {
       if (action === 'next') goNext();
       if (action === 'previous') goPrevious();
@@ -460,6 +537,8 @@ import type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ShortcutConfig,
+  ShortcutMode,
   DialConfig,
   DialValue,
   ResolvedValues,

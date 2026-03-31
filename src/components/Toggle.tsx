@@ -1,15 +1,33 @@
 import { SegmentedControl } from './SegmentedControl';
+import type { ShortcutConfig } from '../store/DialStore';
 
 interface ToggleProps {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  shortcut?: ShortcutConfig;
+  shortcutActive?: boolean;
 }
 
-export function Toggle({ label, checked, onChange }: ToggleProps) {
+function formatShortcut(sc: ShortcutConfig): string {
+  const mod = sc.modifier === 'alt' ? '⌥'
+    : sc.modifier === 'shift' ? '⇧'
+    : sc.modifier === 'meta' ? '⌘'
+    : '';
+  return `${mod}${sc.key.toUpperCase()}`;
+}
+
+export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
   return (
     <div className="dialkit-labeled-control">
-      <span className="dialkit-labeled-control-label">{label}</span>
+      <span className="dialkit-labeled-control-label">
+        {label}
+        {shortcut && (
+          <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+            {formatShortcut(shortcut)}
+          </span>
+        )}
+      </span>
       <SegmentedControl
         options={[
           { value: 'off' as const, label: 'Off' },

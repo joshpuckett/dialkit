@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
+import type { ShortcutConfig } from '../store/DialStore';
 
 interface SliderProps {
   label: string;
@@ -9,6 +10,16 @@ interface SliderProps {
   max?: number;
   step?: number;
   unit?: string;
+  shortcut?: ShortcutConfig;
+  shortcutActive?: boolean;
+}
+
+function formatShortcut(sc: ShortcutConfig): string {
+  const mod = sc.modifier === 'alt' ? '⌥'
+    : sc.modifier === 'shift' ? '⇧'
+    : sc.modifier === 'meta' ? '⌘'
+    : '';
+  return `${mod}${sc.key.toUpperCase()}`;
 }
 
 const CLICK_THRESHOLD = 3;
@@ -44,6 +55,8 @@ export function Slider({
   max = 1,
   step = 0.01,
   unit,
+  shortcut,
+  shortcutActive,
 }: SliderProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -411,7 +424,14 @@ export function Slider({
           }}
         />
 
-        <span ref={labelRef} className="dialkit-slider-label">{label}</span>
+        <span ref={labelRef} className="dialkit-slider-label">
+          {label}
+          {shortcut && (
+            <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+              {formatShortcut(shortcut)}
+            </span>
+          )}
+        </span>
 
         {showInput ? (
           <input

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { Panel } from './Panel';
+import { ShortcutListener } from './ShortcutListener';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -40,13 +41,15 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   }
 
   const content = (
-    <div className="dialkit-root" data-mode={mode}>
-      <div className="dialkit-panel" data-position={inline ? undefined : position} data-mode={mode}>
-        {panels.map((panel) => (
-          <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} />
-        ))}
+    <ShortcutListener>
+      <div className="dialkit-root" data-mode={mode}>
+        <div className="dialkit-panel" data-position={inline ? undefined : position} data-mode={mode}>
+          {panels.map((panel) => (
+            <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} />
+          ))}
+        </div>
       </div>
-    </div>
+    </ShortcutListener>
   );
 
   if (inline) {
