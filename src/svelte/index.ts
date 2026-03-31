@@ -21,7 +21,7 @@ export { default as ColorControl } from './components/ColorControl.svelte';
 export { default as PresetManager } from './components/PresetManager.svelte';
 
 // Store exports (via dialkit/store subpath — svelte-package doesn't bundle, so relative paths to src/store would break in dist)
-export { DialStore } from 'dialkit/store';
+export { DialStore, isDevEnvironment } from 'dialkit/store';
 export type {
   SpringConfig,
   EasingConfig,

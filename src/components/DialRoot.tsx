@@ -1,36 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { DialStore, PanelConfig } from '../store/DialStore';
+import { DialStore, isDevEnvironment, PanelConfig } from '../store/DialStore';
 import { Panel } from './Panel';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
 
+const EMPTY_PANELS: PanelConfig[] = [];
+
 interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  /** Controls whether DialKit renders. Defaults to true in development, false in production. */
+  enabled?: boolean;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover' }: DialRootProps) {
-  const [panels, setPanels] = useState<PanelConfig[]>([]);
-  const [mounted, setMounted] = useState(false);
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', enabled = isDevEnvironment() }: DialRootProps) {
   const inline = mode === 'inline';
 
-  // Subscribe to global panel changes
+  // Sync enabled state to the store
   useEffect(() => {
-    setMounted(true);
-    setPanels(DialStore.getPanels());
+    DialStore.setEnabled(enabled);
+  }, [enabled]);
 
-    const unsubscribe = DialStore.subscribeGlobal(() => {
-      setPanels(DialStore.getPanels());
-    });
+  // Subscribe to panel changes
+  const panels = useSyncExternalStore(
+    (callback) => DialStore.subscribeGlobal(callback),
+    () => DialStore.getPanels(),
+    () => EMPTY_PANELS
+  );
 
-    return unsubscribe;
-  }, []);
+  // Don't render when disabled
+  if (!enabled) {
+    return null;
+  }
 
   // Don't render on server
-  if (!mounted || typeof window === 'undefined') {
+  if (typeof window === 'undefined') {
     return null;
   }
 

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Real-time parameter tweaking for React, Solid, and Svelte apps",
   "type": "module",
+  "sideEffects": ["*.css", "*.svelte"],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

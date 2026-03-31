@@ -18,8 +18,9 @@ export function useDialKit<T extends DialConfig>(
   const onActionRef = useRef(options?.onAction);
   onActionRef.current = options?.onAction;
 
-  // Register panel on mount
+  // Register panel on mount (skip when disabled)
   useEffect(() => {
+    if (!DialStore.isEnabled()) return;
     DialStore.registerPanel(panelId, name, configRef.current);
     return () => DialStore.unregisterPanel(panelId);
   }, [panelId, name]);
@@ -27,6 +28,7 @@ export function useDialKit<T extends DialConfig>(
   // Update panel when config structure changes
   const mountedRef = useRef(false);
   useEffect(() => {
+    if (!DialStore.isEnabled()) return;
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
@@ -37,6 +39,7 @@ export function useDialKit<T extends DialConfig>(
 
   // Subscribe to action events
   useEffect(() => {
+    if (!DialStore.isEnabled()) return;
     return DialStore.subscribeActions(panelId, (action) => {
       onActionRef.current?.(action);
     });

@@ -21,7 +21,7 @@ export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
 
 // Store (for advanced usage)
-export { DialStore } from './store/DialStore';
+export { DialStore, isDevEnvironment } from './store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,

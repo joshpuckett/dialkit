@@ -30,6 +30,7 @@ export function createDialKit<T extends DialConfig>(
   let values = $state<ResolvedValues<T>>(resolve());
 
   $effect(() => {
+    if (!DialStore.isEnabled()) return;
     DialStore.registerPanel(panelId, name, config);
     values = resolve();
 

@@ -19,6 +19,7 @@ export function createDialKit<T extends DialConfig>(
   );
 
   onMount(() => {
+    if (!DialStore.isEnabled()) return;
     DialStore.registerPanel(panelId, name, config);
     setValues(DialStore.getValues(panelId));
 

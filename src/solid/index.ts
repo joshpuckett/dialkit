@@ -19,7 +19,7 @@ export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
-export { DialStore } from '../store/DialStore';
+export { DialStore, isDevEnvironment } from '../store/DialStore';
 export type {
   SpringConfig,
   ActionConfig,

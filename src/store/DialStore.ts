@@ -1,5 +1,26 @@
 // Lightweight state store with subscriptions for dialkit
 
+declare const process: { env?: { NODE_ENV?: string } } | undefined;
+declare global {
+  interface ImportMeta {
+    env?: { MODE?: string; DEV?: boolean };
+  }
+}
+
+export function isDevEnvironment(): boolean {
+  try {
+    // import.meta.env.MODE is used by Vite/ESM bundlers (works in dev server)
+    // process.env.NODE_ENV is used by Webpack/CJS/Node (replaced at build time)
+    // Same dual-check pattern as Zustand devtools
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      return import.meta.env.MODE !== 'production';
+    }
+    return typeof process !== 'undefined' && process?.env?.NODE_ENV !== 'production';
+  } catch {
+    return false;
+  }
+}
+
 export type SpringConfig = {
   type: 'spring';
   stiffness?: number;
@@ -92,8 +113,9 @@ export type Preset = {
   values: Record<string, DialValue>;
 };
 
-// Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
+// Stable empty references for useSyncExternalStore (React 19 requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
+const EMPTY_PANELS: PanelConfig[] = [];
 
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
@@ -104,8 +126,40 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  private panelsSnapshot: PanelConfig[] = EMPTY_PANELS;
+  private enabled: boolean = true;
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  setEnabled(value: boolean): void {
+    if (this.enabled === value) return;
+    this.enabled = value;
+
+    if (!value) {
+      // Notify per-panel listeners first so useSyncExternalStore detects the change
+      for (const panelId of this.panels.keys()) {
+        this.notify(panelId);
+      }
+      // Then clear all panels
+      const panelIds = Array.from(this.panels.keys());
+      for (const id of panelIds) {
+        this.panels.delete(id);
+        this.listeners.delete(id);
+        this.snapshots.delete(id);
+        this.actionListeners.delete(id);
+        this.baseValues.delete(id);
+      }
+      this.presets.clear();
+      this.activePreset.clear();
+      // Then notify global listeners
+      this.notifyGlobal();
+    }
+  }
 
   registerPanel(id: string, name: string, config: DialConfig): void {
+    if (!this.enabled) return;
     const controls = this.parseConfig(config, '');
     const values = this.flattenValues(config, '');
 
@@ -119,6 +173,7 @@ class DialStoreClass {
   }
 
   updatePanel(id: string, name: string, config: DialConfig): void {
+    if (!this.enabled) return;
     const existing = this.panels.get(id);
     if (!existing) {
       this.registerPanel(id, name, config);
@@ -247,7 +302,7 @@ class DialStoreClass {
   }
 
   getPanels(): PanelConfig[] {
-    return Array.from(this.panels.values());
+    return this.panelsSnapshot;
   }
 
   getPanel(id: string): PanelConfig | undefined {
@@ -255,6 +310,7 @@ class DialStoreClass {
   }
 
   subscribe(panelId: string, listener: Listener): () => void {
+    if (!this.enabled) return () => {};
     if (!this.listeners.has(panelId)) {
       this.listeners.set(panelId, new Set());
     }
@@ -271,6 +327,7 @@ class DialStoreClass {
   }
 
   subscribeActions(panelId: string, listener: ActionListener): () => void {
+    if (!this.enabled) return () => {};
     if (!this.actionListeners.has(panelId)) {
       this.actionListeners.set(panelId, new Set());
     }
@@ -363,6 +420,7 @@ class DialStoreClass {
   }
 
   private notifyGlobal(): void {
+    this.panelsSnapshot = this.panels.size > 0 ? Array.from(this.panels.values()) : EMPTY_PANELS;
     this.globalListeners.forEach(fn => fn());
   }
 
@@ -654,4 +712,4 @@ class DialStoreClass {
 }
 
 // Singleton instance
-export const DialStore = new DialStoreClass();
+export const DialStore = /*#__PURE__*/ new DialStoreClass();
