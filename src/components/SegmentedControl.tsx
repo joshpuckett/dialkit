@@ -1,5 +1,4 @@
-import { useRef, useState, useLayoutEffect } from 'react';
-import { motion } from 'motion/react';
+import { useRef } from 'react';
 
 interface SegmentedControlOption<T extends string> {
   value: T;
@@ -12,51 +11,42 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
 }
 
+const PADDING = 2;
+
 export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
 }: SegmentedControlProps<T>) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<Map<T, HTMLButtonElement>>(new Map());
-  const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null);
   const hasAnimated = useRef(false);
+  const activeIndex = options.findIndex((o) => o.value === value);
+  const count = options.length;
 
-  useLayoutEffect(() => {
-    const button = buttonRefs.current.get(value);
-    const container = containerRef.current;
-    if (button && container) {
-      const containerRect = container.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      setPillStyle({
-        left: buttonRect.left - containerRect.left,
-        width: buttonRect.width,
-      });
-    }
-  }, [value]);
+  const pillLeft = `calc(${PADDING}px + ${activeIndex} * (100% - ${PADDING * 2}px) / ${count})`;
+  const pillWidth = `calc((100% - ${PADDING * 2}px) / ${count})`;
+
+  // Enable transition after first render
+  const shouldAnimate = hasAnimated.current;
+  hasAnimated.current = true;
 
   return (
-    <div ref={containerRef} className="dialkit-segmented">
-      {pillStyle && (
-        <motion.div
-          className="dialkit-segmented-pill"
-          style={{ left: pillStyle.left, width: pillStyle.width }}
-          animate={{ left: pillStyle.left, width: pillStyle.width }}
-          transition={
-            hasAnimated.current
-              ? { type: 'spring', visualDuration: 0.2, bounce: 0.15 }
-              : { duration: 0 }
-          }
-          onAnimationComplete={() => { hasAnimated.current = true; }}
-        />
-      )}
+    <div className="dialkit-segmented">
+      <div
+        className="dialkit-segmented-pill"
+        style={{
+          left: pillLeft,
+          width: pillWidth,
+          transition: shouldAnimate
+            ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+            : 'none',
+        }}
+      />
 
       {options.map((option) => {
         const isActive = value === option.value;
         return (
           <button
             key={option.value}
-            ref={(el) => { if (el) buttonRefs.current.set(option.value, el); }}
             onClick={() => onChange(option.value)}
             className="dialkit-segmented-button"
             data-active={String(isActive)}

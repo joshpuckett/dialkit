@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { Spring } from 'svelte/motion';
-
   export interface SegmentedControlOption<T extends string = string> {
     value: T;
     label: string;
@@ -12,90 +10,36 @@
     onChange: (value: string) => void;
   }>();
 
-  let containerRef: HTMLDivElement | undefined;
-  const buttonRefs = new Map<string, HTMLButtonElement>();
-  let pillReady = $state(false);
+  const PADDING = 2;
+
   let hasAnimated = false;
 
-  const pillLeft = new Spring(0, { stiffness: 0.2, damping: 0.6 });
-  const pillWidth = new Spring(0, { stiffness: 0.2, damping: 0.6 });
-
-  const buttonRef = (node: HTMLButtonElement, key: string) => {
-    buttonRefs.set(key, node);
-    return {
-      destroy() {
-        buttonRefs.delete(key);
-      },
-    };
-  };
-
-  const measurePill = () => {
-    const button = buttonRefs.get(value);
-    if (!button || !containerRef) return null;
-    const containerRect = containerRef.getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-
-    return {
-      left: buttonRect.left - containerRect.left,
-      width: buttonRect.width,
-    };
-  };
-
-  const updatePill = (shouldAnimate: boolean) => {
-    const next = measurePill();
-    if (!next) return;
-
-    if (!pillReady) {
-      pillLeft.set(next.left, { instant: true });
-      pillWidth.set(next.width, { instant: true });
-      pillReady = true;
-      return;
-    }
-
-    if (!shouldAnimate || !hasAnimated) {
-      pillLeft.set(next.left, { instant: true });
-      pillWidth.set(next.width, { instant: true });
-      return;
-    }
-
-    pillLeft.set(next.left);
-    pillWidth.set(next.width);
-  };
-
-  $effect(() => {
-    value;
-    if (!pillReady) return;
-    updatePill(true);
+  let pillLeft = $derived.by(() => {
+    const i = options.findIndex((o: SegmentedControlOption) => o.value === value);
+    return `calc(${PADDING}px + ${i} * (100% - ${PADDING * 2}px) / ${options.length})`;
   });
 
-  $effect(() => {
-    if (!containerRef || typeof ResizeObserver === 'undefined') return;
+  let pillWidth = $derived(`calc((100% - ${PADDING * 2}px) / ${options.length})`);
 
-    requestAnimationFrame(() => {
-      updatePill(false);
+  let transition = $derived.by(() => {
+    if (!hasAnimated) {
       hasAnimated = true;
-    });
-
-    const ro = new ResizeObserver(() => updatePill(false));
-    ro.observe(containerRef);
-
-    return () => {
-      ro.disconnect();
-    };
+      return 'none';
+    }
+    return 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)';
   });
 </script>
 
-<div bind:this={containerRef} class="dialkit-segmented">
+<div class="dialkit-segmented">
   <div
     class="dialkit-segmented-pill"
-    style:left={`${pillLeft.current}px`}
-    style:width={`${pillWidth.current}px`}
-    style:visibility={pillReady ? 'visible' : 'hidden'}
-  />
+    style:left={pillLeft}
+    style:width={pillWidth}
+    style:transition={transition}
+  ></div>
 
   {#each options as option (option.value)}
     <button
-      use:buttonRef={option.value}
       onclick={() => onChange(option.value)}
       class="dialkit-segmented-button"
       data-active={String(value === option.value)}

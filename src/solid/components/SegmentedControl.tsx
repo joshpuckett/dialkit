@@ -1,5 +1,4 @@
-import { createSignal, createRenderEffect, onMount, onCleanup, For } from 'solid-js';
-import { animate } from 'motion';
+import { For, createMemo } from 'solid-js';
 
 interface SegmentedControlOption<T extends string> {
   value: T;
@@ -12,99 +11,44 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
 }
 
+const PADDING = 2;
+
 export function SegmentedControl<T extends string>(props: SegmentedControlProps<T>) {
-  let containerRef!: HTMLDivElement;
-  let pillRef!: HTMLDivElement;
-  const buttonRefs = new Map<T, HTMLButtonElement>();
-  const [pillReady, setPillReady] = createSignal(false);
-
   let hasAnimated = false;
-  let pillAnim: any = null;
 
-  const measurePill = () => {
-    const button = buttonRefs.get(props.value);
-    if (!button || !containerRef) return null;
-    const containerRect = containerRef.getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-    return {
-      left: buttonRect.left - containerRect.left,
-      width: buttonRect.width,
-    };
-  };
+  const activeIndex = createMemo(() =>
+    props.options.findIndex((o) => o.value === props.value)
+  );
 
-  const setPillImmediate = (left: number, width: number) => {
-    if (!pillRef) return;
-    pillRef.style.left = `${left}px`;
-    pillRef.style.width = `${width}px`;
-  };
+  const pillLeft = createMemo(() =>
+    `calc(${PADDING}px + ${activeIndex()} * (100% - ${PADDING * 2}px) / ${props.options.length})`
+  );
 
-  const updatePill = (shouldAnimate: boolean) => {
-    const next = measurePill();
-    if (!next) return;
+  const pillWidth = `calc((100% - ${PADDING * 2}px) / 2)`;
 
-    if (!pillReady()) {
-      setPillImmediate(next.left, next.width);
-      setPillReady(true);
-      return;
-    }
-
-    if (!shouldAnimate || !hasAnimated) {
-      pillAnim?.stop();
-      pillAnim = null;
-      setPillImmediate(next.left, next.width);
-      return;
-    }
-
-    pillAnim?.stop();
-    pillAnim = animate(pillRef, {
-      left: next.left,
-      width: next.width,
-    }, {
-      type: 'spring',
-      visualDuration: 0.2,
-      bounce: 0.15,
-      onComplete: () => {
-        pillAnim = null;
-      },
-    });
-  };
-
-  createRenderEffect(() => {
-    const _ = props.value;
-    if (!pillReady()) return;
-    updatePill(true);
-  });
-
-  onMount(() => {
-    requestAnimationFrame(() => {
-      updatePill(false);
+  const transition = createMemo(() => {
+    // Track value to re-evaluate on change
+    activeIndex();
+    if (!hasAnimated) {
       hasAnimated = true;
-    });
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => updatePill(false));
-    ro.observe(containerRef);
-
-    onCleanup(() => {
-      pillAnim?.stop();
-      ro.disconnect();
-    });
+      return 'none';
+    }
+    return 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)';
   });
 
   return (
-    <div ref={containerRef} class="dialkit-segmented">
+    <div class="dialkit-segmented">
       <div
-        ref={pillRef}
         class="dialkit-segmented-pill"
-        style={{ left: '0px', width: '0px', visibility: pillReady() ? 'visible' : 'hidden' }}
+        style={{
+          left: pillLeft(),
+          width: pillWidth,
+          transition: transition(),
+        }}
       />
       <For each={props.options}>
         {(option) => (
           <button
-            ref={(el) => {
-              if (!el) return;
-              buttonRefs.set(option.value, el);
-            }}
             onClick={() => props.onChange(option.value)}
             class="dialkit-segmented-button"
             data-active={String(props.value === option.value)}
