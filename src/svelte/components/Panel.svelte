@@ -1,12 +1,12 @@
 <script lang="ts">
   import { Spring } from 'svelte/motion';
-  import { DialStore } from 'dialkit/store';
-  import type { DialValue, PanelConfig, Preset } from 'dialkit/store';
+  import { DialStore, DIAL_POSITIONS } from 'dialkit/store';
+  import type { DialValue, PanelConfig, Preset, DialPosition } from 'dialkit/store';
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
 
-  let { panel, defaultOpen = true, inline = false } = $props<{ panel: PanelConfig; defaultOpen?: boolean; inline?: boolean }>();
+  let { panel, defaultOpen = true, inline = false, growDirection, currentPosition, onPositionChange } = $props<{ panel: PanelConfig; defaultOpen?: boolean; inline?: boolean; growDirection?: 'up' | 'down'; currentPosition?: DialPosition; onPositionChange?: (pos: DialPosition) => void }>();
 
   let copied = $state(false);
   let isPanelOpen = $state(defaultOpen);
@@ -71,8 +71,19 @@
 </script>
 
 <div class="dialkit-panel-wrapper">
-  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={(open) => (isPanelOpen = open)}>
+  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={(open) => (isPanelOpen = open)} {growDirection} compactToolbar={!!currentPosition}>
     {#snippet toolbar()}
+      {#if currentPosition && onPositionChange}
+        <div class="dialkit-position-picker" title="Panel position">
+          {#each DIAL_POSITIONS as pos}
+            <button
+              class="dialkit-position-dot"
+              data-active={currentPosition === pos ? 'true' : undefined}
+              onclick={() => onPositionChange(pos)}
+            ></button>
+          {/each}
+        </div>
+      {/if}
       <button
         class="dialkit-toolbar-add"
         onclick={handleAddPreset}

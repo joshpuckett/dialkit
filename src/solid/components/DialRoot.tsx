@@ -1,22 +1,34 @@
 import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { DialStore } from '../../store/DialStore';
-import type { PanelConfig } from '../../store/DialStore';
+import { DialStore, loadPosition, savePosition } from '../../store/DialStore';
+import type { PanelConfig, DialPosition } from '../../store/DialStore';
 import { Panel } from './Panel';
 
-export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+export type { DialPosition };
 export type DialMode = 'popover' | 'inline';
 
 interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  positionPicker?: boolean;
 }
 
 export function DialRoot(props: DialRootProps) {
   const [panels, setPanels] = createSignal<PanelConfig[]>([]);
   const [mounted, setMounted] = createSignal(false);
   const inline = () => (props.mode ?? 'popover') === 'inline';
+  const showPicker = () => (props.positionPicker ?? false) && !inline();
+  const [currentPosition, setCurrentPosition] = createSignal<DialPosition>(
+    showPicker() ? loadPosition(props.position ?? 'top-right') : (props.position ?? 'top-right')
+  );
+
+  const growDirection = () => currentPosition().startsWith('bottom') ? 'up' as const : 'down' as const;
+
+  const handlePositionChange = (pos: DialPosition) => {
+    setCurrentPosition(pos);
+    savePosition(pos);
+  };
 
   onMount(() => {
     setMounted(true);
@@ -29,9 +41,22 @@ export function DialRoot(props: DialRootProps) {
 
   const content = () => (
     <div class="dialkit-root" data-mode={props.mode ?? 'popover'}>
-      <div class="dialkit-panel" data-position={inline() ? undefined : (props.position ?? 'top-right')} data-mode={props.mode ?? 'popover'}>
+      <div
+        class="dialkit-panel"
+        data-position={inline() ? undefined : currentPosition()}
+        data-mode={props.mode ?? 'popover'}
+      >
         <For each={panels()}>
-          {(panel) => <Panel panel={panel} defaultOpen={inline() || (props.defaultOpen ?? true)} inline={inline()} />}
+          {(panel) => (
+            <Panel
+              panel={panel}
+              defaultOpen={inline() || (props.defaultOpen ?? true)}
+              inline={inline()}
+              growDirection={!inline() ? growDirection() : undefined}
+              currentPosition={showPicker() ? currentPosition() : undefined}
+              onPositionChange={showPicker() ? handlePositionChange : undefined}
+            />
+          )}
         </For>
       </div>
     </div>

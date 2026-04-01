@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { DialStore, PanelConfig } from '../store/DialStore';
+import { DialStore, PanelConfig, loadPosition, savePosition } from '../store/DialStore';
+import type { DialPosition } from '../store/DialStore';
 import { Panel } from './Panel';
 
-export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+export type { DialPosition };
 export type DialMode = 'popover' | 'inline';
 
 interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  positionPicker?: boolean;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover' }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', positionPicker = false }: DialRootProps) {
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [mounted, setMounted] = useState(false);
   const inline = mode === 'inline';
+  const showPicker = positionPicker && !inline;
+  const [currentPosition, setCurrentPosition] = useState<DialPosition>(() => showPicker ? loadPosition(position) : position);
 
   // Subscribe to global panel changes
   useEffect(() => {
@@ -29,6 +33,14 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     return unsubscribe;
   }, []);
 
+  const handlePositionChange = useCallback((pos: DialPosition) => {
+    setCurrentPosition(pos);
+    savePosition(pos);
+  }, []);
+
+  // Derive transform-origin from position for open/close animation
+  const growDirection = currentPosition.startsWith('bottom') ? 'up' : 'down';
+
   // Don't render on server
   if (!mounted || typeof window === 'undefined') {
     return null;
@@ -41,9 +53,21 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
 
   const content = (
     <div className="dialkit-root" data-mode={mode}>
-      <div className="dialkit-panel" data-position={inline ? undefined : position} data-mode={mode}>
+      <div
+        className="dialkit-panel"
+        data-position={inline ? undefined : currentPosition}
+        data-mode={mode}
+      >
         {panels.map((panel) => (
-          <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} />
+          <Panel
+            key={panel.id}
+            panel={panel}
+            defaultOpen={inline || defaultOpen}
+            inline={inline}
+            growDirection={!inline ? growDirection : undefined}
+            currentPosition={showPicker ? currentPosition : undefined}
+            onPositionChange={showPicker ? handlePositionChange : undefined}
+          />
         ))}
       </div>
     </div>

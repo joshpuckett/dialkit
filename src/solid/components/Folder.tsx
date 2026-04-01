@@ -9,6 +9,8 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: JSX.Element;
+  growDirection?: 'up' | 'down';
+  compactToolbar?: boolean;
 }
 
 export function Folder(props: FolderProps) {
@@ -169,7 +171,7 @@ export function Folder(props: FolderProps) {
         </div>
 
         <Show when={props.isRoot && props.toolbar && isOpen()}>
-          <div class="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
+          <div class="dialkit-panel-toolbar" data-compact={props.compactToolbar ? '' : undefined} onClick={(e) => e.stopPropagation()}>
             {props.toolbar}
           </div>
         </Show>
@@ -249,6 +251,8 @@ export function Folder(props: FolderProps) {
 
       panelRef.style.cursor = open ? '' : 'pointer';
       panelRef.style.overflow = open ? '' : 'hidden';
+
+      panelRef.style.transformOrigin = props.growDirection === 'up' ? 'bottom right' : '';
 
       if (!rootPanelInitialized) {
         rootPanelInitialized = true;

@@ -12,6 +12,8 @@
     onOpenChange,
     toolbar,
     children,
+    growDirection,
+    compactToolbar,
   } = $props<{
     title: string;
     defaultOpen?: boolean;
@@ -20,6 +22,8 @@
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: Snippet;
     children?: Snippet;
+    growDirection?: 'up' | 'down';
+    compactToolbar?: boolean;
   }>();
 
   let isOpen = $state(defaultOpen);
@@ -95,7 +99,8 @@
     `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
       `box-shadow:${isOpen ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0, 0, 0, 0.25)'};` +
       `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? '' : 'hidden'};` +
-      `transform:scale(${panelScale.current});`
+      `transform:scale(${panelScale.current});` +
+      (growDirection === 'up' ? 'transform-origin:bottom right;' : '')
   );
 </script>
 
@@ -109,7 +114,7 @@
           </div>
         </div>
 
-        <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+        <div class="dialkit-panel-toolbar" data-compact={compactToolbar ? '' : undefined} onclick={(e) => e.stopPropagation()}>
           {#if toolbar}{@render toolbar()}{/if}
         </div>
       </div>
@@ -155,7 +160,7 @@
         </div>
 
         {#if isOpen}
-          <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+          <div class="dialkit-panel-toolbar" data-compact={compactToolbar ? '' : undefined} onclick={(e) => e.stopPropagation()}>
             {#if toolbar}{@render toolbar()}{/if}
           </div>
         {/if}

@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For, JSX } from 'solid-js';
 import { animate } from 'motion';
-import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, DialValue } from '../../store/DialStore';
+import { DialStore, DIAL_POSITIONS } from '../../store/DialStore';
+import type { ControlMeta, PanelConfig, SpringConfig, DialValue, DialPosition } from '../../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
@@ -15,6 +15,9 @@ interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  growDirection?: 'up' | 'down';
+  currentPosition?: DialPosition;
+  onPositionChange?: (position: DialPosition) => void;
 }
 
 export function Panel(props: PanelProps) {
@@ -229,8 +232,21 @@ export function Panel(props: PanelProps) {
     );
   };
 
+  const positionPicker = () => props.currentPosition && props.onPositionChange ? (
+    <div class="dialkit-position-picker" title="Panel position">
+      {DIAL_POSITIONS.map((pos) => (
+        <button
+          class="dialkit-position-dot"
+          data-active={props.currentPosition === pos ? 'true' : undefined}
+          onClick={() => props.onPositionChange!(pos)}
+        />
+      ))}
+    </div>
+  ) : null;
+
   const toolbar = (
     <>
+      {positionPicker()}
       <button
         ref={addButtonRef}
         class="dialkit-toolbar-add"
@@ -296,7 +312,7 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="dialkit-panel-wrapper">
-      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
+      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={setIsPanelOpen} toolbar={toolbar} growDirection={props.growDirection} compactToolbar={!!props.currentPosition}>
         {renderControls()}
       </Folder>
     </div>

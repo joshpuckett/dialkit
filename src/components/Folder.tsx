@@ -9,9 +9,11 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: ReactNode;
+  growDirection?: 'up' | 'down';
+  compactToolbar?: boolean;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, growDirection, compactToolbar }: FolderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
         </div>
 
         {isRoot && toolbar && isOpen && (
-          <div className="dialkit-panel-toolbar" onClick={(e) => e.stopPropagation()}>
+          <div className="dialkit-panel-toolbar" data-compact={compactToolbar ? '' : undefined} onClick={(e) => e.stopPropagation()}>
             {toolbar}
           </div>
         )}
@@ -125,9 +127,13 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
       );
     }
 
-    const panelStyle = isOpen
+    const panelStyle: Record<string, any> = isOpen
       ? { width: 280, height: contentHeight !== undefined ? contentHeight + 24 : 'auto' as const, borderRadius: 14, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)', cursor: undefined as string | undefined }
       : { width: 42, height: 42, borderRadius: 21, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)', overflow: 'hidden' as const, cursor: 'pointer' as const };
+
+    if (growDirection === 'up') {
+      panelStyle.transformOrigin = 'bottom right';
+    }
 
     return (
       <motion.div

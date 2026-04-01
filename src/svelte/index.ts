@@ -4,7 +4,7 @@ export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
 
 // Root component
 export { default as DialRoot } from './components/DialRoot.svelte';
-export type { DialPosition, DialMode } from './components/DialRoot.svelte';
+export type { DialMode } from './components/DialRoot.svelte';
 
 // Component exports
 export { default as Slider } from './components/Slider.svelte';
@@ -36,4 +36,5 @@ export type {
   ResolvedValues,
   ControlMeta,
   PanelConfig,
+  DialPosition,
 } from 'dialkit/store';

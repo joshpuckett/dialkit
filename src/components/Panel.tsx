@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig } from '../store/DialStore';
+import { DialStore, DIAL_POSITIONS } from '../store/DialStore';
+import type { ControlMeta, PanelConfig, SpringConfig, TransitionConfig, DialPosition } from '../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
@@ -15,9 +16,12 @@ interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  growDirection?: 'up' | 'down';
+  currentPosition?: DialPosition;
+  onPositionChange?: (position: DialPosition) => void;
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, growDirection, currentPosition, onPositionChange }: PanelProps) {
   const [copied, setCopied] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
 
@@ -164,8 +168,22 @@ Apply these values as the new defaults in the useDialKit call.`;
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
+  const positionPicker = currentPosition && onPositionChange ? (
+    <div className="dialkit-position-picker" title="Panel position">
+      {DIAL_POSITIONS.map((pos) => (
+        <button
+          key={pos}
+          className="dialkit-position-dot"
+          data-active={currentPosition === pos ? 'true' : undefined}
+          onClick={() => onPositionChange(pos)}
+        />
+      ))}
+    </div>
+  ) : null;
+
   const toolbar = (
     <>
+      {positionPicker}
       <motion.button
         className="dialkit-toolbar-add"
         onClick={handleAddPreset}
@@ -240,7 +258,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 
   return (
     <div className="dialkit-panel-wrapper">
-      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
+      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar} growDirection={growDirection} compactToolbar={!!currentPosition}>
         {renderControls()}
       </Folder>
     </div>

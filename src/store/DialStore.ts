@@ -655,3 +655,21 @@ class DialStoreClass {
 
 // Singleton instance
 export const DialStore = new DialStoreClass();
+
+// Position utilities (shared across React, Solid, Svelte)
+export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+export const DIAL_POSITIONS: DialPosition[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+
+const POSITION_STORAGE_KEY = 'dialkit-position';
+
+export function loadPosition(fallback: DialPosition): DialPosition {
+  try {
+    const stored = localStorage.getItem(POSITION_STORAGE_KEY);
+    if (stored && DIAL_POSITIONS.includes(stored as DialPosition)) return stored as DialPosition;
+  } catch {}
+  return fallback;
+}
+
+export function savePosition(pos: DialPosition): void {
+  try { localStorage.setItem(POSITION_STORAGE_KEY, pos); } catch {}
+}
