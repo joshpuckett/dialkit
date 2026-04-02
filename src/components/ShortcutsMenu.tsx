@@ -8,11 +8,22 @@ interface ShortcutsMenuProps {
 }
 
 function formatShortcutKey(sc: ShortcutConfig): string {
+  if (!sc.key) return '—';
   const mod = sc.modifier === 'alt' ? '⌥'
     : sc.modifier === 'shift' ? '⇧'
     : sc.modifier === 'meta' ? '⌘'
     : '';
   return `${mod}${sc.key.toUpperCase()}`;
+}
+
+function formatInteraction(sc: ShortcutConfig): string {
+  const interaction = sc.interaction ?? 'scroll';
+  switch (interaction) {
+    case 'scroll': return sc.key ? 'key+scroll' : 'scroll';
+    case 'drag': return 'key+drag';
+    case 'move': return 'key+move';
+    case 'scroll-only': return 'scroll';
+  }
 }
 
 export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
@@ -119,11 +130,11 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
                       {formatShortcutKey(row.shortcut)}
                     </span>
                     <span className="dialkit-shortcuts-row-label">{row.label}</span>
-                    <span className="dialkit-shortcuts-row-mode">{row.shortcut.mode ?? 'normal'}</span>
+                    <span className="dialkit-shortcuts-row-mode">{formatInteraction(row.shortcut)}</span>
                   </div>
                 ))}
               </div>
-              <div className="dialkit-shortcuts-hint">Hold key + scroll to adjust</div>
+              <div className="dialkit-shortcuts-hint">See pill badges on controls for keys</div>
             </motion.div>
           )}
         </AnimatePresence>,

@@ -309,17 +309,19 @@ const p = useDialKit('Card', {
   blur: [24, 0, 100],
   scale: 1.2,
   opacity: [1, 0, 1],
+  borderRadius: [16, 0, 64],
   darkMode: true,
   shadow: {
     blur: [10, 0, 50],
   },
 }, {
   shortcuts: {
-    blur:          { key: 'b', mode: 'fine' },
-    scale:         { key: 's', modifier: 'alt', mode: 'coarse' },
-    opacity:       { key: 'o' },
-    darkMode:      { key: 'm' },
-    'shadow.blur': { key: 'd', mode: 'fine' },
+    blur:          { key: 'b', mode: 'fine' },                          // B+Scroll
+    scale:         { key: 's', interaction: 'drag', mode: 'coarse' },   // S+Drag
+    opacity:       { key: 'o', interaction: 'move' },                   // O+Move
+    borderRadius:  { interaction: 'scroll-only' },                      // Scroll (no key)
+    darkMode:      { key: 'm' },                                        // press M
+    'shadow.blur': { key: 'd', mode: 'fine' },                          // D+Scroll
   },
 });
 ```
@@ -328,22 +330,32 @@ const p = useDialKit('Card', {
 
 ```tsx
 type ShortcutConfig = {
-  key: string;                          // trigger key (e.g. 'b', 's')
-  modifier?: 'alt' | 'shift' | 'meta'; // optional modifier key
-  mode?: 'fine' | 'normal' | 'coarse'; // precision level (default: 'normal')
+  key?: string;                                       // trigger key (e.g. 'b', 's') — optional for scroll-only
+  modifier?: 'alt' | 'shift' | 'meta';               // optional modifier key
+  mode?: 'fine' | 'normal' | 'coarse';               // precision level (default: 'normal')
+  interaction?: 'scroll' | 'drag' | 'move' | 'scroll-only'; // input method (default: 'scroll')
 };
 ```
 
+### Interaction types
+
+| Interaction | Description | Example pill |
+|-------------|-------------|-------------|
+| `scroll` | Hold key + scroll wheel to adjust (default) | `B+Scroll` |
+| `drag` | Hold key + click and drag horizontally | `S+Drag` |
+| `move` | Hold key + move mouse (no click needed) | `O+Move` |
+| `scroll-only` | Just scroll anywhere, no key needed | `Scroll` |
+
 ### Supported controls
 
-| Control | Interaction | Description |
-|---------|------------|-------------|
-| **Slider** | Hold key + scroll wheel | Increment/decrement the value |
-| **Toggle** | Press key | Flip on/off |
+| Control | Interactions | Description |
+|---------|-------------|-------------|
+| **Slider** | `scroll`, `drag`, `move`, `scroll-only` | Adjust value with chosen input method |
+| **Toggle** | key press | Press the assigned key to flip on/off |
 
 ### Precision modes
 
-For sliders, the `mode` controls how much each scroll tick changes the value:
+For sliders, the `mode` controls how much each scroll tick or drag pixel changes the value:
 
 | Mode | Step multiplier | Use case |
 |------|----------------|----------|
@@ -358,13 +370,13 @@ For controls inside folders, use dot notation:
 ```tsx
 shortcuts: {
   'shadow.blur': { key: 'd' },
-  'shadow.opacity': { key: 'a', mode: 'fine' },
+  'shadow.opacity': { key: 'a', interaction: 'drag', mode: 'fine' },
 }
 ```
 
 ### UI indicators
 
-Each control with a shortcut displays a pill badge next to its label showing the key combo (e.g. `B`, `⌥S`, `⇧D`). The pill highlights when the shortcut key is actively held.
+Each control with a shortcut displays a pill badge next to its label showing the key and interaction (e.g. `B+Scroll`, `S+Drag`, `O+Move`, `Scroll`). The pill highlights when the shortcut key is actively held.
 
 Shortcuts are automatically disabled when a text input is focused.
 
@@ -408,8 +420,8 @@ function PhotoStack() {
     previous: { type: 'action' },
   }, {
     shortcuts: {
-      'backPhoto.offsetX': { key: 'x', mode: 'coarse' },
-      'backPhoto.scale': { key: 's', mode: 'fine' },
+      'backPhoto.offsetX': { key: 'x', interaction: 'drag', mode: 'coarse' },
+      'backPhoto.scale': { key: 's', interaction: 'move', mode: 'fine' },
       darkMode: { key: 'm' },
     },
     onAction: (action) => {

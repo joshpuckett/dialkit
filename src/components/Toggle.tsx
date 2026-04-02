@@ -10,6 +10,7 @@ interface ToggleProps {
 }
 
 function formatShortcut(sc: ShortcutConfig): string {
+  if (!sc.key) return 'Press';
   const mod = sc.modifier === 'alt' ? '⌥'
     : sc.modifier === 'shift' ? '⇧'
     : sc.modifier === 'meta' ? '⌘'

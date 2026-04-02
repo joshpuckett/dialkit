@@ -33,6 +33,7 @@ export type {
   TextConfig,
   ShortcutConfig,
   ShortcutMode,
+  ShortcutInteraction,
   Preset,
   DialValue,
   DialConfig,

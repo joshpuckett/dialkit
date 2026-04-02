@@ -64,11 +64,13 @@ export type ResolvedValues<T extends DialConfig> = {
 };
 
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
+export type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
 
 export type ShortcutConfig = {
-  key: string;
+  key?: string;
   modifier?: 'alt' | 'shift' | 'meta';
   mode?: ShortcutMode;
+  interaction?: ShortcutInteraction;
 };
 
 export type ControlMeta = {
@@ -375,11 +377,11 @@ class DialStoreClass {
   } | null {
     for (const panel of this.panels.values()) {
       for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        if (!shortcut.key) continue; // skip keyless shortcuts
         if (shortcut.key.toLowerCase() !== key.toLowerCase()) continue;
         const scMod = shortcut.modifier ?? undefined;
         if (scMod !== modifier) continue;
 
-        // Find the control meta for this path
         const control = this.findControlByPath(panel.controls, path);
         if (control) {
           return { panelId: panel.id, path, control };
@@ -387,6 +389,25 @@ class DialStoreClass {
       }
     }
     return null;
+  }
+
+  resolveScrollOnlyTargets(): Array<{
+    panelId: string;
+    path: string;
+    control: ControlMeta;
+    shortcut: ShortcutConfig;
+  }> {
+    const results: Array<{ panelId: string; path: string; control: ControlMeta; shortcut: ShortcutConfig }> = [];
+    for (const panel of this.panels.values()) {
+      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        if ((shortcut.interaction ?? 'scroll') !== 'scroll-only') continue;
+        const control = this.findControlByPath(panel.controls, path);
+        if (control) {
+          results.push({ panelId: panel.id, path, control, shortcut });
+        }
+      }
+    }
+    return results;
   }
 
   getAllShortcuts(): Array<{
