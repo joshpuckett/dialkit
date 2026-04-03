@@ -358,7 +358,7 @@ export function Slider(props: SliderProps) {
   });
 
   const fillBackground = () =>
-    isActive() ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.11)';
+    isActive() ? 'var(--dial-slider-fill-active)' : 'var(--dial-slider-fill)';
 
   const discreteSteps = () => (max() - min()) / step();
 
@@ -407,7 +407,7 @@ export function Slider(props: SliderProps) {
             left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
             transform: 'translateY(-50%) scaleX(0.25) scaleY(1)',
             opacity: 0,
-            background: 'rgba(255, 255, 255, 0.9)',
+            background: 'var(--dial-slider-handle)',
           }}
         />
 

@@ -7,17 +7,36 @@
 
   export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   export type DialMode = 'popover' | 'inline';
+  export type DialTheme = 'light' | 'dark' | 'system';
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover' } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = undefined } = $props<{
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
+    theme?: DialTheme;
   }>();
 
   const inline = $derived(mode === 'inline');
 
   let panels = $state<PanelConfig[]>([]);
   let mounted = $state(false);
+  let systemDark = $state(
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : true
+  );
+
+  $effect(() => {
+    if (theme !== 'system' || typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => { systemDark = e.matches; };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  });
+
+  const resolvedTheme = $derived(
+    !theme ? undefined : theme === 'system' ? (systemDark ? 'dark' : 'light') : theme
+  );
 
   $effect(() => {
     if (typeof document === 'undefined') return;
@@ -46,7 +65,7 @@
 
 {#if mounted && panels.length > 0}
   {#snippet content()}
-    <div class="dialkit-root" data-mode={mode}>
+    <div class="dialkit-root" data-mode={mode} data-theme={resolvedTheme}>
       <div class="dialkit-panel" data-mode={mode} data-position={inline ? undefined : position}>
         {#each panels as panel (panel.id)}
           <Panel {panel} defaultOpen={inline || defaultOpen} {inline} />

@@ -81,8 +81,8 @@ export function SpringVisualization(props: SpringVisualizationProps) {
       const x = (width / 4) * i;
       const y = (height / 4) * i;
       lines.push(
-        <line x1={x} y1={0} x2={x} y2={height} stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />,
-        <line x1={0} y1={y} x2={width} y2={y} stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />
+        <line x1={x} y1={0} x2={x} y2={height} style={{ stroke: 'var(--dial-viz-grid)' }} stroke-width="1" />,
+        <line x1={0} y1={y} x2={width} y2={y} style={{ stroke: 'var(--dial-viz-grid)' }} stroke-width="1" />
       );
     }
     return lines;
@@ -96,14 +96,14 @@ export function SpringVisualization(props: SpringVisualizationProps) {
         y1={height / 2}
         x2={width}
         y2={height / 2}
-        stroke="rgba(255, 255, 255, 0.15)"
+        style={{ stroke: 'var(--dial-viz-line)' }}
         stroke-width="1"
         stroke-dasharray="4,4"
       />
       <path
         d={params()}
         fill="none"
-        stroke="rgba(255, 255, 255, 0.6)"
+        style={{ stroke: 'var(--dial-viz-curve)' }}
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"

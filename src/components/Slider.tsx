@@ -341,8 +341,8 @@ export function Slider({
         : 0.5;
 
   const fillBackground = isActive
-    ? 'rgba(255, 255, 255, 0.15)'
-    : 'rgba(255, 255, 255, 0.11)';
+    ? 'var(--dial-slider-fill-active)'
+    : 'var(--dial-slider-fill)';
 
   // The ≤ 10 threshold separates discrete sliders
   // (like step=2 on a 0–10 range → 5 steps) from continuous ones.
@@ -397,7 +397,7 @@ export function Slider({
           style={{
             left: handleLeft,
             y: '-50%',
-            background: 'rgba(255, 255, 255, 0.9)',
+            background: 'var(--dial-slider-handle)',
           }}
           animate={{
             opacity: handleOpacity,

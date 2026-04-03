@@ -4,7 +4,7 @@ export type { UseDialOptions } from './hooks/useDialKit';
 
 // Root component (user mounts once)
 export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode } from './components/DialRoot';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Individual components (for advanced usage)
 export { Slider } from './components/Slider';

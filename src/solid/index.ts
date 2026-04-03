@@ -4,7 +4,7 @@ export type { CreateDialOptions } from './createDialKit';
 
 // Root component
 export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode } from './components/DialRoot';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 // Component exports
 export { Slider } from './components/Slider';

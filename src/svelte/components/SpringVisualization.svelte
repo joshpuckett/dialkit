@@ -89,7 +89,7 @@
       y1={line.y1}
       x2={line.x2}
       y2={line.y2}
-      stroke="rgba(255, 255, 255, 0.08)"
+      style="stroke: var(--dial-viz-grid)"
       stroke-width="1"
     />
   {/each}
@@ -99,7 +99,7 @@
     y1={height / 2}
     x2={width}
     y2={height / 2}
-    stroke="rgba(255, 255, 255, 0.15)"
+    style="stroke: var(--dial-viz-line)"
     stroke-width="1"
     stroke-dasharray="4,4"
   />
@@ -107,7 +107,7 @@
   <path
     d={pathData}
     fill="none"
-    stroke="rgba(255, 255, 255, 0.6)"
+    style="stroke: var(--dial-viz-curve)"
     stroke-width="2"
     stroke-linecap="round"
     stroke-linejoin="round"

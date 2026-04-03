@@ -40,12 +40,12 @@ export function EasingVisualization({ easing }: EasingVisualizationProps) {
     >
       <line
         x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-        stroke="rgba(255, 255, 255, 0.15)"
+        style={{ stroke: 'var(--dial-viz-line)' }}
         strokeWidth="1"
         strokeDasharray="4,4"
       />
 
-      <path d={curvePath} fill="none" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" strokeLinecap="round" />
+      <path d={curvePath} fill="none" style={{ stroke: 'var(--dial-viz-curve)' }} strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

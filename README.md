@@ -257,6 +257,7 @@ const values = useDialKit('Controls', {
 | `position` | `'top-right' \| 'top-left' \| 'bottom-right' \| 'bottom-left'` | `'top-right'` |
 | `defaultOpen` | `boolean` | `true` |
 | `mode` | `'popover' \| 'inline'` | `'popover'` |
+| `theme` | `'light' \| 'dark' \| 'system'` | — |
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
 
@@ -286,6 +287,18 @@ Use `mode="inline"` to render DialKit directly in your layout instead of as a fl
 ```
 
 In inline mode, the `position` prop is ignored and the collapse-to-icon behavior is disabled.
+
+### Theming
+
+Pass `theme` to switch between light and dark appearances:
+
+```tsx
+<DialRoot theme="dark" />    // always dark (default look)
+<DialRoot theme="light" />   // always light
+<DialRoot theme="system" />  // follows OS preference
+```
+
+When set to `"system"`, the panel listens to `prefers-color-scheme` and updates live if the user changes their OS appearance. When `theme` is omitted, the panel uses the original dark style.
 
 ---
 
