@@ -63,6 +63,10 @@
   padding: 10px 12px 0 12px;
   transform: translateZ(0);
   transform-origin: top right;
+}
+
+.dialkit-panel[data-position="top-left"] .dialkit-panel-inner {
+  transform-origin: top left;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
 }

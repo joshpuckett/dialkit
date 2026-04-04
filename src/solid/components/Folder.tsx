@@ -15,6 +15,13 @@ export function Folder(props: FolderProps) {
   const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
   const [isCollapsed, setIsCollapsed] = createSignal(!(props.defaultOpen ?? true));
   const [contentHeight, setContentHeight] = createSignal<number | undefined>(undefined);
+  const [windowHeight, setWindowHeight] = createSignal(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  if (props.isRoot) {
+    const onResize = () => setWindowHeight(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    onCleanup(() => window.removeEventListener('resize', onResize));
+  }
 
   // Section content animation state
   const [contentMounted, setContentMounted] = createSignal(props.defaultOpen ?? true);
@@ -235,7 +242,7 @@ export function Folder(props: FolderProps) {
 
       const open = isOpen();
       const measuredOpenHeight = contentHeight() !== undefined
-        ? contentHeight()! + 10
+        ? Math.min(contentHeight()! + 10, windowHeight() - 32)
         : panelRef.getBoundingClientRect().height;
 
       const target = {
@@ -248,7 +255,7 @@ export function Folder(props: FolderProps) {
       };
 
       panelRef.style.cursor = open ? '' : 'pointer';
-      panelRef.style.overflow = open ? '' : 'hidden';
+      panelRef.style.overflow = open ? 'hidden auto' : 'hidden';
 
       if (!rootPanelInitialized) {
         rootPanelInitialized = true;

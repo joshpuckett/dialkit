@@ -20,6 +20,17 @@ export const Folder = defineComponent({
     const isCollapsed = ref(!props.defaultOpen);
     const contentRef = ref<HTMLElement | null>(null);
     const contentHeight = ref<number | undefined>(undefined);
+    const windowHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+    let resizeHandler: (() => void) | null = null;
+    if (props.isRoot) {
+      resizeHandler = () => { windowHeight.value = window.innerHeight; };
+      window.addEventListener('resize', resizeHandler);
+    }
+
+    onUnmounted(() => {
+      if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+    });
 
     const handleToggle = () => {
       if (props.inline && props.isRoot) return;
@@ -143,10 +154,11 @@ export const Folder = defineComponent({
         const panelStyle = isOpen.value
           ? {
             width: 280,
-            height: contentHeight.value !== undefined ? contentHeight.value + 10 : 'auto',
+            height: contentHeight.value !== undefined ? Math.min(contentHeight.value + 10, windowHeight.value - 32) : 'auto',
             borderRadius: 14,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
             cursor: undefined as string | undefined,
+            overflowY: 'auto' as const,
           }
           : {
             width: 42,

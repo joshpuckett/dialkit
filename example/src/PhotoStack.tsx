@@ -31,12 +31,14 @@ export function PhotoStack() {
       default: 'portrait',
     },
     backPhoto: {
+      _collapsed: true,
       offsetX: [239, 0, 400],
       offsetY: [0, 0, 150],
       scale: [0.7, 0.5, 0.95],
       overlayOpacity: [0.6, 0, 1],
     },
     shadow: {
+      _collapsed: true,
       scale: [1.03, 1, 1.2],
       opacity: [0.25, 0, 1],
       blur: [14, 0, 60],
@@ -89,7 +91,7 @@ export function PhotoStack() {
       flexDirection: 'column',
       alignItems: 'flex-start',
       gap: 24,
-      minHeight: '100vh',
+      height: '100vh',
       width: '100%',
       padding: 40,
       background: bgColor,

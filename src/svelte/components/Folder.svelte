@@ -28,6 +28,14 @@
 
   let contentRef: HTMLDivElement | undefined;
   let panelRef: HTMLDivElement | undefined;
+  let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  $effect(() => {
+    if (!isRoot) return;
+    const onResize = () => { windowHeight = window.innerHeight; };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
 
   const chevronRotation = new Spring(defaultOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
   const panelWidth = new Spring(defaultOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
@@ -65,7 +73,7 @@
     if (!isRoot) return;
 
     const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
-    const nextHeight = isOpen ? measured + 10 : 42;
+    const nextHeight = isOpen ? Math.min(measured + 10, windowHeight - 32) : 42;
 
     panelWidth.set(isOpen ? 280 : 42);
     panelHeight.set(nextHeight);
@@ -94,7 +102,7 @@
   const panelStyle = $derived(
     `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
       `box-shadow:${isOpen ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0, 0, 0, 0.25)'};` +
-      `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? '' : 'hidden'};` +
+      `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
       `transform:scale(${panelScale.current});`
   );
 </script>
