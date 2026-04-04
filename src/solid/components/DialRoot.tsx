@@ -7,13 +7,23 @@ import { Panel } from './Panel';
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
 
+declare const process: { env?: { NODE_ENV?: string } } | undefined;
+
+const isDevDefault = typeof process !== 'undefined' && process?.env?.NODE_ENV
+  ? process.env.NODE_ENV !== 'production'
+  : typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE
+    ? (import.meta as any).env.MODE !== 'production'
+    : true;
+
 interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  productionEnabled?: boolean;
 }
 
 export function DialRoot(props: DialRootProps) {
+  if ((props.productionEnabled ?? isDevDefault) === false) return null;
   const [panels, setPanels] = createSignal<PanelConfig[]>([]);
   const [mounted, setMounted] = createSignal(false);
   const inline = () => (props.mode ?? 'popover') === 'inline';

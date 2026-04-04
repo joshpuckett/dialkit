@@ -265,8 +265,15 @@ const values = useDialKit('Controls', {
 | `position` | `'top-right' \| 'top-left' \| 'bottom-right' \| 'bottom-left'` | `'top-right'` |
 | `defaultOpen` | `boolean` | `true` |
 | `mode` | `'popover' \| 'inline'` | `'popover'` |
+| `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
+
+DialKit is automatically hidden in production builds. To enable it in production, pass `productionEnabled`:
+
+```tsx
+<DialRoot productionEnabled />
+```
 
 ### Inline mode
 
