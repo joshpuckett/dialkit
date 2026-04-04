@@ -96,35 +96,39 @@ export const TransitionControl = defineComponent({
 
     onUnmounted(() => unsub?.());
 
-    const spring = (): SpringConfig => props.value.type === 'spring'
-      ? props.value
-      : { type: 'spring', visualDuration: 0.3, bounce: 0.2 };
+    const cache = {
+      easing: (props.value.type === 'easing' ? { ...props.value } : { type: 'easing' as const, duration: 0.3, ease: [1, -0.4, 0.5, 1] as [number, number, number, number] }) as EasingConfig,
+      simple: (props.value.type === 'spring' && props.value.visualDuration !== undefined ? { ...props.value } : { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 }) as SpringConfig,
+      advanced: (props.value.type === 'spring' && props.value.stiffness !== undefined ? { ...props.value } : { type: 'spring' as const, stiffness: 200, damping: 25, mass: 1 }) as SpringConfig,
+    };
 
-    const easing = (): EasingConfig => props.value.type === 'easing'
-      ? props.value
-      : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] };
+    const spring = (): SpringConfig => {
+      if (props.value.type === 'spring') {
+        // Keep cache updated
+        if (mode.value === 'simple') cache.simple = props.value;
+        else if (mode.value === 'advanced') cache.advanced = props.value;
+        return props.value;
+      }
+      return cache.simple;
+    };
+
+    const easing = (): EasingConfig => {
+      if (props.value.type === 'easing') {
+        cache.easing = props.value;
+        return props.value;
+      }
+      return cache.easing;
+    };
 
     const handleModeChange = (nextMode: CurveMode) => {
       DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
 
       if (nextMode === 'easing') {
-        const duration = props.value.type === 'spring' ? (props.value.visualDuration ?? 0.3) : props.value.duration;
-        emit('change', { type: 'easing', duration, ease: easing().ease });
+        emit('change', cache.easing);
       } else if (nextMode === 'simple') {
-        const current = spring();
-        emit('change', {
-          type: 'spring',
-          visualDuration: current.visualDuration ?? (props.value.type === 'easing' ? props.value.duration : 0.3),
-          bounce: current.bounce ?? 0.2,
-        });
+        emit('change', cache.simple);
       } else {
-        const current = spring();
-        emit('change', {
-          type: 'spring',
-          stiffness: current.stiffness ?? 200,
-          damping: current.damping ?? 25,
-          mass: current.mass ?? 1,
-        });
+        emit('change', cache.advanced);
       }
     };
 

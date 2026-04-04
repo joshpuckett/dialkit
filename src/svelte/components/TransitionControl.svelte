@@ -31,17 +31,34 @@
   const isEasing = $derived(mode === 'easing');
   const isSimpleSpring = $derived(mode === 'simple');
 
+  const cache: {
+    easing: EasingConfig;
+    simple: SpringConfig;
+    advanced: SpringConfig;
+  } = {
+    easing: value.type === 'easing' ? value : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
+    simple: value.type === 'spring' && value.visualDuration !== undefined ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: value.type === 'spring' && value.stiffness !== undefined ? value : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+  };
+
   const spring = $derived<SpringConfig>(
-    value.type === 'spring'
-      ? value
-      : { type: 'spring', visualDuration: 0.3, bounce: 0.2 }
+    value.type === 'spring' ? value : cache.simple
   );
 
   const easing = $derived<EasingConfig>(
-    value.type === 'easing'
-      ? value
-      : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] }
+    value.type === 'easing' ? value : cache.easing
   );
+
+  // Keep cache updated with current edits
+  $effect(() => {
+    if (isEasing && value.type === 'easing') {
+      cache.easing = value;
+    } else if (isSimpleSpring && value.type === 'spring') {
+      cache.simple = value;
+    } else if (mode === 'advanced' && value.type === 'spring') {
+      cache.advanced = value;
+    }
+  });
 
   const formatEase = (ease: [number, number, number, number]) =>
     ease.map((v) => Number(v.toFixed(2))).join(', ');
@@ -57,26 +74,12 @@
     DialStore.updateTransitionMode(panelId, path, typed);
 
     if (typed === 'easing') {
-      const duration = value.type === 'spring' ? (value.visualDuration ?? 0.3) : value.duration;
-      onChange({ type: 'easing', duration, ease: easing.ease });
-      return;
+      onChange(cache.easing);
+    } else if (typed === 'simple') {
+      onChange(cache.simple);
+    } else {
+      onChange(cache.advanced);
     }
-
-    if (typed === 'simple') {
-      onChange({
-        type: 'spring',
-        visualDuration: spring.visualDuration ?? (value.type === 'easing' ? value.duration : 0.3),
-        bounce: spring.bounce ?? 0.2,
-      });
-      return;
-    }
-
-    onChange({
-      type: 'spring',
-      stiffness: spring.stiffness ?? 200,
-      damping: spring.damping ?? 25,
-      mass: spring.mass ?? 1,
-    });
   };
 
   const handleSpringUpdate = (key: keyof SpringConfig, val: number) => {

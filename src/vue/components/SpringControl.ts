@@ -34,26 +34,24 @@ export const SpringControl = defineComponent({
 
     const isSimpleMode = () => mode.value === 'simple';
 
+    const cache = {
+      simple: props.spring.visualDuration !== undefined ? { ...props.spring } : { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 },
+      advanced: props.spring.stiffness !== undefined ? { ...props.spring } : { type: 'spring' as const, stiffness: 200, damping: 25, mass: 1 },
+    };
+
     const handleModeChange = (nextMode: 'simple' | 'advanced') => {
+      if (isSimpleMode()) {
+        cache.simple = { ...props.spring };
+      } else {
+        cache.advanced = { ...props.spring };
+      }
+
       DialStore.updateSpringMode(props.panelId, props.path, nextMode);
 
       if (nextMode === 'simple') {
-        const { stiffness, damping, mass, ...rest } = props.spring;
-        emit('change', {
-          ...rest,
-          type: 'spring',
-          visualDuration: props.spring.visualDuration ?? 0.3,
-          bounce: props.spring.bounce ?? 0.2,
-        });
+        emit('change', cache.simple);
       } else {
-        const { visualDuration, bounce, ...rest } = props.spring;
-        emit('change', {
-          ...rest,
-          type: 'spring',
-          stiffness: props.spring.stiffness ?? 200,
-          damping: props.spring.damping ?? 25,
-          mass: props.spring.mass ?? 1,
-        });
+        emit('change', cache.advanced);
       }
     };
 

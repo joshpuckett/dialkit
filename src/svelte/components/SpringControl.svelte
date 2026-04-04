@@ -25,27 +25,29 @@
 
   const isSimpleMode = $derived(mode === 'simple');
 
+  const cache: {
+    simple: SpringConfig;
+    advanced: SpringConfig;
+  } = {
+    simple: spring.visualDuration !== undefined ? spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: spring.stiffness !== undefined ? spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+  };
+
   const handleModeChange = (newMode: string) => {
     const typedMode = newMode as 'simple' | 'advanced';
+
+    if (isSimpleMode) {
+      cache.simple = spring;
+    } else {
+      cache.advanced = spring;
+    }
+
     DialStore.updateSpringMode(panelId, path, typedMode);
 
     if (typedMode === 'simple') {
-      const { stiffness, damping, mass, ...rest } = spring;
-      onChange({
-        ...rest,
-        type: 'spring',
-        visualDuration: spring.visualDuration ?? 0.3,
-        bounce: spring.bounce ?? 0.2,
-      });
+      onChange(cache.simple);
     } else {
-      const { visualDuration, bounce, ...rest } = spring;
-      onChange({
-        ...rest,
-        type: 'spring',
-        stiffness: spring.stiffness ?? 200,
-        damping: spring.damping ?? 25,
-        mass: spring.mass ?? 1,
-      });
+      onChange(cache.advanced);
     }
   };
 

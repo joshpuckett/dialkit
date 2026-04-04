@@ -3,7 +3,7 @@ import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, useRef } from 'react';
 
 interface SpringControlProps {
   panelId: string;
@@ -22,29 +22,28 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
 
   const isSimpleMode = mode === 'simple';
 
+  // Cache per-mode values so switching back restores previous edits
+  const cache = useRef<{
+    simple: SpringConfig;
+    advanced: SpringConfig;
+  }>({
+    simple: spring.visualDuration !== undefined ? spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: spring.stiffness !== undefined ? spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+  });
+
+  if (isSimpleMode) {
+    cache.current.simple = spring;
+  } else {
+    cache.current.advanced = spring;
+  }
+
   const handleModeChange = (newMode: 'simple' | 'advanced') => {
     DialStore.updateSpringMode(panelId, path, newMode);
 
-    // When switching modes, update the spring config to remove conflicting properties
     if (newMode === 'simple') {
-      // Remove physics properties, keep/add time-based properties
-      const { stiffness, damping, mass, ...rest } = spring;
-      onChange({
-        ...rest,
-        type: 'spring',
-        visualDuration: spring.visualDuration ?? 0.3,
-        bounce: spring.bounce ?? 0.2,
-      });
+      onChange(cache.current.simple);
     } else {
-      // Remove time-based properties, keep/add physics properties
-      const { visualDuration, bounce, ...rest } = spring;
-      onChange({
-        ...rest,
-        type: 'spring',
-        stiffness: spring.stiffness ?? 200,
-        damping: spring.damping ?? 25,
-        mass: spring.mass ?? 1,
-      });
+      onChange(cache.current.advanced);
     }
   };
 
