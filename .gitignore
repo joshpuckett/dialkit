@@ -10,9 +10,6 @@ src/store/DialStore.d.ts
 src/store/DialStore.d.ts.map
 src/svelte/theme-css.ts
 
-# Example/demo (lives on personal site)
-example/
-
 # IDE
 .vscode/
 .idea/
