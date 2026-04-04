@@ -4,7 +4,7 @@ import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
 import { EasingVisualization } from './EasingVisualization';
-import { useSyncExternalStore, useState } from 'react';
+import { useSyncExternalStore, useRef, useState } from 'react';
 
 interface TransitionControlProps {
   panelId: string;
@@ -26,28 +26,38 @@ export function TransitionControl({ panelId, path, label, value, onChange }: Tra
   const isEasing = mode === 'easing';
   const isSimpleSpring = mode === 'simple';
 
-  const spring: SpringConfig = value.type === 'spring' ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 };
-  const easing: EasingConfig = value.type === 'easing' ? value : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] };
+  // Cache per-mode values so switching back restores previous edits
+  const cache = useRef<{
+    easing: EasingConfig;
+    simple: SpringConfig;
+    advanced: SpringConfig;
+  }>({
+    easing: value.type === 'easing' ? value : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
+    simple: value.type === 'spring' && value.visualDuration !== undefined ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: value.type === 'spring' && value.stiffness !== undefined ? value : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+  });
+
+  // Keep cache up to date with current edits
+  if (isEasing && value.type === 'easing') {
+    cache.current.easing = value;
+  } else if (isSimpleSpring && value.type === 'spring') {
+    cache.current.simple = value;
+  } else if (mode === 'advanced' && value.type === 'spring') {
+    cache.current.advanced = value;
+  }
+
+  const spring: SpringConfig = value.type === 'spring' ? value : cache.current.simple;
+  const easing: EasingConfig = value.type === 'easing' ? value : cache.current.easing;
 
   const handleModeChange = (newMode: CurveMode) => {
     DialStore.updateTransitionMode(panelId, path, newMode);
 
     if (newMode === 'easing') {
-      const duration = value.type === 'spring' ? (value.visualDuration ?? 0.3) : (value as EasingConfig).duration;
-      onChange({ type: 'easing', duration, ease: easing.ease });
+      onChange(cache.current.easing);
     } else if (newMode === 'simple') {
-      onChange({
-        type: 'spring',
-        visualDuration: spring.visualDuration ?? (value.type === 'easing' ? value.duration : 0.3),
-        bounce: spring.bounce ?? 0.2,
-      });
+      onChange(cache.current.simple);
     } else {
-      onChange({
-        type: 'spring',
-        stiffness: spring.stiffness ?? 200,
-        damping: spring.damping ?? 25,
-        mass: spring.mass ?? 1,
-      });
+      onChange(cache.current.advanced);
     }
   };
 

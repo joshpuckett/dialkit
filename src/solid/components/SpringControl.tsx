@@ -29,26 +29,28 @@ export function SpringControl(props: SpringControlProps) {
 
   const isSimpleMode = () => mode() === 'simple';
 
+  const cache: {
+    simple: SpringConfig;
+    advanced: SpringConfig;
+  } = {
+    simple: props.spring.visualDuration !== undefined ? props.spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: props.spring.stiffness !== undefined ? props.spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+  };
+
   const handleModeChange = (newMode: 'simple' | 'advanced') => {
+    // Save current mode's values before switching
+    if (isSimpleMode()) {
+      cache.simple = props.spring;
+    } else {
+      cache.advanced = props.spring;
+    }
+
     DialStore.updateSpringMode(props.panelId, props.path, newMode);
 
     if (newMode === 'simple') {
-      const { stiffness, damping, mass, ...rest } = props.spring;
-      props.onChange({
-        ...rest,
-        type: 'spring',
-        visualDuration: props.spring.visualDuration ?? 0.3,
-        bounce: props.spring.bounce ?? 0.2,
-      });
+      props.onChange(cache.simple);
     } else {
-      const { visualDuration, bounce, ...rest } = props.spring;
-      props.onChange({
-        ...rest,
-        type: 'spring',
-        stiffness: props.spring.stiffness ?? 200,
-        damping: props.spring.damping ?? 25,
-        mass: props.spring.mass ?? 1,
-      });
+      props.onChange(cache.advanced);
     }
   };
 
