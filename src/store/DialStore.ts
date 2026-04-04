@@ -63,6 +63,16 @@ export type ResolvedValues<T extends DialConfig> = {
                 : T[K];
 };
 
+export type ShortcutMode = 'fine' | 'normal' | 'coarse';
+export type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
+
+export type ShortcutConfig = {
+  key?: string;
+  modifier?: 'alt' | 'shift' | 'meta';
+  mode?: ShortcutMode;
+  interaction?: ShortcutInteraction;
+};
+
 export type ControlMeta = {
   type: 'slider' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'text';
   path: string;
@@ -74,6 +84,7 @@ export type ControlMeta = {
   defaultOpen?: boolean;
   options?: (string | { value: string; label: string })[];
   placeholder?: string;
+  shortcut?: ShortcutConfig;
 };
 
 export type PanelConfig = {
@@ -81,6 +92,7 @@ export type PanelConfig = {
   name: string;
   controls: ControlMeta[];
   values: Record<string, DialValue>;
+  shortcuts: Record<string, ShortcutConfig>;
 };
 
 type Listener = () => void;
@@ -105,27 +117,27 @@ class DialStoreClass {
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
 
-  registerPanel(id: string, name: string, config: DialConfig): void {
-    const controls = this.parseConfig(config, '');
+  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+    const controls = this.parseConfig(config, '', shortcuts);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
 
-    this.panels.set(id, { id, name, controls, values });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
   }
 
-  updatePanel(id: string, name: string, config: DialConfig): void {
+  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config);
+      this.registerPanel(id, name, config, shortcuts);
       return;
     }
 
-    const controls = this.parseConfig(config, '');
+    const controls = this.parseConfig(config, '', shortcuts);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
     const nextValues: Record<string, DialValue> = {};
@@ -153,7 +165,7 @@ class DialStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -358,6 +370,82 @@ class DialStoreClass {
     this.notify(panelId);
   }
 
+  resolveShortcutTarget(key: string, modifier?: 'alt' | 'shift' | 'meta'): {
+    panelId: string;
+    path: string;
+    control: ControlMeta;
+  } | null {
+    for (const panel of this.panels.values()) {
+      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        if (!shortcut.key) continue; // skip keyless shortcuts
+        if (shortcut.key.toLowerCase() !== key.toLowerCase()) continue;
+        const scMod = shortcut.modifier ?? undefined;
+        if (scMod !== modifier) continue;
+
+        const control = this.findControlByPath(panel.controls, path);
+        if (control) {
+          return { panelId: panel.id, path, control };
+        }
+      }
+    }
+    return null;
+  }
+
+  resolveScrollOnlyTargets(): Array<{
+    panelId: string;
+    path: string;
+    control: ControlMeta;
+    shortcut: ShortcutConfig;
+  }> {
+    const results: Array<{ panelId: string; path: string; control: ControlMeta; shortcut: ShortcutConfig }> = [];
+    for (const panel of this.panels.values()) {
+      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        if ((shortcut.interaction ?? 'scroll') !== 'scroll-only') continue;
+        const control = this.findControlByPath(panel.controls, path);
+        if (control) {
+          results.push({ panelId: panel.id, path, control, shortcut });
+        }
+      }
+    }
+    return results;
+  }
+
+  getAllShortcuts(): Array<{
+    panelId: string;
+    panelName: string;
+    path: string;
+    label: string;
+    shortcut: ShortcutConfig;
+  }> {
+    const result: Array<{ panelId: string; panelName: string; path: string; label: string; shortcut: ShortcutConfig }> = [];
+    for (const panel of this.panels.values()) {
+      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        const control = this.findControlByPath(panel.controls, path);
+        if (control) {
+          result.push({
+            panelId: panel.id,
+            panelName: panel.name,
+            path,
+            label: control.label,
+            shortcut,
+          });
+        }
+      }
+    }
+    return result;
+  }
+
+  private findControlByPath(controls: ControlMeta[], path: string): ControlMeta | null {
+    for (const control of controls) {
+      if (control.path === path) return control;
+      if (control.type === 'folder' && control.children) {
+        const found = this.findControlByPath(control.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
   private notify(panelId: string): void {
     this.listeners.get(panelId)?.forEach(fn => fn());
   }
@@ -384,13 +472,14 @@ class DialStoreClass {
     }
   }
 
-  private parseConfig(config: DialConfig, prefix: string): ControlMeta[] {
+  private parseConfig(config: DialConfig, prefix: string, shortcuts?: Record<string, ShortcutConfig>): ControlMeta[] {
     const controls: ControlMeta[] = [];
 
     for (const [key, value] of Object.entries(config)) {
       if (key === '_collapsed') continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
+      const shortcut = shortcuts?.[path];
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         // Range tuple: [default, min, max]
@@ -401,13 +490,14 @@ class DialStoreClass {
           min: value[1],
           max: value[2],
           step: value[3] ?? this.inferStep(value[1], value[2]),
+          shortcut,
         });
       } else if (typeof value === 'number') {
         // Single number - auto-infer range
         const { min, max, step } = this.inferRange(value);
-        controls.push({ type: 'slider', path, label, min, max, step });
+        controls.push({ type: 'slider', path, label, min, max, step, shortcut });
       } else if (typeof value === 'boolean') {
-        controls.push({ type: 'toggle', path, label });
+        controls.push({ type: 'toggle', path, label, shortcut });
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: 'transition', path, label });
       } else if (this.isActionConfig(value)) {
@@ -434,7 +524,7 @@ class DialStoreClass {
           path,
           label,
           defaultOpen,
-          children: this.parseConfig(folderConfig, path),
+          children: this.parseConfig(folderConfig, path, shortcuts),
         });
       }
     }

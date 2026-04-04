@@ -71,6 +71,7 @@ const params = useDialKit(name, config, options?)
 | `name` | `string` | Panel title displayed in the UI |
 | `config` | `DialConfig` | Parameter definitions (see Control Types below) |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
+| `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
 
@@ -310,6 +311,89 @@ When the panel is open, the toolbar provides:
 
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
+- **Shortcuts** — When shortcuts are configured, a keyboard icon appears in the toolbar. Click it to view all registered keyboard shortcuts for that panel.
+
+---
+
+## Keyboard Shortcuts
+
+Assign keyboard shortcuts to controls so you can adjust values without touching the panel. Pass a `shortcuts` map in the options object:
+
+```tsx
+const p = useDialKit('Card', {
+  blur: [24, 0, 100],
+  scale: 1.2,
+  opacity: [1, 0, 1],
+  borderRadius: [16, 0, 64],
+  darkMode: true,
+  shadow: {
+    blur: [10, 0, 50],
+  },
+}, {
+  shortcuts: {
+    blur:          { key: 'b', mode: 'fine' },                          // B+Scroll
+    scale:         { key: 's', interaction: 'drag', mode: 'coarse' },   // S+Drag
+    opacity:       { key: 'o', interaction: 'move' },                   // O+Move
+    borderRadius:  { interaction: 'scroll-only' },                      // Scroll (no key)
+    darkMode:      { key: 'm' },                                        // press M
+    'shadow.blur': { key: 'd', mode: 'fine' },                          // D+Scroll
+  },
+});
+```
+
+### ShortcutConfig
+
+```tsx
+type ShortcutConfig = {
+  key?: string;                                       // trigger key (e.g. 'b', 's') — optional for scroll-only
+  modifier?: 'alt' | 'shift' | 'meta';               // optional modifier key
+  mode?: 'fine' | 'normal' | 'coarse';               // precision level (default: 'normal')
+  interaction?: 'scroll' | 'drag' | 'move' | 'scroll-only'; // input method (default: 'scroll')
+};
+```
+
+### Interaction types
+
+| Interaction | Description | Example pill |
+|-------------|-------------|-------------|
+| `scroll` | Hold key + scroll wheel to adjust (default) | `B+Scroll` |
+| `drag` | Hold key + click and drag horizontally | `S+Drag` |
+| `move` | Hold key + move mouse (no click needed) | `O+Move` |
+| `scroll-only` | Just scroll anywhere, no key needed | `Scroll` |
+
+### Supported controls
+
+| Control | Interactions | Description |
+|---------|-------------|-------------|
+| **Slider** | `scroll`, `drag`, `move`, `scroll-only` | Adjust value with chosen input method |
+| **Toggle** | key press | Press the assigned key to flip on/off |
+
+### Precision modes
+
+For sliders, the `mode` controls how much each scroll tick or drag pixel changes the value:
+
+| Mode | Step multiplier | Use case |
+|------|----------------|----------|
+| `fine` | step &divide; 10 | Precision tweaking |
+| `normal` | step &times; 1 | Default behavior |
+| `coarse` | step &times; 10 | Big sweeps |
+
+### Nested paths
+
+For controls inside folders, use dot notation:
+
+```tsx
+shortcuts: {
+  'shadow.blur': { key: 'd' },
+  'shadow.opacity': { key: 'a', interaction: 'drag', mode: 'fine' },
+}
+```
+
+### UI indicators
+
+Each control with a shortcut displays a pill badge next to its label showing the key and interaction (e.g. `B+Scroll`, `S+Drag`, `O+Move`, `Scroll`). The pill highlights when the shortcut key is actively held.
+
+Shortcuts are automatically disabled when a text input is focused.
 
 ---
 
@@ -350,6 +434,11 @@ function PhotoStack() {
     next: { type: 'action' },
     previous: { type: 'action' },
   }, {
+    shortcuts: {
+      'backPhoto.offsetX': { key: 'x', interaction: 'drag', mode: 'coarse' },
+      'backPhoto.scale': { key: 's', interaction: 'move', mode: 'fine' },
+      darkMode: { key: 'm' },
+    },
     onAction: (action) => {
       if (action === 'next') goNext();
       if (action === 'previous') goPrevious();
@@ -475,6 +564,8 @@ import type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ShortcutConfig,
+  ShortcutMode,
   DialConfig,
   DialValue,
   ResolvedValues,

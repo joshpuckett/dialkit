@@ -613,6 +613,8 @@
   gap: 6px;
   height: var(--dial-row-height);
   margin-bottom: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .dialkit-toolbar-add {
@@ -1102,4 +1104,121 @@
   width: 14px;
   height: 14px;
   color: var(--dial-text-label);
+}
+
+/* Shortcut Pill */
+.dialkit-shortcut-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--dial-text-tertiary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: color 0.15s, background 0.15s;
+}
+
+.dialkit-shortcut-pill-active {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Shortcuts Menu Trigger */
+.dialkit-shortcuts-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dial-row-height);
+  height: var(--dial-row-height);
+  padding: 0;
+  flex-shrink: 0;
+  background: var(--dial-surface);
+  border: none;
+  border-radius: var(--dial-radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dialkit-shortcuts-trigger:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-shortcuts-trigger svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dial-text-label);
+}
+
+/* Shortcuts Dropdown */
+.dialkit-shortcuts-dropdown {
+  background: #2a2a2a;
+  border: 1px solid var(--dial-border);
+  border-radius: 12px;
+  padding: 8px;
+  z-index: 10000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  min-width: 200px;
+}
+
+.dialkit-shortcuts-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dial-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 8px 8px;
+}
+
+.dialkit-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialkit-shortcuts-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.dialkit-shortcuts-row-key {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  color: var(--dial-text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.dialkit-shortcuts-row-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+}
+
+.dialkit-shortcuts-row-mode {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dial-text-tertiary);
+  font-style: italic;
+}
+
+.dialkit-shortcuts-hint {
+  font-size: 11px;
+  color: var(--dial-text-tertiary);
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--dial-border);
+  margin-top: 4px;
 }

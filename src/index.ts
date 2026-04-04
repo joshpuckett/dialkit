@@ -19,6 +19,7 @@ export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
+export { ShortcutsMenu } from './components/ShortcutsMenu';
 
 // Store (for advanced usage)
 export { DialStore } from './store/DialStore';
@@ -30,6 +31,9 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ShortcutConfig,
+  ShortcutMode,
+  ShortcutInteraction,
   Preset,
   DialValue,
   DialConfig,
