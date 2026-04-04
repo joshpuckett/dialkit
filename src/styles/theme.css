@@ -71,6 +71,7 @@
 .dialkit-panel-inner[data-collapsed="true"] {
   border-radius: 50%;
   padding: 12px;
+  box-sizing: border-box;
 }
 
 .dialkit-panel-inner[data-collapsed="true"] .dialkit-panel-header {

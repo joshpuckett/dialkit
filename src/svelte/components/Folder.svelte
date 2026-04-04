@@ -65,7 +65,7 @@
     if (!isRoot) return;
 
     const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
-    const nextHeight = isOpen ? measured + 24 : 42;
+    const nextHeight = isOpen ? measured + 10 : 42;
 
     panelWidth.set(isOpen ? 280 : 42);
     panelHeight.set(nextHeight);

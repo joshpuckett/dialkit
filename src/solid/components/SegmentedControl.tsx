@@ -1,4 +1,4 @@
-import { For, createMemo } from 'solid-js';
+import { createSignal, createEffect, For, Show } from 'solid-js';
 
 interface SegmentedControlOption<T extends string> {
   value: T;
@@ -6,46 +6,55 @@ interface SegmentedControlOption<T extends string> {
 }
 
 interface SegmentedControlProps<T extends string> {
-  options: [SegmentedControlOption<T>, SegmentedControlOption<T>];
+  options: SegmentedControlOption<T>[];
   value: T;
   onChange: (value: T) => void;
 }
 
-const PADDING = 2;
-
 export function SegmentedControl<T extends string>(props: SegmentedControlProps<T>) {
+  let containerRef: HTMLDivElement | undefined;
   let hasAnimated = false;
+  const [pillStyle, setPillStyle] = createSignal<{ left: number; width: number } | null>(null);
 
-  const activeIndex = createMemo(() =>
-    props.options.findIndex((o) => o.value === props.value)
-  );
+  const measure = () => {
+    if (!containerRef) return;
+    const activeButton = containerRef.querySelector('[data-active="true"]') as HTMLElement | null;
+    if (!activeButton) return;
+    setPillStyle({
+      left: activeButton.offsetLeft,
+      width: activeButton.offsetWidth,
+    });
+  };
 
-  const pillLeft = createMemo(() =>
-    `calc(${PADDING}px + ${activeIndex()} * (100% - ${PADDING * 2}px) / ${props.options.length})`
-  );
+  createEffect(() => {
+    void props.value;
+    void props.options.length;
+    measure();
+  });
 
-  const pillWidth = `calc((100% - ${PADDING * 2}px) / 2)`;
-
-  const transition = createMemo(() => {
-    // Track value to re-evaluate on change
-    activeIndex();
+  const transition = (): string => {
+    void props.value;
     if (!hasAnimated) {
       hasAnimated = true;
       return 'none';
     }
     return 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)';
-  });
+  };
 
   return (
-    <div class="dialkit-segmented">
-      <div
-        class="dialkit-segmented-pill"
-        style={{
-          left: pillLeft(),
-          width: pillWidth,
-          transition: transition(),
-        }}
-      />
+    <div class="dialkit-segmented" ref={containerRef}>
+      <Show when={pillStyle()}>
+        {(style) => (
+          <div
+            class="dialkit-segmented-pill"
+            style={{
+              left: `${style().left}px`,
+              width: `${style().width}px`,
+              transition: transition(),
+            }}
+          />
+        )}
+      </Show>
       <For each={props.options}>
         {(option) => (
           <button

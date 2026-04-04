@@ -143,7 +143,7 @@ export const Folder = defineComponent({
         const panelStyle = isOpen.value
           ? {
             width: 280,
-            height: contentHeight.value !== undefined ? contentHeight.value + 24 : 'auto',
+            height: contentHeight.value !== undefined ? contentHeight.value + 10 : 'auto',
             borderRadius: 14,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
             cursor: undefined as string | undefined,

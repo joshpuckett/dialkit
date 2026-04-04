@@ -235,7 +235,7 @@ export function Folder(props: FolderProps) {
 
       const open = isOpen();
       const measuredOpenHeight = contentHeight() !== undefined
-        ? contentHeight()! + 24
+        ? contentHeight()! + 10
         : panelRef.getBoundingClientRect().height;
 
       const target = {

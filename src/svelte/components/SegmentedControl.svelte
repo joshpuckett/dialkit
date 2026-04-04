@@ -10,33 +10,45 @@
     onChange: (value: string) => void;
   }>();
 
-  const PADDING = 2;
-
+  let containerRef = $state<HTMLDivElement | undefined>(undefined);
   let hasAnimated = false;
+  let pillLeft = $state<number | null>(null);
+  let pillWidth = $state<number | null>(null);
 
-  let pillLeft = $derived.by(() => {
-    const i = options.findIndex((o: SegmentedControlOption) => o.value === value);
-    return `calc(${PADDING}px + ${i} * (100% - ${PADDING * 2}px) / ${options.length})`;
+  function measure() {
+    if (!containerRef) return;
+    const activeButton = containerRef.querySelector('[data-active="true"]') as HTMLElement | null;
+    if (!activeButton) return;
+    pillLeft = activeButton.offsetLeft;
+    pillWidth = activeButton.offsetWidth;
+  }
+
+  $effect(() => {
+    void value;
+    void options.length;
+    measure();
   });
 
-  let pillWidth = $derived(`calc((100% - ${PADDING * 2}px) / ${options.length})`);
-
-  let transition = $derived.by(() => {
+  let shouldAnimate = $derived.by(() => {
     if (!hasAnimated) {
       hasAnimated = true;
-      return 'none';
+      return false;
     }
-    return 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)';
+    return true;
   });
 </script>
 
-<div class="dialkit-segmented">
-  <div
-    class="dialkit-segmented-pill"
-    style:left={pillLeft}
-    style:width={pillWidth}
-    style:transition={transition}
-  ></div>
+<div class="dialkit-segmented" bind:this={containerRef}>
+  {#if pillLeft !== null && pillWidth !== null}
+    <div
+      class="dialkit-segmented-pill"
+      style:left="{pillLeft}px"
+      style:width="{pillWidth}px"
+      style:transition={shouldAnimate
+        ? 'left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+        : 'none'}
+    ></div>
+  {/if}
 
   {#each options as option (option.value)}
     <button
