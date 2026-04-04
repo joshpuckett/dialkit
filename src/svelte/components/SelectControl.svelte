@@ -2,6 +2,7 @@
   import { Spring } from 'svelte/motion';
   import Portal from '../Portal.svelte';
   import { dropdownTransition } from './transitions';
+  import { ICON_CHEVRON } from '../../icons';
 
   type SelectOption = string | { value: string; label: string };
 
@@ -118,7 +119,7 @@
         stroke-linejoin="round"
         style:transform={`rotate(${chevronRotation.current}deg)`}
       >
-        <path d="M6 9.5L12 15.5L18 9.5" />
+        <path d={ICON_CHEVRON} />
       </svg>
     </div>
   </button>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { ICON_CHEVRON } from '../icons';
 
 type SelectOption = string | { value: string; label: string };
 
@@ -98,7 +99,7 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ type: 'spring', visualDuration: 0.2, bounce: 0.15 }}
           >
-            <path d="M6 9.5L12 15.5L18 9.5" />
+            <path d={ICON_CHEVRON} />
           </motion.svg>
         </div>
       </button>

@@ -1,5 +1,6 @@
 import { Teleport, defineComponent, h, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
+import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { Preset } from '../../store/DialStore';
 
@@ -109,7 +110,7 @@ export const PresetManager = defineComponent({
           'stroke-linejoin': 'round',
           animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
           transition: { type: 'spring', visualDuration: 0.2, bounce: 0.15 },
-        }, [h('path', { d: 'M6 9.5L12 15.5L18 9.5' })]),
+        }, [h('path', { d: ICON_CHEVRON })]),
       ]),
 
       h(Teleport, { to: 'body' }, [
@@ -155,13 +156,7 @@ export const PresetManager = defineComponent({
                     'stroke-width': '2',
                     'stroke-linecap': 'round',
                     'stroke-linejoin': 'round',
-                  }, [
-                    h('path', { d: 'M5 6.5L5.80734 18.2064C5.91582 19.7794 7.22348 21 8.80023 21H15.1998C16.7765 21 18.0842 19.7794 18.1927 18.2064L19 6.5' }),
-                    h('path', { d: 'M10 11V16' }),
-                    h('path', { d: 'M14 11V16' }),
-                    h('path', { d: 'M3.5 6H20.5' }),
-                    h('path', { d: 'M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621' }),
-                  ]),
+                  }, ICON_TRASH.map((d) => h('path', { d }))),
                 ]),
               ])),
             ])]

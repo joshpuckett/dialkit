@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
+import { ICON_CHEVRON } from '../../icons';
 
 type SelectOption = string | { value: string; label: string };
 
@@ -154,7 +155,7 @@ export function SelectControl(props: SelectControlProps) {
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M6 9.5L12 15.5L18 9.5" />
+            <path d={ICON_CHEVRON} />
           </svg>
         </div>
       </button>

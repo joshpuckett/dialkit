@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, Preset } from '../store/DialStore';
+import { ICON_CHEVRON, ICON_TRASH } from '../icons';
 
 interface PresetManagerProps {
   panelId: string;
@@ -90,7 +91,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
           animate={{ rotate: isOpen ? 180 : 0, opacity: hasPresets ? 0.6 : 0.25 }}
           transition={{ type: 'spring', visualDuration: 0.2, bounce: 0.15 }}
         >
-          <path d="M6 9.5L12 15.5L18 9.5" />
+          <path d={ICON_CHEVRON} />
         </motion.svg>
       </button>
 
@@ -128,11 +129,9 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
                     title="Delete preset"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 6.5L5.80734 18.2064C5.91582 19.7794 7.22348 21 8.80023 21H15.1998C16.7765 21 18.0842 19.7794 18.1927 18.2064L19 6.5" />
-                      <path d="M10 11V16" />
-                      <path d="M14 11V16" />
-                      <path d="M3.5 6H20.5" />
-                      <path d="M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621" />
+                      {ICON_TRASH.map((d, i) => (
+                        <path key={i} d={d} />
+                      ))}
                     </svg>
                   </button>
                 </div>

@@ -4,6 +4,7 @@
   import { DialStore } from 'dialkit/store';
   import type { Preset } from 'dialkit/store';
   import { dropdownTransition } from './transitions';
+  import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 
   let { panelId, presets, activePresetId } = $props<{
     panelId: string;
@@ -106,7 +107,7 @@
       style:transform={`rotate(${chevronRotation.current}deg)`}
       style:opacity={chevronOpacity.current}
     >
-      <path d="M6 9.5L12 15.5L18 9.5" />
+      <path d={ICON_CHEVRON} />
     </svg>
   </button>
 
@@ -140,11 +141,11 @@
                 title="Delete preset"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 6.5L5.80734 18.2064C5.91582 19.7794 7.22348 21 8.80023 21H15.1998C16.7765 21 18.0842 19.7794 18.1927 18.2064L19 6.5" />
-                  <path d="M10 11V16" />
-                  <path d="M14 11V16" />
-                  <path d="M3.5 6H20.5" />
-                  <path d="M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621" />
+                  <path d={ICON_TRASH[0]} />
+                  <path d={ICON_TRASH[1]} />
+                  <path d={ICON_TRASH[2]} />
+                  <path d={ICON_TRASH[3]} />
+                  <path d={ICON_TRASH[4]} />
                 </svg>
               </button>
             </div>
