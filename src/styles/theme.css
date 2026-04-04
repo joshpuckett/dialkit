@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+
 /* Dialkit Theme - Dark glassmorphic design */
 .dialkit-root {
   /* Surfaces */
@@ -58,7 +60,7 @@
   border-radius: 14px;
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
-  padding: 10px 12px 12px 12px;
+  padding: 10px 12px 0 12px;
   transform: translateZ(0);
   transform-origin: top right;
   max-height: calc(100vh - 80px);
@@ -361,7 +363,7 @@
   transform: translateY(calc(-50% + 0.5px));
   font-size: 13px;
   font-weight: 500;
-  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
   color: var(--dial-text-label);
   pointer-events: auto;
   transition: color 0.15s, border-color 0.15s;
@@ -383,7 +385,7 @@
   max-width: 6ch;
   font-size: 13px;
   font-weight: 500;
-  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
   color: var(--dial-text-label);
   background: transparent;
   border: none;
@@ -419,8 +421,8 @@
 .dialkit-segmented-button {
   position: relative;
   z-index: 1;
-  flex: 1;
-  padding: 8px 12px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -531,6 +533,8 @@
 }
 
 .dialkit-labeled-control-label {
+  display: flex;
+  align-items: center;
   font-size: 13px;
   font-weight: 500;
   color: var(--dial-text-label);
@@ -540,6 +544,7 @@
 
 .dialkit-labeled-control .dialkit-segmented {
   flex-shrink: 0;
+  margin-right: -6px;
 }
 
 .dialkit-action-button {
@@ -836,7 +841,7 @@
 .dialkit-color-hex {
   font-size: 13px;
   font-weight: 500;
-  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
   color: var(--dial-text-label);
   cursor: text;
   transform: translateY(-0.5px);
@@ -846,7 +851,7 @@
   width: 7ch;
   font-size: 13px;
   font-weight: 500;
-  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  font-family: 'Geist Mono', monospace;
   color: var(--dial-text-label);
   background: transparent;
   border: none;

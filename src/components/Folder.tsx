@@ -126,8 +126,8 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
     }
 
     const panelStyle = isOpen
-      ? { width: 280, height: contentHeight !== undefined ? contentHeight + 24 : 'auto' as const, borderRadius: 14, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)', cursor: undefined as string | undefined }
-      : { width: 42, height: 42, borderRadius: 21, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)', overflow: 'hidden' as const, cursor: 'pointer' as const };
+      ? { width: 280, height: contentHeight !== undefined ? contentHeight + 10 : 'auto' as const, borderRadius: 14, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)', cursor: undefined as string | undefined }
+      : { width: 42, height: 42, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)', overflow: 'hidden' as const, cursor: 'pointer' as const };
 
     return (
       <motion.div

@@ -1,6 +1,14 @@
 # dialkit
 
-Real-time parameter tweaking for React, Solid, and Svelte.
+Real-time parameter tweaking for React, Solid, and Svelte, created by Josh Puckett.
+
+To learn more about how I use DialKit, and approach design in general, feel free to check out [Interface Craft](http://interfacecraft.dev/).
+
+## Contributing
+
+- **Open an issue first.** All pull requests should reference an existing issue. PRs without a corresponding issue will be closed.
+- **Keep PRs small and focused.** Each pull request should address a single change — one bug fix, one feature, or one refactor. Avoid bundling unrelated changes together.
+- **No unnecessary dependencies.** If your change can be accomplished without adding a new dependency, it should be. Any new dependency needs justification in the PR description.
 
 ## Quick Start
 
