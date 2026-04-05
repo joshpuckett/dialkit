@@ -1,4 +1,6 @@
-# dialkit
+# dialkit v1.2.0
+
+<img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue, created by Josh Puckett.
 
