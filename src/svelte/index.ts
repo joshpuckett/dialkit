@@ -4,7 +4,7 @@ export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
 
 // Root component
 export { default as DialRoot } from './components/DialRoot.svelte';
-export type { DialPosition, DialMode } from './components/DialRoot.svelte';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot.svelte';
 
 // Shortcut components
 export { default as ShortcutListener } from './components/ShortcutListener.svelte';

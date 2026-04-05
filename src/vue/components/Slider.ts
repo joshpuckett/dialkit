@@ -51,10 +51,6 @@ export const Slider = defineComponent({
     const percentage = computed(() => ((props.value - min.value) / (max.value - min.value)) * 100);
     const isActive = computed(() => isInteracting.value || isHovered.value);
     const displayValue = computed(() => props.value.toFixed(decimalsForStep(step.value)));
-    const fillBackground = computed(() =>
-      isActive.value ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.11)'
-    );
-
     let pointerDownPos: { x: number; y: number } | null = null;
     let isClickFlag = true;
     let wrapperRect: DOMRect | null = null;
@@ -386,9 +382,7 @@ export const Slider = defineComponent({
           ref: fillRef,
           class: 'dialkit-slider-fill',
           style: {
-            background: fillBackground.value,
             width: `${fillPercent.get()}%`,
-            transition: 'background 0.15s',
           },
         }),
         h('div', {
@@ -398,7 +392,6 @@ export const Slider = defineComponent({
             left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
             transform: 'translateY(-50%) scaleX(0.25) scaleY(1)',
             opacity: 0,
-            background: 'rgba(255, 255, 255, 0.9)',
           },
         }),
         h('span', { ref: labelRef, class: 'dialkit-slider-label' }, [

@@ -8,6 +8,7 @@
 
   export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   export type DialMode = 'popover' | 'inline';
+  export type DialTheme = 'light' | 'dark' | 'system';
 
   declare const process: { env?: { NODE_ENV?: string } } | undefined;
 
@@ -17,10 +18,11 @@
       ? (import.meta as any).env.MODE !== 'production'
       : true;
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', productionEnabled = isDevDefault } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault } = $props<{
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
+    theme?: DialTheme;
     productionEnabled?: boolean;
   }>();
 
@@ -57,7 +59,7 @@
 {#if productionEnabled && mounted && panels.length > 0}
   {#snippet content()}
     <ShortcutListener>
-      <div class="dialkit-root" data-mode={mode}>
+      <div class="dialkit-root" data-mode={mode} data-theme={theme}>
         <div class="dialkit-panel" data-mode={mode} data-position={inline ? undefined : position}>
           {#each panels as panel (panel.id)}
             <Panel {panel} defaultOpen={inline || defaultOpen} {inline} />

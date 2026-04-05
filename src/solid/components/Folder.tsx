@@ -251,8 +251,8 @@ export function Folder(props: FolderProps) {
         height: open ? measuredOpenHeight : 42,
         borderRadius: open ? 14 : 21,
         boxShadow: open
-          ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-          : '0 4px 16px rgba(0, 0, 0, 0.25)',
+          ? 'var(--dial-shadow)'
+          : 'var(--dial-shadow-collapsed)',
       };
 
       panelRef.style.cursor = open ? '' : 'pointer';

@@ -7,6 +7,7 @@ import { Panel } from './Panel';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
+export type DialTheme = 'light' | 'dark' | 'system';
 
 declare const process: { env?: { NODE_ENV?: string } } | undefined;
 
@@ -20,6 +21,7 @@ interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  theme?: DialTheme;
   productionEnabled?: boolean;
 }
 
@@ -40,7 +42,7 @@ export function DialRoot(props: DialRootProps) {
 
   const content = () => (
     <ShortcutListener>
-      <div class="dialkit-root" data-mode={props.mode ?? 'popover'}>
+      <div class="dialkit-root" data-mode={props.mode ?? 'popover'} data-theme={props.theme ?? 'system'}>
         <div class="dialkit-panel" data-position={inline() ? undefined : (props.position ?? 'top-right')} data-mode={props.mode ?? 'popover'}>
           <For each={panels()}>
             {(panel) => <Panel panel={panel} defaultOpen={inline() || (props.defaultOpen ?? true)} inline={inline()} />}

@@ -6,6 +6,7 @@ import { ShortcutListener } from './ShortcutListener';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
+export type DialTheme = 'light' | 'dark' | 'system';
 
 declare const process: { env?: { NODE_ENV?: string } } | undefined;
 
@@ -30,6 +31,10 @@ export const DialRoot = defineComponent({
       type: String as () => DialMode,
       default: 'popover',
     },
+    theme: {
+      type: String as () => DialTheme,
+      default: 'system',
+    },
     productionEnabled: {
       type: Boolean,
       default: isDevDefault,
@@ -53,7 +58,7 @@ export const DialRoot = defineComponent({
     });
 
     const renderContent = () => h(ShortcutListener, null, {
-      default: () => h('div', { class: 'dialkit-root', 'data-mode': props.mode }, [
+      default: () => h('div', { class: 'dialkit-root', 'data-mode': props.mode, 'data-theme': props.theme }, [
         h('div', {
           class: 'dialkit-panel',
           'data-position': props.mode === 'inline' ? undefined : props.position,

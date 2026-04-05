@@ -326,10 +326,6 @@ export function Slider({
         ? 0.9
         : 0.5;
 
-  const fillBackground = isActive
-    ? 'rgba(255, 255, 255, 0.15)'
-    : 'rgba(255, 255, 255, 0.11)';
-
   // The ≤ 10 threshold separates discrete sliders
   // (like step=2 on a 0–10 range → 5 steps) from continuous ones.
   const discreteSteps = (max - min) / step;
@@ -372,9 +368,7 @@ export function Slider({
         <motion.div
           className="dialkit-slider-fill"
           style={{
-            background: fillBackground,
             width: fillWidth,
-            transition: 'background 0.15s',
           }}
         />
 
@@ -383,7 +377,6 @@ export function Slider({
           style={{
             left: handleLeft,
             y: '-50%',
-            background: 'rgba(255, 255, 255, 0.9)',
           }}
           animate={{
             opacity: handleOpacity,

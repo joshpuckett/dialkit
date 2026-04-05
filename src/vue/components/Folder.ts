@@ -155,7 +155,7 @@ export const Folder = defineComponent({
             width: 280,
             height: contentHeight.value !== undefined ? Math.min(contentHeight.value + 10, windowHeight.value - 32) : 'auto',
             borderRadius: 14,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+            boxShadow: 'var(--dial-shadow)',
             cursor: undefined as string | undefined,
             overflowY: 'auto' as const,
           }
@@ -163,7 +163,7 @@ export const Folder = defineComponent({
             width: 42,
             height: 42,
             borderRadius: 21,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+            boxShadow: 'var(--dial-shadow-collapsed)',
             overflow: 'hidden',
             cursor: 'pointer',
           };

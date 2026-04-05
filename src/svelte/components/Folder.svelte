@@ -102,7 +102,7 @@
 
   const panelStyle = $derived(
     `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
-      `box-shadow:${isOpen ? '0 8px 32px rgba(0, 0, 0, 0.5)' : '0 4px 16px rgba(0, 0, 0, 0.25)'};` +
+      `box-shadow:${isOpen ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)'};` +
       `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
       `transform:scale(${panelScale.current});`
   );

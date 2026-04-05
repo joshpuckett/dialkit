@@ -4,7 +4,7 @@ export { vDialKit } from './directives/dialkit';
 export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directives/dialkit';
 
 export { DialRoot } from './components/DialRoot';
-export type { DialPosition, DialMode } from './components/DialRoot';
+export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
 
 export { ShortcutListener, useShortcutContext, ShortcutKey } from './components/ShortcutListener';
 export type { ShortcutState } from './components/ShortcutListener';

@@ -346,9 +346,6 @@ export function Slider(props: SliderProps) {
     });
   });
 
-  const fillBackground = () =>
-    isActive() ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.11)';
-
   const discreteSteps = () => (max() - min()) / step();
 
   const hashMarks = () => {
@@ -383,9 +380,7 @@ export function Slider(props: SliderProps) {
           ref={fillRef}
           class="dialkit-slider-fill"
           style={{
-            background: fillBackground(),
             width: `${fillPercent.get()}%`,
-            transition: 'background 0.15s',
           }}
         />
 
@@ -396,7 +391,6 @@ export function Slider(props: SliderProps) {
             left: `max(5px, calc(${fillPercent.get()}% - 9px))`,
             transform: 'translateY(-50%) scaleX(0.25) scaleY(1)',
             opacity: 0,
-            background: 'rgba(255, 255, 255, 0.9)',
           }}
         />
 

@@ -6,6 +6,7 @@ import { ShortcutListener } from './ShortcutListener';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
+export type DialTheme = 'light' | 'dark' | 'system';
 
 declare const process: { env?: { NODE_ENV?: string } } | undefined;
 
@@ -19,10 +20,11 @@ interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  theme?: DialTheme;
   productionEnabled?: boolean;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', productionEnabled = isDevDefault }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault }: DialRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -144,7 +146,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
 
   const content = (
   <ShortcutListener>
-    <div className="dialkit-root" data-mode={mode}>
+    <div className="dialkit-root" data-mode={mode} data-theme={theme}>
       <div
         ref={panelRef}
         className="dialkit-panel"

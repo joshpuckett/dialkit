@@ -149,10 +149,6 @@
     handleScaleYMv.set(isActive && valueDodge ? 0.75 : 1);
   });
 
-  const fillBackground = $derived(
-    isActive ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.11)'
-  );
-
   const discreteSteps = $derived((max - min) / step);
 
   const hashMarks = $derived.by(() => {
@@ -267,8 +263,8 @@
   const displayValue = $derived(value.toFixed(decimalsForStep(step)));
 
   const trackStyle = $derived(`width:calc(100% + ${Math.abs(rubberStretchPx.current)}px);transform:translateX(${rubberStretchPx.current < 0 ? rubberStretchPx.current : 0}px);`);
-  const fillStyle = $derived(`background:${fillBackground};width:${fillPercent.current}%;transition:background 0.15s;`);
-  const handleStyle = $derived(`left:max(5px, calc(${fillPercent.current}% - 9px));opacity:${handleOpacityMv.current};transform:translateY(-50%) scaleX(${handleScaleXMv.current}) scaleY(${handleScaleYMv.current});background:rgba(255, 255, 255, 0.9);`);
+  const fillStyle = $derived(`width:${fillPercent.current}%;`);
+  const handleStyle = $derived(`left:max(5px, calc(${fillPercent.current}% - 9px));opacity:${handleOpacityMv.current};transform:translateY(-50%) scaleX(${handleScaleXMv.current}) scaleY(${handleScaleYMv.current});`);
 </script>
 
 <div bind:this={wrapperRef} class="dialkit-slider-wrapper">
