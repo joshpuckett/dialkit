@@ -3,6 +3,8 @@ import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta, PanelConfig, SpringConfig, DialValue } from '../../store/DialStore';
+import { useShortcutContext } from './ShortcutListener';
+import { ShortcutsMenu } from './ShortcutsMenu';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
@@ -21,6 +23,8 @@ interface PanelProps {
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
   const [isPanelOpen, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
+  const shortcutCtx = useShortcutContext();
+  const hasShortcuts = () => Object.keys(props.panel.shortcuts).length > 0;
   const [values, setValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(props.panel.id)
   );
@@ -143,6 +147,8 @@ export function Panel(props: PanelProps) {
             min={control.min}
             max={control.max}
             step={control.step}
+            shortcut={control.shortcut}
+            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
           />
         );
 
@@ -152,6 +158,8 @@ export function Panel(props: PanelProps) {
             label={control.label}
             checked={value() as boolean}
             onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
+            shortcut={control.shortcut}
+            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
           />
         );
 
@@ -292,6 +300,7 @@ export function Panel(props: PanelProps) {
         </span>
         Copy
       </button>
+
     </>
   );
 

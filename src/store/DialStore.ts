@@ -410,31 +410,6 @@ class DialStoreClass {
     return results;
   }
 
-  getAllShortcuts(): Array<{
-    panelId: string;
-    panelName: string;
-    path: string;
-    label: string;
-    shortcut: ShortcutConfig;
-  }> {
-    const result: Array<{ panelId: string; panelName: string; path: string; label: string; shortcut: ShortcutConfig }> = [];
-    for (const panel of this.panels.values()) {
-      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
-        const control = this.findControlByPath(panel.controls, path);
-        if (control) {
-          result.push({
-            panelId: panel.id,
-            panelName: panel.name,
-            path,
-            label: control.label,
-            shortcut,
-          });
-        }
-      }
-    }
-    return result;
-  }
-
   private findControlByPath(controls: ControlMeta[], path: string): ControlMeta | null {
     for (const control of controls) {
       if (control.path === path) return control;

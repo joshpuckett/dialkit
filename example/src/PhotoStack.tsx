@@ -52,6 +52,10 @@ export function PhotoStack() {
     darkMode: false,
     next: { type: 'action' as const },
   }, {
+    shortcuts: {
+      'backPhoto.offsetX': { key: 'x', mode: 'coarse' },
+      'shadow.opacity': { key: 'o', mode: 'fine' },
+    },
     onAction: (action) => {
       if (action === 'next') next();
     },

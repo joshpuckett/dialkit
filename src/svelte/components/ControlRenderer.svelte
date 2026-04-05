@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
   import { DialStore } from 'dialkit/store';
   import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from 'dialkit/store';
   import Slider from './Slider.svelte';
@@ -10,6 +11,8 @@
   import SelectControl from './SelectControl.svelte';
   import ColorControl from './ColorControl.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
+  import { SHORTCUT_CTX } from './ShortcutListener.svelte';
+  import type { ShortcutContextValue } from './ShortcutListener.svelte';
 
   let { panelId, control, values } = $props<{
     panelId: string;
@@ -17,7 +20,12 @@
     values: Record<string, DialValue>;
   }>();
 
+  const shortcutCtx = getContext<ShortcutContextValue | undefined>(SHORTCUT_CTX);
+
   const controlValue = $derived(values[control.path]);
+  const isShortcutActive = $derived(
+    shortcutCtx ? shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path : false
+  );
 </script>
 
 {#if control.type === 'slider'}
@@ -28,12 +36,16 @@
     min={control.min}
     max={control.max}
     step={control.step}
+    shortcut={control.shortcut}
+    shortcutActive={isShortcutActive}
   />
 {:else if control.type === 'toggle'}
   <Toggle
     label={control.label}
     checked={controlValue as boolean}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
+    shortcut={control.shortcut}
+    shortcutActive={isShortcutActive}
   />
 {:else if control.type === 'spring'}
   <SpringControl

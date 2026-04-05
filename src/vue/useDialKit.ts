@@ -8,12 +8,14 @@ import type {
   EasingConfig,
   ResolvedValues,
   SelectConfig,
+  ShortcutConfig,
   SpringConfig,
   TextConfig,
 } from '../store/DialStore';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
 }
 
 let dialKitInstance = 0;
@@ -26,15 +28,17 @@ export function useDialKit<T extends DialConfig>(
   const panelId = `${name}-${++dialKitInstance}`;
   const configRef = shallowRef(config);
   const onActionRef = ref(options?.onAction);
+  const shortcutsRef = shallowRef(options?.shortcuts);
   const values = ref<Record<string, DialValue>>(DialStore.getValues(panelId));
   const mounted = ref(false);
   const serializedConfig = computed(() => JSON.stringify(config));
+  const serializedShortcuts = computed(() => JSON.stringify(options?.shortcuts));
 
   let unsubscribeValues: (() => void) | undefined;
   let unsubscribeActions: (() => void) | undefined;
 
   const register = () => {
-    DialStore.registerPanel(panelId, name, configRef.value);
+    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value);
     values.value = DialStore.getValues(panelId);
 
     unsubscribeValues = DialStore.subscribe(panelId, () => {
@@ -50,10 +54,15 @@ export function useDialKit<T extends DialConfig>(
     onActionRef.value = next;
   });
 
-  watch(serializedConfig, () => {
+  watch(() => options?.shortcuts, (next) => {
+    shortcutsRef.value = next;
+  });
+
+  watch([serializedConfig, serializedShortcuts], () => {
     configRef.value = config;
+    shortcutsRef.value = options?.shortcuts;
     if (mounted.value) {
-      DialStore.updatePanel(panelId, name, configRef.value);
+      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value);
       values.value = DialStore.getValues(panelId);
     }
   });

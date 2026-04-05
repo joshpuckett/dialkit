@@ -242,9 +242,6 @@ Apply these values as the new defaults in the useDialKit call.`;
         </span>
       </motion.button>
 
-      {hasShortcuts && (
-        <ShortcutsMenu panelId={panel.id} />
-      )}
     </>
   );
 

@@ -1,41 +1,46 @@
-import { createContext, useEffect, useRef, useState, useCallback } from 'react';
-import { DialStore } from '../store/DialStore';
+import { createContext, useContext, createSignal, onMount, onCleanup, JSX } from 'solid-js';
+import { DialStore } from '../../store/DialStore';
 import {
   getEffectiveStep,
   applySliderDelta,
+  DRAG_SENSITIVITY,
+  findControl,
   isInputFocused,
   getActiveModifier,
-  findControl,
-  DRAG_SENSITIVITY,
-} from '../shortcut-utils';
+} from '../../shortcut-utils';
 
-export const ShortcutContext = createContext<{
+type ShortcutState = {
   activePanelId: string | null;
   activePath: string | null;
-}>({ activePanelId: null, activePath: null });
+};
 
-export function ShortcutListener({ children }: { children: React.ReactNode }) {
-  const [activeShortcut, setActiveShortcut] = useState<{
-    activePanelId: string | null;
-    activePath: string | null;
-  }>({ activePanelId: null, activePath: null });
+const defaultState: ShortcutState = { activePanelId: null, activePath: null };
 
-  const activeKeysRef = useRef<Set<string>>(new Set());
-  const isDraggingRef = useRef(false);
-  const lastMouseXRef = useRef<number | null>(null);
-  const dragAccumulatorRef = useRef(0);
+const ShortcutContext = createContext<() => ShortcutState>(() => defaultState);
 
-  // Find the active target for key-based interactions (scroll, drag, move)
-  const resolveActiveTarget = useCallback((interaction: string) => {
-    for (const key of activeKeysRef.current) {
-      // We can't get the modifier from a stored key, so we check all panels
+export function useShortcutContext() {
+  return useContext(ShortcutContext);
+}
+
+export function ShortcutListener(props: { children: JSX.Element }) {
+  const [activeShortcut, setActiveShortcut] = createSignal<ShortcutState>(defaultState);
+
+  const activeKeys = new Set<string>();
+  let isDragging = false;
+  let lastMouseX: number | null = null;
+  let dragAccumulator = 0;
+
+  const resolveActiveTarget = (interaction: string) => {
+    for (const key of activeKeys) {
       const panels = DialStore.getPanels();
       for (const panel of panels) {
         for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
           if (!shortcut.key) continue;
           if (shortcut.key.toLowerCase() !== key) continue;
           if ((shortcut.interaction ?? 'scroll') !== interaction) continue;
-          const control = findControl(panel.controls, path);
+          const control = DialStore.getPanel(panel.id)?.controls
+            ? findControl(panel.controls, path)
+            : null;
           if (control && control.type === 'slider') {
             return { panelId: panel.id, path, control, shortcut };
           }
@@ -43,9 +48,9 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       }
     }
     return null;
-  }, []);
+  };
 
-  useEffect(() => {
+  onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInputFocused()) return;
 
@@ -53,7 +58,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
 
       // Arrow keys adjust the active shortcut's slider
       if (key === 'arrowleft' || key === 'arrowright' || key === 'arrowup' || key === 'arrowdown') {
-        if (activeKeysRef.current.size > 0) {
+        if (activeKeys.size > 0) {
           const target = resolveActiveTarget('scroll') || resolveActiveTarget('drag') || resolveActiveTarget('move');
           if (target && target.control.type === 'slider') {
             e.preventDefault();
@@ -65,8 +70,8 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const wasAlreadyHeld = activeKeysRef.current.has(key);
-      activeKeysRef.current.add(key);
+      const wasAlreadyHeld = activeKeys.has(key);
+      activeKeys.add(key);
 
       const modifier = getActiveModifier(e);
       const target = DialStore.resolveShortcutTarget(key, modifier);
@@ -82,25 +87,25 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
 
       // Reset mouse tracking when a new key is pressed (for move/drag)
       if (!wasAlreadyHeld) {
-        lastMouseXRef.current = null;
-        dragAccumulatorRef.current = 0;
+        lastMouseX = null;
+        dragAccumulator = 0;
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      activeKeysRef.current.delete(key);
+      activeKeys.delete(key);
 
       // Reset drag state when key is released
-      isDraggingRef.current = false;
-      lastMouseXRef.current = null;
-      dragAccumulatorRef.current = 0;
+      isDragging = false;
+      lastMouseX = null;
+      dragAccumulator = 0;
 
-      if (activeKeysRef.current.size === 0) {
+      if (activeKeys.size === 0) {
         setActiveShortcut({ activePanelId: null, activePath: null });
       } else {
         let found = false;
-        for (const remainingKey of activeKeysRef.current) {
+        for (const remainingKey of activeKeys) {
           const modifier = getActiveModifier(e);
           const target = DialStore.resolveShortcutTarget(remainingKey, modifier);
           if (target) {
@@ -115,15 +120,15 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // ── Scroll: key+scroll and scroll-only ──
+    // Scroll: key+scroll and scroll-only
     const handleWheel = (e: WheelEvent) => {
       if (isInputFocused()) return;
 
       const modifier = getActiveModifier(e);
 
       // Key+scroll shortcuts
-      if (activeKeysRef.current.size > 0) {
-        for (const key of activeKeysRef.current) {
+      if (activeKeys.size > 0) {
+        for (const key of activeKeys) {
           const target = DialStore.resolveShortcutTarget(key, modifier);
           if (!target) continue;
 
@@ -152,43 +157,43 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // ── Drag: key+mousedown starts, mousemove adjusts, mouseup stops ──
+    // Drag: key+mousedown starts, mousemove adjusts, mouseup stops
     const handleMouseDown = (e: MouseEvent) => {
       if (isInputFocused()) return;
-      if (activeKeysRef.current.size === 0) return;
+      if (activeKeys.size === 0) return;
 
       const target = resolveActiveTarget('drag');
       if (target) {
-        isDraggingRef.current = true;
-        lastMouseXRef.current = e.clientX;
-        dragAccumulatorRef.current = 0;
+        isDragging = true;
+        lastMouseX = e.clientX;
+        dragAccumulator = 0;
         e.preventDefault();
       }
     };
 
     const handleMouseUp = () => {
-      isDraggingRef.current = false;
-      lastMouseXRef.current = null;
-      dragAccumulatorRef.current = 0;
+      isDragging = false;
+      lastMouseX = null;
+      dragAccumulator = 0;
     };
 
-    // ── Move + Drag: mousemove handles both ──
+    // Move + Drag: mousemove handles both
     const handleMouseMove = (e: MouseEvent) => {
       if (isInputFocused()) return;
-      if (activeKeysRef.current.size === 0) return;
+      if (activeKeys.size === 0) return;
 
       // Drag interaction (requires mousedown)
-      if (isDraggingRef.current) {
+      if (isDragging) {
         const target = resolveActiveTarget('drag');
-        if (target && lastMouseXRef.current !== null) {
-          const deltaX = e.clientX - lastMouseXRef.current;
-          lastMouseXRef.current = e.clientX;
-          dragAccumulatorRef.current += deltaX;
+        if (target && lastMouseX !== null) {
+          const deltaX = e.clientX - lastMouseX;
+          lastMouseX = e.clientX;
+          dragAccumulator += deltaX;
 
           const effectiveStep = getEffectiveStep(target.control, target.shortcut);
-          const steps = Math.trunc(dragAccumulatorRef.current / DRAG_SENSITIVITY);
+          const steps = Math.trunc(dragAccumulator / DRAG_SENSITIVITY);
           if (steps !== 0) {
-            dragAccumulatorRef.current -= steps * DRAG_SENSITIVITY;
+            dragAccumulator -= steps * DRAG_SENSITIVITY;
             applySliderDelta(target.panelId, target.path, target.control, effectiveStep, steps);
           }
         }
@@ -198,29 +203,29 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       // Move interaction (no click needed, just key held + mouse movement)
       const moveTarget = resolveActiveTarget('move');
       if (moveTarget) {
-        if (lastMouseXRef.current === null) {
-          lastMouseXRef.current = e.clientX;
+        if (lastMouseX === null) {
+          lastMouseX = e.clientX;
           return;
         }
 
-        const deltaX = e.clientX - lastMouseXRef.current;
-        lastMouseXRef.current = e.clientX;
-        dragAccumulatorRef.current += deltaX;
+        const deltaX = e.clientX - lastMouseX;
+        lastMouseX = e.clientX;
+        dragAccumulator += deltaX;
 
         const effectiveStep = getEffectiveStep(moveTarget.control, moveTarget.shortcut);
-        const steps = Math.trunc(dragAccumulatorRef.current / DRAG_SENSITIVITY);
+        const steps = Math.trunc(dragAccumulator / DRAG_SENSITIVITY);
         if (steps !== 0) {
-          dragAccumulatorRef.current -= steps * DRAG_SENSITIVITY;
+          dragAccumulator -= steps * DRAG_SENSITIVITY;
           applySliderDelta(moveTarget.panelId, moveTarget.path, moveTarget.control, effectiveStep, steps);
         }
       }
     };
 
     const handleWindowBlur = () => {
-      activeKeysRef.current.clear();
-      isDraggingRef.current = false;
-      lastMouseXRef.current = null;
-      dragAccumulatorRef.current = 0;
+      activeKeys.clear();
+      isDragging = false;
+      lastMouseX = null;
+      dragAccumulator = 0;
       setActiveShortcut({ activePanelId: null, activePath: null });
     };
 
@@ -232,7 +237,7 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('blur', handleWindowBlur);
 
-    return () => {
+    onCleanup(() => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('wheel', handleWheel);
@@ -240,12 +245,12 @@ export function ShortcutListener({ children }: { children: React.ReactNode }) {
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('blur', handleWindowBlur);
-    };
-  }, [resolveActiveTarget]);
+    });
+  });
 
   return (
     <ShortcutContext.Provider value={activeShortcut}>
-      {children}
+      {props.children}
     </ShortcutContext.Provider>
   );
 }

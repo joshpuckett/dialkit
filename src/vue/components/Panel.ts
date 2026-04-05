@@ -12,6 +12,8 @@ import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
 import { ColorControl } from './ColorControl';
 import { PresetManager } from './PresetManager';
+import { useShortcutContext } from './ShortcutListener';
+import { ShortcutsMenu } from './ShortcutsMenu';
 
 export const Panel = defineComponent({
   name: 'DialKitPanel',
@@ -30,10 +32,12 @@ export const Panel = defineComponent({
     },
   },
   setup(props) {
+    const shortcutCtx = useShortcutContext();
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
     const copied = ref(false);
+    const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
 
     let unsubscribe: (() => void) | undefined;
     let copiedTimeout: ReturnType<typeof window.setTimeout> | null = null;
@@ -91,6 +95,8 @@ export const Panel = defineComponent({
             min: control.min,
             max: control.max,
             step: control.step,
+            shortcut: control.shortcut,
+            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
             onChange: (next: number) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'toggle':
@@ -98,6 +104,8 @@ export const Panel = defineComponent({
             key: control.path,
             label: control.label,
             checked: value as boolean,
+            shortcut: control.shortcut,
+            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
             onChange: (next: boolean) => DialStore.updateValue(props.panel.id, control.path, next),
           });
         case 'spring':

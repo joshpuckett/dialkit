@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
+  import type { ShortcutConfig } from 'dialkit/store';
+  import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
 
   let {
     label,
@@ -9,6 +11,8 @@
     min = 0,
     max = 1,
     step = 0.01,
+    shortcut,
+    shortcutActive = false,
   } = $props<{
     label: string;
     value: number;
@@ -17,6 +21,8 @@
     max?: number;
     step?: number;
     unit?: string;
+    shortcut?: ShortcutConfig;
+    shortcutActive?: boolean;
   }>();
 
   const CLICK_THRESHOLD = 3;
@@ -51,28 +57,6 @@
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  const decimalsForStep = (s: number) => {
-    const text = s.toString();
-    const dot = text.indexOf('.');
-    return dot === -1 ? 0 : text.length - dot - 1;
-  };
-
-  const roundValue = (val: number, s: number) => {
-    const raw = Math.round(val / s) * s;
-    return Number.parseFloat(raw.toFixed(decimalsForStep(s)));
-  };
-
-  const snapToDecile = (rawValue: number, minValue: number, maxValue: number) => {
-    const normalized = (rawValue - minValue) / (maxValue - minValue);
-    const nearest = Math.round(normalized * 10) / 10;
-
-    if (Math.abs(normalized - nearest) <= 0.03125) {
-      return minValue + nearest * (maxValue - minValue);
-    }
-
-    return rawValue;
-  };
 
   const percentFromValue = (nextValue: number) => ((nextValue - min) / (max - min)) * 100;
 
@@ -308,7 +292,14 @@
 
     <div class="dialkit-slider-handle" style={handleStyle} />
 
-    <span bind:this={labelRef} class="dialkit-slider-label">{label}</span>
+    <span bind:this={labelRef} class="dialkit-slider-label">
+      {label}
+      {#if shortcut}
+        <span class={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+          {formatSliderShortcut(shortcut)}
+        </span>
+      {/if}
+    </span>
 
     {#if showInput}
       <input

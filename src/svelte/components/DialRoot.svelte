@@ -4,6 +4,7 @@
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
   import Panel from './Panel.svelte';
+  import ShortcutListener from './ShortcutListener.svelte';
 
   export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   export type DialMode = 'popover' | 'inline';
@@ -55,13 +56,15 @@
 
 {#if productionEnabled && mounted && panels.length > 0}
   {#snippet content()}
-    <div class="dialkit-root" data-mode={mode}>
-      <div class="dialkit-panel" data-mode={mode} data-position={inline ? undefined : position}>
-        {#each panels as panel (panel.id)}
-          <Panel {panel} defaultOpen={inline || defaultOpen} {inline} />
-        {/each}
+    <ShortcutListener>
+      <div class="dialkit-root" data-mode={mode}>
+        <div class="dialkit-panel" data-mode={mode} data-position={inline ? undefined : position}>
+          {#each panels as panel (panel.id)}
+            <Panel {panel} defaultOpen={inline || defaultOpen} {inline} />
+          {/each}
+        </div>
       </div>
-    </div>
+    </ShortcutListener>
   {/snippet}
 
   {#if inline}

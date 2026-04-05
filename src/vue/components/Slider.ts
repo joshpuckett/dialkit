@@ -1,30 +1,12 @@
-import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { animate, motionValue } from 'motion-v';
+import type { ShortcutConfig } from '../../store/DialStore';
+import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
 
 const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
-
-function decimalsForStep(step: number): number {
-  const text = String(step);
-  const dot = text.indexOf('.');
-  return dot === -1 ? 0 : text.length - dot - 1;
-}
-
-function roundValue(value: number, step: number): number {
-  const rounded = Math.round(value / step) * step;
-  return Number(rounded.toFixed(decimalsForStep(step)));
-}
-
-function snapToDecile(rawValue: number, min: number, max: number): number {
-  const normalized = (rawValue - min) / (max - min);
-  const nearest = Math.round(normalized * 10) / 10;
-  if (Math.abs(normalized - nearest) <= 0.03125) {
-    return min + nearest * (max - min);
-  }
-  return rawValue;
-}
 
 export const Slider = defineComponent({
   name: 'DialKitSlider',
@@ -35,6 +17,8 @@ export const Slider = defineComponent({
     max: { type: Number, required: false },
     step: { type: Number, required: false },
     unit: { type: String, required: false },
+    shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
+    shortcutActive: { type: Boolean, default: false },
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -417,7 +401,14 @@ export const Slider = defineComponent({
             background: 'rgba(255, 255, 255, 0.9)',
           },
         }),
-        h('span', { ref: labelRef, class: 'dialkit-slider-label' }, props.label),
+        h('span', { ref: labelRef, class: 'dialkit-slider-label' }, [
+          props.label,
+          props.shortcut
+            ? h('span', {
+                class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
+              }, formatSliderShortcut(props.shortcut))
+            : null,
+        ]),
         showInput.value
           ? h('input', {
             ref: inputRef,

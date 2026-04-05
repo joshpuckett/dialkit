@@ -6,6 +6,10 @@ export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directive
 export { DialRoot } from './components/DialRoot';
 export type { DialPosition, DialMode } from './components/DialRoot';
 
+export { ShortcutListener, useShortcutContext, ShortcutKey } from './components/ShortcutListener';
+export type { ShortcutState } from './components/ShortcutListener';
+export { ShortcutsMenu } from './components/ShortcutsMenu';
+
 export { Slider } from './components/Slider';
 export { Toggle } from './components/Toggle';
 export { Folder } from './components/Folder';
@@ -34,4 +38,5 @@ export type {
   ResolvedValues,
   ControlMeta,
   PanelConfig,
+  ShortcutConfig,
 } from '../store/DialStore';

@@ -1,5 +1,12 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { animate, motionValue } from 'motion';
+import type { ShortcutConfig } from '../../store/DialStore';
+import {
+  decimalsForStep,
+  roundValue,
+  snapToDecile,
+  formatSliderShortcut,
+} from '../../shortcut-utils';
 
 interface SliderProps {
   label: string;
@@ -9,32 +16,14 @@ interface SliderProps {
   max?: number;
   step?: number;
   unit?: string;
+  shortcut?: ShortcutConfig;
+  shortcutActive?: boolean;
 }
 
 const CLICK_THRESHOLD = 3;
 const DEAD_ZONE = 32;
 const MAX_CURSOR_RANGE = 200;
 const MAX_STRETCH = 8;
-
-function decimalsForStep(step: number): number {
-  const s = step.toString();
-  const dot = s.indexOf('.');
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-
-function roundValue(val: number, step: number): number {
-  const raw = Math.round(val / step) * step;
-  return parseFloat(raw.toFixed(decimalsForStep(step)));
-}
-
-function snapToDecile(rawValue: number, min: number, max: number): number {
-  const normalized = (rawValue - min) / (max - min);
-  const nearest = Math.round(normalized * 10) / 10;
-  if (Math.abs(normalized - nearest) <= 0.03125) {
-    return min + nearest * (max - min);
-  }
-  return rawValue;
-}
 
 export function Slider(props: SliderProps) {
   const min = () => props.min ?? 0;
@@ -411,7 +400,14 @@ export function Slider(props: SliderProps) {
           }}
         />
 
-        <span ref={labelRef} class="dialkit-slider-label">{props.label}</span>
+        <span ref={labelRef} class="dialkit-slider-label">
+          {props.label}
+          <Show when={props.shortcut}>
+            <span class={`dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
+              {formatSliderShortcut(props.shortcut!)}
+            </span>
+          </Show>
+        </span>
 
         {showInput() ? (
           <input

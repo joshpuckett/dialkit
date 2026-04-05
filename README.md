@@ -1,6 +1,6 @@
 # dialkit
 
-Real-time parameter tweaking for React, Solid, and Svelte, created by Josh Puckett.
+Real-time parameter tweaking for React, Solid, Svelte, and Vue, created by Josh Puckett.
 
 To learn more about how I use DialKit, and approach design in general, feel free to check out [Interface Craft](http://interfacecraft.dev/).
 
@@ -276,6 +276,10 @@ DialKit is automatically hidden in production builds. To enable it in production
 <DialRoot productionEnabled />
 ```
 
+### Draggable panel
+
+In popover mode, the collapsed panel bubble can be dragged to any position on the screen. When you click to open the panel, it snaps to the nearest side — top-left if the bubble is on the left half of the screen, top-right if on the right half. When the panel is closed again, it returns to where you last dragged it.
+
 ### Inline mode
 
 Use `mode="inline"` to render DialKit directly in your layout instead of as a floating popover. The panel fills its container and scrolls internally, which is useful for embedding in a sidebar or resizable panel. Inline mode works across all frameworks:
@@ -311,7 +315,6 @@ When the panel is open, the toolbar provides:
 
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
-- **Shortcuts** — When shortcuts are configured, a keyboard icon appears in the toolbar. Click it to view all registered keyboard shortcuts for that panel.
 
 ---
 
@@ -550,6 +553,67 @@ npm install dialkit
 ```
 
 `createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
+
+---
+
+## Vue
+
+DialKit works with Vue 3 (≥3.3.0). Import from `dialkit/vue`.
+
+```bash
+npm install dialkit motion-v vue
+```
+
+```ts
+// main.ts
+import { createApp } from 'vue';
+import { DialRoot } from 'dialkit/vue';
+import 'dialkit/styles.css';
+import App from './App.vue';
+
+const app = createApp(App);
+app.mount('#app');
+```
+
+```vue
+<!-- App.vue -->
+<script setup>
+import { DialRoot } from 'dialkit/vue';
+import Card from './Card.vue';
+</script>
+
+<template>
+  <Card />
+  <DialRoot />
+</template>
+```
+
+```vue
+<!-- Card.vue -->
+<script setup>
+import { useDialKit } from 'dialkit/vue';
+
+const params = useDialKit('Card', {
+  blur: [24, 0, 100],
+  scale: 1.2,
+  color: '#ff5500',
+  visible: true,
+});
+</script>
+
+<template>
+  <div :style="{
+    filter: `blur(${params.blur}px)`,
+    transform: `scale(${params.scale})`,
+    color: params.color,
+    opacity: params.visible ? 1 : 0,
+  }">
+    ...
+  </div>
+</template>
+```
+
+`useDialKit` returns a reactive object. All control types, presets, folders, keyboard shortcuts, and transitions work identically to the other frameworks.
 
 ---
 

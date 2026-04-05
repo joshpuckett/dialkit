@@ -5,9 +5,12 @@
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
+  import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
   let { panel, defaultOpen = true, inline = false } = $props<{ panel: PanelConfig; defaultOpen?: boolean; inline?: boolean }>();
+
+  const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
 
   let copied = $state(false);
   let isPanelOpen = $state(defaultOpen);
@@ -136,6 +139,7 @@
         </span>
         Copy
       </button>
+
     {/snippet}
 
     {#each panel.controls as control (control.path)}

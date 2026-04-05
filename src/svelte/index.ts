@@ -6,6 +6,12 @@ export type { CreateDialOptions, DialKitValues } from './createDialKit.svelte';
 export { default as DialRoot } from './components/DialRoot.svelte';
 export type { DialPosition, DialMode } from './components/DialRoot.svelte';
 
+// Shortcut components
+export { default as ShortcutListener } from './components/ShortcutListener.svelte';
+export { SHORTCUT_CTX } from './components/ShortcutListener.svelte';
+export type { ShortcutContextValue } from './components/ShortcutListener.svelte';
+export { default as ShortcutsMenu } from './components/ShortcutsMenu.svelte';
+
 // Component exports
 export { default as Slider } from './components/Slider.svelte';
 export { default as Toggle } from './components/Toggle.svelte';
@@ -30,6 +36,7 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ShortcutConfig,
   Preset,
   DialValue,
   DialConfig,

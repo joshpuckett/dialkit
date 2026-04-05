@@ -26,6 +26,7 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  ShortcutConfig,
   Preset,
   DialValue,
   DialConfig,

@@ -7,12 +7,14 @@ import type {
   EasingConfig,
   ResolvedValues,
   SelectConfig,
+  ShortcutConfig,
   SpringConfig,
   TextConfig,
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
 }
 
 export type DialKitValues<T> = T;
@@ -30,7 +32,7 @@ export function createDialKit<T extends DialConfig>(
   let values = $state<ResolvedValues<T>>(resolve());
 
   $effect(() => {
-    DialStore.registerPanel(panelId, name, config);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
     values = resolve();
 
     const unsubValues = DialStore.subscribe(panelId, () => {

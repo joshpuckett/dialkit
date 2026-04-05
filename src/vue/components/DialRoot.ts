@@ -2,6 +2,7 @@ import { defineComponent, h, onMounted, onUnmounted, ref, Teleport } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
 import { Panel } from './Panel';
+import { ShortcutListener } from './ShortcutListener';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -51,18 +52,20 @@ export const DialRoot = defineComponent({
       unsubscribe?.();
     });
 
-    const renderContent = () => h('div', { class: 'dialkit-root', 'data-mode': props.mode }, [
-      h('div', {
-        class: 'dialkit-panel',
-        'data-position': props.mode === 'inline' ? undefined : props.position,
-        'data-mode': props.mode,
-      }, panels.value.map((panel) => h(Panel, {
-        key: panel.id,
-        panel,
-        defaultOpen: props.mode === 'inline' || props.defaultOpen,
-        inline: props.mode === 'inline',
-      }))),
-    ]);
+    const renderContent = () => h(ShortcutListener, null, {
+      default: () => h('div', { class: 'dialkit-root', 'data-mode': props.mode }, [
+        h('div', {
+          class: 'dialkit-panel',
+          'data-position': props.mode === 'inline' ? undefined : props.position,
+          'data-mode': props.mode,
+        }, panels.value.map((panel) => h(Panel, {
+          key: panel.id,
+          panel,
+          defaultOpen: props.mode === 'inline' || props.defaultOpen,
+          inline: props.mode === 'inline',
+        }))),
+      ]),
+    });
 
     return () => {
       if (!props.productionEnabled || !mounted.value || typeof window === 'undefined' || panels.value.length === 0) {

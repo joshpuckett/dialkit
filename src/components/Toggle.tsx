@@ -1,5 +1,6 @@
 import { SegmentedControl } from './SegmentedControl';
 import type { ShortcutConfig } from '../store/DialStore';
+import { formatToggleShortcut } from '../shortcut-utils';
 
 interface ToggleProps {
   label: string;
@@ -9,15 +10,6 @@ interface ToggleProps {
   shortcutActive?: boolean;
 }
 
-function formatShortcut(sc: ShortcutConfig): string {
-  if (!sc.key) return 'Press';
-  const mod = sc.modifier === 'alt' ? '⌥'
-    : sc.modifier === 'shift' ? '⇧'
-    : sc.modifier === 'meta' ? '⌘'
-    : '';
-  return `${mod}${sc.key.toUpperCase()}`;
-}
-
 export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
   return (
     <div className="dialkit-labeled-control">
@@ -25,7 +17,7 @@ export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: T
         {label}
         {shortcut && (
           <span className={`dialkit-shortcut-pill${shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`}>
-            {formatShortcut(shortcut)}
+            {formatToggleShortcut(shortcut)}
           </span>
         )}
       </span>

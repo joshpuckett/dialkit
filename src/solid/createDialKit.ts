@@ -1,9 +1,10 @@
 import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
 import { DialStore } from '../store/DialStore';
-import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig } from '../store/DialStore';
+import type { DialConfig, ResolvedValues, DialValue, SpringConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
 
 export interface CreateDialOptions {
   onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
 }
 
 export function createDialKit<T extends DialConfig>(
@@ -19,7 +20,7 @@ export function createDialKit<T extends DialConfig>(
   );
 
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
     setValues(DialStore.getValues(panelId));
 
     const unsubValues = DialStore.subscribe(panelId, () => {

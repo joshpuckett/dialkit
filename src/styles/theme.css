@@ -359,6 +359,8 @@
   color: var(--dial-text-label);
   pointer-events: none;
   transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
 }
 
 .dialkit-slider-value {
