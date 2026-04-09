@@ -5,6 +5,7 @@ import { DialRoot } from 'dialkit';
 import 'dialkit/styles.css';
 import { PhotoStack } from './PhotoStack';
 import { Release } from './Release';
+import { ConditionalVisibility } from './ConditionalVisibility';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -12,6 +13,10 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<><PhotoStack /><DialRoot position="top-right" /></>} />
         <Route path="/release-1.2" element={<Release />} />
+        <Route
+          path="/conditional"
+          element={<><ConditionalVisibility /><DialRoot position="top-right" /></>}
+        />
       </Routes>
     </BrowserRouter>
   </StrictMode>

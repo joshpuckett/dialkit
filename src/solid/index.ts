@@ -19,7 +19,7 @@ export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
 
 // Store exports
-export { DialStore } from '../store/DialStore';
+export { DialStore, withVisibility, unwrapVisibility } from '../store/DialStore';
 export type {
   SpringConfig,
   ActionConfig,
@@ -33,4 +33,7 @@ export type {
   ResolvedValues,
   ControlMeta,
   PanelConfig,
+  VisibleWhen,
+  VisibleWhenValue,
+  ControlWithVisibility,
 } from '../store/DialStore';
