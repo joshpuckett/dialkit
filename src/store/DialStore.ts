@@ -41,8 +41,79 @@ export type TextConfig = {
 
 export type DialValue = number | boolean | string | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ColorConfig | TextConfig;
 
+export type VisibleWhenValue = string | boolean | number;
+
+/**
+ * Rule for conditional control visibility. Exactly one of `is` or `not`
+ * should be provided — if both are set, only `is` is evaluated.
+ */
+export type VisibleWhen = {
+  /**
+   * Flat store path of another control in the same panel to watch.
+   * Must be the full dot-delimited path as it appears in panel.values
+   * (e.g. `"debug.showStats"` for a nested control, not a relative path).
+   */
+  field: string;
+} & (
+  | { is: VisibleWhenValue | VisibleWhenValue[]; not?: never }
+  | { not: VisibleWhenValue | VisibleWhenValue[]; is?: never }
+  | { is?: undefined; not?: undefined }
+);
+
+/**
+ * Wraps a control with a visibility rule. The control is only added to the
+ * panel's rendered tree when its rule passes. Re-evaluated on every value
+ * change. Use the {@link withVisibility} helper instead of building this by hand.
+ */
+export type ControlWithVisibility<T = DialValue | [number, number, number, number?] | DialConfig> = {
+  value: T;
+  visibleWhen: VisibleWhen;
+};
+
+/**
+ * Tag any DialKit control with a conditional visibility rule. The control is
+ * only shown when `rule` passes against the current panel values.
+ *
+ * @example
+ * const config = {
+ *   layoutMode: { type: 'select', options: ['grid', 'sphere'] },
+ *   radius: withVisibility([1, 0, 10], { field: 'layoutMode', is: 'sphere' }),
+ * };
+ */
+export function withVisibility<T extends DialValue | [number, number, number, number?] | DialConfig>(
+  control: T,
+  rule: VisibleWhen
+): ControlWithVisibility<T> {
+  return { value: control, visibleWhen: rule };
+}
+
+/** The union of all value shapes that can appear in a DialConfig entry. */
+type DialConfigValue = DialValue | [number, number, number, number?] | DialConfig;
+
+/**
+ * Detect and unwrap a `{ value, visibleWhen }` wrapper produced by
+ * {@link withVisibility}. Returns the inner value if wrapped, or the
+ * original value if not.
+ *
+ * Exported for use by framework hooks (React, Solid, Svelte, Vue) so
+ * they can strip the wrapper when building resolved values without
+ * duplicating the detection logic.
+ */
+export function unwrapVisibility(raw: unknown): DialConfigValue {
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    !Array.isArray(raw) &&
+    'value' in raw &&
+    'visibleWhen' in raw
+  ) {
+    return (raw as ControlWithVisibility).value;
+  }
+  return raw as DialConfigValue;
+}
+
 export type DialConfig = {
-  [key: string]: DialValue | [number, number, number, number?] | DialConfig;
+  [key: string]: DialValue | [number, number, number, number?] | DialConfig | ControlWithVisibility;
 };
 
 export type ResolvedValues<T extends DialConfig> = {
@@ -85,6 +156,8 @@ export type ControlMeta = {
   options?: (string | { value: string; label: string })[];
   placeholder?: string;
   shortcut?: ShortcutConfig;
+  /** Conditional visibility rule attached via {@link withVisibility}. */
+  visibleWhen?: VisibleWhen;
 };
 
 export type PanelConfig = {
@@ -116,13 +189,23 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  /**
+   * Full (unfiltered) control tree per panel. `panels[id].controls` holds the
+   * tree with conditional-visibility controls already filtered out, which is
+   * what the UI renders. We keep the unfiltered tree here so visibility can
+   * flip back when a dependent value changes.
+   */
+  private allControls: Map<string, ControlMeta[]> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
-    const controls = this.parseConfig(config, '', shortcuts);
+    const allControls = this.parseConfig(config, '', shortcuts);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
+
+    this.allControls.set(id, allControls);
+    const controls = this.filterByVisibility(allControls, values);
 
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
     this.snapshots.set(id, { ...values });
@@ -137,8 +220,8 @@ class DialStoreClass {
       return;
     }
 
-    const controls = this.parseConfig(config, '', shortcuts);
-    const controlsByPath = this.mapControlsByPath(controls);
+    const allControls = this.parseConfig(config, '', shortcuts);
+    const controlsByPath = this.mapControlsByPath(allControls);
     const defaultValues = this.flattenValues(config, '');
     const nextValues: Record<string, DialValue> = {};
 
@@ -164,6 +247,9 @@ class DialStoreClass {
         nextValues[path] = mode;
       }
     }
+
+    this.allControls.set(id, allControls);
+    const controls = this.filterByVisibility(allControls, nextValues);
 
     const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
     this.panels.set(id, nextPanel);
@@ -197,6 +283,7 @@ class DialStoreClass {
     this.snapshots.delete(id);
     this.actionListeners.delete(id);
     this.baseValues.delete(id);
+    this.allControls.delete(id);
     this.notifyGlobal();
   }
 
@@ -220,6 +307,17 @@ class DialStoreClass {
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);
+
+    // Re-evaluate conditional visibility. If any control's visibility flipped,
+    // rebuild the filtered tree and bump the global listener so DialRoot picks
+    // up the new controls array.
+    const allControls = this.allControls.get(panelId);
+    if (!allControls) return;
+    const nextControls = this.filterByVisibility(allControls, panel.values);
+    if (!this.sameControlPaths(panel.controls, nextControls)) {
+      panel.controls = nextControls;
+      this.notifyGlobal();
+    }
   }
 
   updateSpringMode(panelId: string, path: string, mode: 'simple' | 'advanced'): void {
@@ -236,7 +334,22 @@ class DialStoreClass {
     const panel = this.panels.get(panelId);
     if (!panel) return;
 
-    panel.values[`${path}.__mode`] = mode;
+    const modePath = `${path}.__mode`;
+    panel.values[modePath] = mode;
+
+    // Auto-save to active preset or base values, mirroring updateValue.
+    // Without this, mode changes are ephemeral — they die at the next
+    // preset switch because loadPreset replaces panel.values wholesale.
+    const activeId = this.activePreset.get(panelId);
+    if (activeId) {
+      const presets = this.presets.get(panelId) ?? [];
+      const preset = presets.find(p => p.id === activeId);
+      if (preset) preset.values[modePath] = mode;
+    } else {
+      const base = this.baseValues.get(panelId);
+      if (base) base[modePath] = mode;
+    }
+
     this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);
   }
@@ -331,6 +444,20 @@ class DialStoreClass {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+
+    // Re-evaluate conditional visibility against the preset's values. If
+    // any control's visibility flipped (e.g. the preset changed a field
+    // that drives a `visibleWhen` rule), rebuild the filtered tree and
+    // bump the global listener so DialRoot picks up the new controls.
+    const allControls = this.allControls.get(panelId);
+    if (allControls) {
+      const nextControls = this.filterByVisibility(allControls, panel.values);
+      if (!this.sameControlPaths(panel.controls, nextControls)) {
+        panel.controls = nextControls;
+        this.notifyGlobal();
+      }
+    }
+
     this.notify(panelId);
   }
 
@@ -365,6 +492,19 @@ class DialStoreClass {
     if (panel && base) {
       panel.values = { ...base };
       this.snapshots.set(panelId, { ...panel.values });
+
+      // Re-evaluate conditional visibility against the restored base
+      // values, same as loadPreset. Without this, switching back to
+      // "Version 1" from an active preset keeps the preset's control
+      // tree even though the values have reverted.
+      const allControls = this.allControls.get(panelId);
+      if (allControls) {
+        const nextControls = this.filterByVisibility(allControls, panel.values);
+        if (!this.sameControlPaths(panel.controls, nextControls)) {
+          panel.controls = nextControls;
+          this.notifyGlobal();
+        }
+      }
     }
     this.activePreset.set(panelId, null);
     this.notify(panelId);
@@ -430,9 +570,11 @@ class DialStoreClass {
   }
 
   private initTransitionModes(config: DialConfig, prefix: string, values: Record<string, DialValue>): void {
-    for (const [key, value] of Object.entries(config)) {
+    for (const [key, rawValue] of Object.entries(config)) {
       if (key === '_collapsed') continue;
       const path = prefix ? `${prefix}.${key}` : key;
+      // Unwrap conditional-visibility wrapper before shape dispatch.
+      const value = this.unwrapVisibilityWithRule(rawValue).value;
 
       if (this.isEasingConfig(value)) {
         values[`${path}.__mode`] = 'easing';
@@ -449,12 +591,25 @@ class DialStoreClass {
 
   private parseConfig(config: DialConfig, prefix: string, shortcuts?: Record<string, ShortcutConfig>): ControlMeta[] {
     const controls: ControlMeta[] = [];
+    const startLen = () => controls.length;
+    const tagLast = (visibleWhen: VisibleWhen | undefined, before: number) => {
+      if (!visibleWhen) return;
+      for (let i = before; i < controls.length; i++) {
+        if (!controls[i].visibleWhen) controls[i].visibleWhen = visibleWhen;
+      }
+    };
 
-    for (const [key, value] of Object.entries(config)) {
+    for (const [key, rawValue] of Object.entries(config)) {
       if (key === '_collapsed') continue;
       const path = prefix ? `${prefix}.${key}` : key;
       const label = this.formatLabel(key);
       const shortcut = shortcuts?.[path];
+
+      // Unwrap conditional-visibility wrapper, remember the rule.
+      const unwrapped = this.unwrapVisibilityWithRule(rawValue);
+      const value = unwrapped.value;
+      const visibleWhen = unwrapped.visibleWhen;
+      const before = startLen();
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         // Range tuple: [default, min, max]
@@ -502,6 +657,8 @@ class DialStoreClass {
           children: this.parseConfig(folderConfig, path, shortcuts),
         });
       }
+
+      tagLast(visibleWhen, before);
     }
 
     return controls;
@@ -510,9 +667,11 @@ class DialStoreClass {
   private flattenValues(config: DialConfig, prefix: string): Record<string, DialValue> {
     const values: Record<string, DialValue> = {};
 
-    for (const [key, value] of Object.entries(config)) {
+    for (const [key, rawValue] of Object.entries(config)) {
       if (key === '_collapsed') continue;
       const path = prefix ? `${prefix}.${key}` : key;
+      // Unwrap conditional-visibility wrapper before shape dispatch.
+      const value = this.unwrapVisibilityWithRule(rawValue).value;
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         values[path] = value[0]; // Default value
@@ -714,6 +873,105 @@ class DialStoreClass {
 
     visit(controls);
     return map;
+  }
+
+  // ─── Conditional visibility ──────────────────────────────────────
+
+  /**
+   * Detects and unwraps a `{ value, visibleWhen }` wrapper produced by
+   * {@link withVisibility}. Returns the inner control plus the rule (or
+   * `undefined` for `visibleWhen` if the input was not a wrapper).
+   */
+  private unwrapVisibilityWithRule(raw: unknown): { value: DialConfigValue; visibleWhen: VisibleWhen | undefined } {
+    if (
+      typeof raw === 'object' &&
+      raw !== null &&
+      !Array.isArray(raw) &&
+      'value' in raw &&
+      'visibleWhen' in raw
+    ) {
+      const wrapper = raw as ControlWithVisibility;
+      return { value: wrapper.value, visibleWhen: wrapper.visibleWhen };
+    }
+    return { value: raw as DialConfigValue, visibleWhen: undefined };
+  }
+
+  /** Evaluate a visibility rule against a flat value map. */
+  private isVisible(rule: VisibleWhen | undefined, values: Record<string, DialValue>): boolean {
+    if (!rule) return true;
+    const actual = values[rule.field];
+    if (actual === undefined && !(rule.field in values)) {
+      // Dev-mode warning for mistyped field paths. Guarded by typeof check
+      // so it's safe in environments without process (bundlers strip this).
+      if (typeof globalThis !== 'undefined' && typeof console !== 'undefined') {
+        console.warn(
+          `[DialKit] visibleWhen references field "${rule.field}" which does not exist in the panel's values. ` +
+          `The control will default to visible. Check for typos — field must be the full dot-delimited store path.`
+        );
+      }
+    }
+    if (rule.is !== undefined) {
+      const targets = Array.isArray(rule.is) ? rule.is : [rule.is];
+      return targets.some(t => t === actual);
+    }
+    if (rule.not !== undefined) {
+      const targets = Array.isArray(rule.not) ? rule.not : [rule.not];
+      return !targets.some(t => t === actual);
+    }
+    return true;
+  }
+
+  /**
+   * Recursively filter a control tree by evaluating each control's
+   * `visibleWhen` against the current values. Folders that become empty
+   * after filtering their children are pruned.
+   *
+   * KNOWN LIMITATION — folder collapsed state across hide/show cycles:
+   * Folder open/closed state lives in `Folder`'s local `useState`, not in
+   * the store. When a folder's `visibleWhen` fails, its DOM node unmounts
+   * and that local state is lost. Re-showing the folder mounts a fresh
+   * instance with `defaultOpen`, so a user-collapsed folder will re-open
+   * after a visibility cycle. Sibling visibility changes do NOT trigger
+   * this (motion.div keys are stable by path), only the wrapped folder
+   * itself hiding. This is a pre-existing architectural constraint of
+   * DialKit's folder state model, not introduced by this feature — any
+   * mechanism that unmounts a folder would behave the same. Lifting
+   * folder state into the store is a possible follow-up.
+   */
+  private filterByVisibility(controls: ControlMeta[], values: Record<string, DialValue>): ControlMeta[] {
+    const result: ControlMeta[] = [];
+    for (const control of controls) {
+      if (!this.isVisible(control.visibleWhen, values)) continue;
+
+      if (control.type === 'folder' && control.children) {
+        const filteredChildren = this.filterByVisibility(control.children, values);
+        if (filteredChildren.length === 0) continue;
+        result.push({ ...control, children: filteredChildren });
+      } else {
+        result.push(control);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Cheap structural comparison used to decide whether visibility flipped
+   * after an updateValue. We only care about the set of visible paths —
+   * labels/options/etc can't change between snapshots of the same tree.
+   */
+  private sameControlPaths(a: ControlMeta[], b: ControlMeta[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ca = a[i];
+      const cb = b[i];
+      if (ca.path !== cb.path || ca.type !== cb.type) return false;
+      if (ca.type === 'folder') {
+        const childrenA = ca.children ?? [];
+        const childrenB = cb.children ?? [];
+        if (!this.sameControlPaths(childrenA, childrenB)) return false;
+      }
+    }
+    return true;
   }
 
 }

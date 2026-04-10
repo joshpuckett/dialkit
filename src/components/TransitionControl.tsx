@@ -5,6 +5,7 @@ import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
 import { EasingVisualization } from './EasingVisualization';
 import { useSyncExternalStore, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface TransitionControlProps {
   panelId: string;
@@ -99,27 +100,47 @@ export function TransitionControl({ panelId, path, label, value, onChange }: Tra
           />
         </div>
 
-        {isEasing ? (
-          <>
-            <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
-            <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
-            <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
-            <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
-            <Slider label="Duration" value={easing.duration} onChange={(v) => onChange({ ...easing, duration: v })} min={0.1} max={2} step={0.05} unit="s" />
-            <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
-          </>
-        ) : isSimpleSpring ? (
-          <>
-            <Slider label="Duration" value={spring.visualDuration ?? 0.3} onChange={(v) => handleSpringUpdate('visualDuration', v)} min={0.1} max={1} step={0.05} unit="s" />
-            <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
-          </>
-        ) : (
-          <>
-            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
-            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
-            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
-          </>
-        )}
+        {/*
+          Mode-swap animation. The column-reverse wrapper makes the
+          entering group visually appear above the exiting one during
+          the swap. No marginBottom trick on the mode motion.div
+          because the wrapper has no flex gap to cancel — adding one
+          caused a 6px unmount jump in earlier iterations.
+        */}
+        <div style={{ display: 'flex', flexDirection: 'column-reverse' }}>
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={mode}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ type: 'spring', visualDuration: 0.25, bounce: 0.1 }}
+              style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 6 }}
+            >
+              {isEasing ? (
+                <>
+                  <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
+                  <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
+                  <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
+                  <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
+                  <Slider label="Duration" value={easing.duration} onChange={(v) => onChange({ ...easing, duration: v })} min={0.1} max={2} step={0.05} unit="s" />
+                  <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
+                </>
+              ) : isSimpleSpring ? (
+                <>
+                  <Slider label="Duration" value={spring.visualDuration ?? 0.3} onChange={(v) => handleSpringUpdate('visualDuration', v)} min={0.1} max={1} step={0.05} unit="s" />
+                  <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
+                </>
+              ) : (
+                <>
+                  <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
+                  <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
+                  <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </Folder>
   );

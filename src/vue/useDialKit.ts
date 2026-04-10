@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch, type ComputedRef } from 'vue';
-import { DialStore } from '../store/DialStore';
+import { DialStore, unwrapVisibility } from '../store/DialStore';
 import type {
   ActionConfig,
   ColorConfig,
@@ -88,9 +88,11 @@ function buildResolvedValues(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
-  for (const [key, configValue] of Object.entries(config)) {
+  for (const [key, rawConfigValue] of Object.entries(config)) {
     if (key === '_collapsed') continue;
     const path = prefix ? `${prefix}.${key}` : key;
+    // Unwrap conditional-visibility wrapper, if any.
+    const configValue = unwrapVisibility(rawConfigValue);
 
     if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
       result[key] = flatValues[path] ?? configValue[0];

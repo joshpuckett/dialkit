@@ -1,6 +1,7 @@
 import { useState, useContext, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, ControlMeta, PanelConfig, SpringConfig, TransitionConfig } from '../store/DialStore';
+import { CONTROL_ANIM } from './control-motion';
 import { ShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
@@ -57,14 +58,13 @@ Apply these values as the new defaults in the useDialKit call.`;
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const renderControl = (control: ControlMeta) => {
+  const renderControlInner = (control: ControlMeta) => {
     const value = values[control.path];
 
     switch (control.type) {
       case 'slider':
         return (
           <Slider
-            key={control.path}
             label={control.label}
             value={value as number}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
@@ -79,7 +79,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'toggle':
         return (
           <Toggle
-            key={control.path}
             label={control.label}
             checked={value as boolean}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
@@ -91,7 +90,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'spring':
         return (
           <SpringControl
-            key={control.path}
             panelId={panel.id}
             path={control.path}
             label={control.label}
@@ -103,7 +101,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'transition':
         return (
           <TransitionControl
-            key={control.path}
             panelId={panel.id}
             path={control.path}
             label={control.label}
@@ -114,15 +111,16 @@ Apply these values as the new defaults in the useDialKit call.`;
 
       case 'folder':
         return (
-          <Folder key={control.path} title={control.label} defaultOpen={control.defaultOpen ?? true}>
-            {control.children?.map(renderControl)}
+          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
+            <AnimatePresence initial={false}>
+              {control.children?.map(renderControl)}
+            </AnimatePresence>
           </Folder>
         );
 
       case 'text':
         return (
           <TextControl
-            key={control.path}
             label={control.label}
             value={value as string}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
@@ -133,7 +131,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'select':
         return (
           <SelectControl
-            key={control.path}
             label={control.label}
             value={value as string}
             options={control.options ?? []}
@@ -144,7 +141,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'color':
         return (
           <ColorControl
-            key={control.path}
             label={control.label}
             value={value as string}
             onChange={(v) => DialStore.updateValue(panel.id, control.path, v)}
@@ -154,7 +150,6 @@ Apply these values as the new defaults in the useDialKit call.`;
       case 'action':
         return (
           <button
-            key={control.path}
             className="dialkit-button"
             onClick={() => DialStore.triggerAction(panel.id, control.path)}
           >
@@ -167,8 +162,40 @@ Apply these values as the new defaults in the useDialKit call.`;
     }
   };
 
+  const renderControl = (control: ControlMeta) => {
+    const inner = renderControlInner(control);
+    if (inner === null) return null;
+
+    // Every control is wrapped in a motion.div so we can animate its
+    // enter/exit when conditional visibility hides/shows it. The marker
+    // classes let theme.css target folder wrappers specifically
+    // (for the adjacent-divider collapse rule) without needing :has().
+    // spring and transition controls render as Folder internally
+    const isFolder = control.type === 'folder' || control.type === 'spring' || control.type === 'transition';
+    const wrapClassName = isFolder
+      ? 'dialkit-control-wrap dialkit-control-wrap-folder'
+      : 'dialkit-control-wrap';
+
+    return (
+      <motion.div
+        key={control.path}
+        className={wrapClassName}
+        {...CONTROL_ANIM}
+      >
+        {inner}
+      </motion.div>
+    );
+  };
+
   const renderControls = () => {
-    return panel.controls.map(renderControl);
+    // AnimatePresence wraps the control list so each control's exit
+    // animation runs before unmount. initial={false} disables the
+    // first-mount enter animation — the panel appears instantly on open.
+    return (
+      <AnimatePresence initial={false}>
+        {panel.controls.map(renderControl)}
+      </AnimatePresence>
+    );
   };
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
