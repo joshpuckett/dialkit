@@ -153,7 +153,18 @@
   border-bottom: 1px solid var(--dial-surface-subtle);
 }
 
-.dialkit-folder:last-child:not(.dialkit-folder-root) {
+.dialkit-folder-inner > .dialkit-folder:last-child:not(.dialkit-folder-root) {
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+/*
+ * Wrapped version of the rule above. When the last child of
+ * .dialkit-folder-inner is a folder wrapper (from Panel.tsx's motion
+ * wrapping), zero out its inner folder's trailing padding and margin
+ * the same way the direct-child rule would.
+ */
+.dialkit-folder-inner > .dialkit-control-wrap-folder:last-child > .dialkit-folder {
   padding-bottom: 0;
   margin-bottom: 0;
 }
@@ -270,6 +281,43 @@
 .dialkit-folder:not(.dialkit-folder-root) + .dialkit-folder:not(.dialkit-folder-root) {
   margin-top: -10px;
   border-top: none;
+}
+
+/*
+ * Wrapped version of the adjacent-folder collapse. Panel.tsx wraps
+ * every control in a motion.div (for enter/exit animation), so folders
+ * are no longer direct siblings of each other — there's a wrapper in
+ * between. Folder wrappers carry the marker class
+ * `.dialkit-control-wrap-folder` so we can target the adjacency using
+ * a plain `+` combinator, no `:has()` needed.
+ *
+ * Natural distance between two adjacent folder wrappers is 10px
+ * (0 folder-mb inside first wrapper + 6 flex gap + 4 folder-mt inside
+ * second wrapper). The folder-mb is 0 (not 4) because each folder is
+ * the :last-child inside its wrapper, triggering the base rule at
+ * line ~156 which zeros margin-bottom. Applying -10 collapses the
+ * spacing to 0, matching the original flush-adjacent look.
+ */
+.dialkit-folder-inner
+  > .dialkit-control-wrap-folder
+  + .dialkit-control-wrap-folder {
+  margin-top: -10px;
+}
+.dialkit-folder-inner
+  > .dialkit-control-wrap-folder
+  + .dialkit-control-wrap-folder
+  > .dialkit-folder {
+  border-top: none;
+}
+
+/*
+ * Smooth the margin-top boundary snap when a folder wrapper unmounts.
+ * If its neighbor gains/loses the -10 rule depending on whether its
+ * new previous sibling is a folder wrapper, animate the change
+ * instead of jumping instantly.
+ */
+.dialkit-folder-inner > .dialkit-control-wrap-folder {
+  transition: margin-top 0.2s ease;
 }
 
 /* Non-root folder header - match row height */
@@ -517,6 +565,13 @@
 
 .dialkit-button {
   flex: 1;
+  /*
+   * width: 100% lets the button stretch inside the motion.div wrapper
+   * that Panel.tsx puts around every control. The `flex: 1` above
+   * remains for any direct-flex-child use case (a consumer rendering
+   * the button outside of Panel.tsx).
+   */
+  width: 100%;
   padding: 10px 16px;
   font-family: inherit;
   font-size: 13px;
