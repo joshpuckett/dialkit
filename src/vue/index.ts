@@ -23,7 +23,7 @@ export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
 
-export { DialStore } from '../store/DialStore';
+export { DialStore, withVisibility, unwrapVisibility } from '../store/DialStore';
 export type {
   SpringConfig,
   EasingConfig,
@@ -39,4 +39,7 @@ export type {
   ControlMeta,
   PanelConfig,
   ShortcutConfig,
+  VisibleWhen,
+  VisibleWhenValue,
+  ControlWithVisibility,
 } from '../store/DialStore';
