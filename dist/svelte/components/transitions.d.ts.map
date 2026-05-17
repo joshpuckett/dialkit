@@ -1,0 +1,1 @@
+{"version":3,"file":"transitions.d.ts","sourceRoot":"","sources":["../../../src/svelte/components/transitions.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,mBAAmB,CAAC;AAE1D,wBAAgB,kBAAkB,CAAC,IAAI,EAAE,OAAO,EAAE,MAAM,CAAC,EAAE;IAAE,KAAK,CAAC,EAAE,OAAO,CAAC;IAAC,QAAQ,CAAC,EAAE,MAAM,CAAA;CAAE,GAAG,gBAAgB,CAcnH"}
