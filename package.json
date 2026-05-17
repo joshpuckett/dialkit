@@ -62,7 +62,7 @@
     "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json",
-    "prepare": "npm run build"
+    "prepare": "rm -rf dist && ./node_modules/.bin/tsup && node scripts/gen-theme-css.js && ./node_modules/.bin/svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map"
   },
   "peerDependencies": {
     "motion": ">=11.0.0",
