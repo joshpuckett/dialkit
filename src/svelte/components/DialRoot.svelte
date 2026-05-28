@@ -10,12 +10,12 @@
   export type DialMode = 'popover' | 'inline';
   export type DialTheme = 'light' | 'dark' | 'system';
 
-  declare const process: { env?: { NODE_ENV?: string } } | undefined;
-
-  const isDevDefault = typeof process !== 'undefined' && process?.env?.NODE_ENV
-    ? process.env.NODE_ENV !== 'production'
-    : typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE
-      ? (import.meta as any).env.MODE !== 'production'
+  const nodeEnv = (globalThis as typeof globalThis & { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV;
+  const viteMode = (import.meta as { env?: { MODE?: string } }).env?.MODE;
+  const isDevDefault = nodeEnv
+    ? nodeEnv !== 'production'
+    : viteMode
+      ? viteMode !== 'production'
       : true;
 
   let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault } = $props<{

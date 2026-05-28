@@ -1,4 +1,4 @@
-import type { ControlMeta, ShortcutConfig } from './store/DialStore';
+import type { ControlMeta, ShortcutConfig } from 'dialkit/store';
 export declare function decimalsForStep(step: number): number;
 export declare function roundValue(val: number, step: number): number;
 export declare function getEffectiveStep(control: ControlMeta, shortcut: ShortcutConfig): number;

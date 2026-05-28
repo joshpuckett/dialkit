@@ -1,7 +1,7 @@
 // Shared shortcut utilities — single source of truth across all framework adapters.
 
 import { DialStore } from './store/DialStore';
-import type { ControlMeta, ShortcutConfig } from './store/DialStore';
+import type { ControlMeta, ShortcutConfig } from 'dialkit/store';
 
 // ── Math helpers ──
 

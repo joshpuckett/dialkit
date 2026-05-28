@@ -1,6 +1,16 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
+const externalPackageStorePlugin = {
+  name: 'external-package-store',
+  setup(build: { onResolve: (options: { filter: RegExp }, callback: () => { path: string; external: boolean }) => void }) {
+    build.onResolve({ filter: /^\.\/store\/DialStore$/ }, () => ({
+      path: 'dialkit/store',
+      external: true,
+    }));
+  },
+};
+
 export default defineConfig([
   // Store build (shared across all framework entries)
   {
@@ -10,6 +20,18 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
+  },
+  // Shared files referenced by the Svelte package output.
+  {
+    entry: {
+      icons: 'src/icons.ts',
+      'shortcut-utils': 'src/shortcut-utils.ts',
+    },
+    format: ['esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalPackageStorePlugin],
   },
   // React build
   {
