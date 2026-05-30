@@ -10,10 +10,22 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: ReactNode;
+  /**
+   * Controlled open state. When provided, the folder derives its open state
+   * from this prop instead of internal state, and `onToggle` is called on
+   * header clicks instead of mutating local state. Used by `Panel` to drive
+   * accordion behavior across first-level folders. Omit for the default
+   * uncontrolled behavior.
+   */
+  open?: boolean;
+  /** Toggle handler for controlled mode. Receives the requested next state. */
+  onToggle?: (next: boolean) => void;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar }: FolderProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, open, onToggle }: FolderProps) {
+  const controlled = open !== undefined;
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const isOpen = controlled ? open : internalOpen;
   const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
@@ -43,7 +55,12 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
   const handleToggle = () => {
     if (inline && isRoot) return;
     const next = !isOpen;
-    setIsOpen(next);
+    if (controlled) {
+      onToggle?.(next);
+      onOpenChange?.(next);
+      return;
+    }
+    setInternalOpen(next);
     if (next) {
       setIsCollapsed(false);
     } else {

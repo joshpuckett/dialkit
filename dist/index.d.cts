@@ -250,14 +250,21 @@ declare function useDialKit<T extends DialConfig>(name: string, config: T, optio
 type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type DialMode = 'popover' | 'inline';
 type DialTheme = 'light' | 'dark' | 'system';
+type FolderMode = 'independent' | 'accordion';
 interface DialRootProps {
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
     theme?: DialTheme;
     productionEnabled?: boolean;
+    /**
+     * First-level folder behavior. `'independent'` (default) keeps each top-level
+     * folder open state isolated. `'accordion'` allows only one top-level folder
+     * open at a time. Nested folders are unaffected.
+     */
+    folderMode?: FolderMode;
 }
-declare function DialRoot({ position, defaultOpen, mode, theme, productionEnabled }: DialRootProps): react_jsx_runtime.JSX.Element | null;
+declare function DialRoot({ position, defaultOpen, mode, theme, productionEnabled, folderMode }: DialRootProps): react_jsx_runtime.JSX.Element | null;
 
 interface SliderProps {
     label: string;
@@ -289,8 +296,18 @@ interface FolderProps {
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: ReactNode;
+    /**
+     * Controlled open state. When provided, the folder derives its open state
+     * from this prop instead of internal state, and `onToggle` is called on
+     * header clicks instead of mutating local state. Used by `Panel` to drive
+     * accordion behavior across first-level folders. Omit for the default
+     * uncontrolled behavior.
+     */
+    open?: boolean;
+    /** Toggle handler for controlled mode. Receives the requested next state. */
+    onToggle?: (next: boolean) => void;
 }
-declare function Folder({ title, children, defaultOpen, isRoot, inline, onOpenChange, toolbar }: FolderProps): react_jsx_runtime.JSX.Element;
+declare function Folder({ title, children, defaultOpen, isRoot, inline, onOpenChange, toolbar, open, onToggle }: FolderProps): react_jsx_runtime.JSX.Element;
 
 interface ButtonGroupProps {
     buttons: Array<{
@@ -369,4 +386,4 @@ interface ShortcutsMenuProps {
 }
 declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
-export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type ControlWithVisibility, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, Folder, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type VisibleWhen, type VisibleWhenValue, unwrapVisibility, useDialKit, withVisibility };
+export { type ActionConfig, ButtonGroup, type ColorConfig, ColorControl, type ControlMeta, type ControlWithVisibility, type DialConfig, type DialMode, type DialPosition, DialRoot, DialStore, type DialTheme, type DialValue, type EasingConfig, EasingVisualization, Folder, type FolderMode, type PanelConfig, type Preset, PresetManager, type ResolvedValues, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, Toggle, type TransitionConfig, TransitionControl, type UseDialOptions, type VisibleWhen, type VisibleWhenValue, unwrapVisibility, useDialKit, withVisibility };

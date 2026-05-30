@@ -16,15 +16,23 @@ const isDevDefault = typeof process !== 'undefined' && process?.env?.NODE_ENV
     ? (import.meta as any).env.MODE !== 'production'
     : true;
 
+export type FolderMode = 'independent' | 'accordion';
+
 interface DialRootProps {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
   theme?: DialTheme;
   productionEnabled?: boolean;
+  /**
+   * First-level folder behavior. `'independent'` (default) keeps each top-level
+   * folder open state isolated. `'accordion'` allows only one top-level folder
+   * open at a time. Nested folders are unaffected.
+   */
+  folderMode?: FolderMode;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, folderMode = 'independent' }: DialRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -158,7 +166,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
         onPointerUp={!inline ? handlePointerUp : undefined}
       >
         {panels.map((panel) => (
-          <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} />
+          <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} folderMode={folderMode} />
         ))}
       </div>
     </div>

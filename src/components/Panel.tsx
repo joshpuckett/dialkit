@@ -19,13 +19,33 @@ interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  /**
+   * How first-level (top-level) folders behave. `'independent'` (default) keeps
+   * each folder's open state isolated — the historical behavior. `'accordion'`
+   * allows only one top-level folder open at a time; opening one closes the
+   * other. Nested folders (depth > 0) are unaffected in either mode.
+   */
+  folderMode?: 'independent' | 'accordion';
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, folderMode = 'independent' }: PanelProps) {
   const [copied, setCopied] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
   const shortcutCtx = useContext(ShortcutContext);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
+
+  // Accordion coordination for first-level folders. Holds the path of the
+  // currently-open top-level folder (or null). Initialized to the first
+  // top-level folder DialKit would have opened, so the one-open invariant
+  // holds from first paint even when several groups default open.
+  const [openFolder, setOpenFolder] = useState<string | null>(() => {
+    if (folderMode !== 'accordion') return null;
+    const first = panel.controls.find(
+      (c) => c.type === 'folder' && (c.defaultOpen ?? true)
+    );
+    return first?.path ?? null;
+  });
+  const accordion = folderMode === 'accordion';
 
   // Subscribe to panel value changes
   const values = useSyncExternalStore(
@@ -58,7 +78,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const renderControlInner = (control: ControlMeta) => {
+  const renderControlInner = (control: ControlMeta, depth: number) => {
     const value = values[control.path];
 
     switch (control.type) {
@@ -109,14 +129,25 @@ Apply these values as the new defaults in the useDialKit call.`;
           />
         );
 
-      case 'folder':
+      case 'folder': {
+        // Accordion only governs first-level (depth 0) folders. Nested
+        // folders keep independent (uncontrolled) behavior.
+        const controlledProps =
+          accordion && depth === 0
+            ? {
+                open: openFolder === control.path,
+                onToggle: (next: boolean) =>
+                  setOpenFolder(next ? control.path : null),
+              }
+            : {};
         return (
-          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
+          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true} {...controlledProps}>
             <AnimatePresence initial={false}>
-              {control.children?.map(renderControl)}
+              {control.children?.map((child) => renderControl(child, depth + 1))}
             </AnimatePresence>
           </Folder>
         );
+      }
 
       case 'text':
         return (
@@ -162,8 +193,8 @@ Apply these values as the new defaults in the useDialKit call.`;
     }
   };
 
-  const renderControl = (control: ControlMeta) => {
-    const inner = renderControlInner(control);
+  const renderControl = (control: ControlMeta, depth = 0) => {
+    const inner = renderControlInner(control, depth);
     if (inner === null) return null;
 
     // Every control is wrapped in a motion.div so we can animate its
@@ -193,7 +224,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     // first-mount enter animation — the panel appears instantly on open.
     return (
       <AnimatePresence initial={false}>
-        {panel.controls.map(renderControl)}
+        {panel.controls.map((control) => renderControl(control, 0))}
       </AnimatePresence>
     );
   };

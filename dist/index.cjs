@@ -1079,8 +1079,10 @@ var ICON_PANEL = {
 var import_react3 = require("react");
 var import_react4 = require("motion/react");
 var import_jsx_runtime2 = require("react/jsx-runtime");
-function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar }) {
-  const [isOpen, setIsOpen] = (0, import_react3.useState)(defaultOpen);
+function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, open, onToggle }) {
+  const controlled = open !== void 0;
+  const [internalOpen, setInternalOpen] = (0, import_react3.useState)(defaultOpen);
+  const isOpen = controlled ? open : internalOpen;
   const [isCollapsed, setIsCollapsed] = (0, import_react3.useState)(!defaultOpen);
   const contentRef = (0, import_react3.useRef)(null);
   const [contentHeight, setContentHeight] = (0, import_react3.useState)(void 0);
@@ -1106,7 +1108,12 @@ function Folder({ title, children, defaultOpen = true, isRoot = false, inline = 
   const handleToggle = () => {
     if (inline && isRoot) return;
     const next = !isOpen;
-    setIsOpen(next);
+    if (controlled) {
+      onToggle?.(next);
+      onOpenChange?.(next);
+      return;
+    }
+    setInternalOpen(next);
     if (next) {
       setIsCollapsed(false);
     } else {
@@ -2348,11 +2355,19 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
 
 // src/components/Panel.tsx
 var import_jsx_runtime14 = require("react/jsx-runtime");
-function Panel({ panel, defaultOpen = true, inline = false }) {
+function Panel({ panel, defaultOpen = true, inline = false, folderMode = "independent" }) {
   const [copied, setCopied] = (0, import_react16.useState)(false);
   const [isPanelOpen, setIsPanelOpen] = (0, import_react16.useState)(defaultOpen);
   const shortcutCtx = (0, import_react16.useContext)(ShortcutContext);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
+  const [openFolder, setOpenFolder] = (0, import_react16.useState)(() => {
+    if (folderMode !== "accordion") return null;
+    const first = panel.controls.find(
+      (c) => c.type === "folder" && (c.defaultOpen ?? true)
+    );
+    return first?.path ?? null;
+  });
+  const accordion = folderMode === "accordion";
   const values = (0, import_react16.useSyncExternalStore)(
     (cb) => DialStore.subscribe(panel.id, cb),
     () => DialStore.getValues(panel.id),
@@ -2377,7 +2392,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-  const renderControlInner = (control) => {
+  const renderControlInner = (control, depth) => {
     const value = values[control.path];
     switch (control.type) {
       case "slider":
@@ -2427,8 +2442,13 @@ Apply these values as the new defaults in the useDialKit call.`;
             onChange: (v) => DialStore.updateValue(panel.id, control.path, v)
           }
         );
-      case "folder":
-        return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Folder, { title: control.label, defaultOpen: control.defaultOpen ?? true, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(import_react17.AnimatePresence, { initial: false, children: control.children?.map(renderControl) }) });
+      case "folder": {
+        const controlledProps = accordion && depth === 0 ? {
+          open: openFolder === control.path,
+          onToggle: (next) => setOpenFolder(next ? control.path : null)
+        } : {};
+        return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Folder, { title: control.label, defaultOpen: control.defaultOpen ?? true, ...controlledProps, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(import_react17.AnimatePresence, { initial: false, children: control.children?.map((child) => renderControl(child, depth + 1)) }) });
+      }
       case "text":
         return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           TextControl,
@@ -2471,8 +2491,8 @@ Apply these values as the new defaults in the useDialKit call.`;
         return null;
     }
   };
-  const renderControl = (control) => {
-    const inner = renderControlInner(control);
+  const renderControl = (control, depth = 0) => {
+    const inner = renderControlInner(control, depth);
     if (inner === null) return null;
     const isFolder = control.type === "folder" || control.type === "spring" || control.type === "transition";
     const wrapClassName = isFolder ? "dialkit-control-wrap dialkit-control-wrap-folder" : "dialkit-control-wrap";
@@ -2487,7 +2507,7 @@ Apply these values as the new defaults in the useDialKit call.`;
     );
   };
   const renderControls = () => {
-    return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(import_react17.AnimatePresence, { initial: false, children: panel.controls.map(renderControl) });
+    return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(import_react17.AnimatePresence, { initial: false, children: panel.controls.map((control) => renderControl(control, 0)) });
   };
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
   const toolbar = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
@@ -2564,7 +2584,7 @@ Apply these values as the new defaults in the useDialKit call.`;
 var import_jsx_runtime15 = require("react/jsx-runtime");
 var import_meta = {};
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta !== "undefined" && import_meta.env?.MODE ? import_meta.env.MODE !== "production" : true;
-function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault }) {
+function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, folderMode = "independent" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react18.useState)([]);
   const [mounted, setMounted] = (0, import_react18.useState)(false);
@@ -2670,7 +2690,7 @@ function DialRoot({ position = "top-right", defaultOpen = true, mode = "popover"
       onPointerDown: !inline ? handlePointerDown : void 0,
       onPointerMove: !inline ? handlePointerMove : void 0,
       onPointerUp: !inline ? handlePointerUp : void 0,
-      children: panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline }, panel.id))
+      children: panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline, folderMode }, panel.id))
     }
   ) }) });
   if (inline) {
