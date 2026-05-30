@@ -2235,17 +2235,25 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
   const [isOpen, setIsOpen] = (0, import_react14.useState)(false);
   const triggerRef = (0, import_react14.useRef)(null);
   const dropdownRef = (0, import_react14.useRef)(null);
-  const [pos, setPos] = (0, import_react14.useState)({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = (0, import_react14.useState)({ top: 0, left: 0, width: 0, above: false });
   const hasPresets = presets.length > 0;
   const activePreset = presets.find((p) => p.id === activePresetId);
   const open = (0, import_react14.useCallback)(() => {
     if (!hasPresets) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
-      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      const dropdownHeight = 8 + (presets.length + 1) * 36;
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+      setPos({
+        top: above ? rect.top - 4 : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        above
+      });
     }
     setIsOpen(true);
-  }, [hasPresets]);
+  }, [hasPresets, presets.length]);
   const close = (0, import_react14.useCallback)(() => setIsOpen(false), []);
   const toggle = (0, import_react14.useCallback)(() => {
     if (isOpen) close();
@@ -2309,10 +2317,15 @@ function PresetManager({ panelId, presets, activePresetId, onAdd }) {
         {
           ref: dropdownRef,
           className: "dialkit-root dialkit-preset-dropdown",
-          style: { position: "fixed", top: pos.top, left: pos.left, minWidth: pos.width },
-          initial: { opacity: 0, y: 4, scale: 0.97 },
+          style: {
+            position: "fixed",
+            left: pos.left,
+            minWidth: pos.width,
+            ...pos.above ? { bottom: window.innerHeight - pos.top, transformOrigin: "bottom" } : { top: pos.top, transformOrigin: "top" }
+          },
+          initial: { opacity: 0, y: pos.above ? 8 : -8, scale: 0.97 },
           animate: { opacity: 1, y: 0, scale: 1 },
-          exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
+          exit: { opacity: 0, y: pos.above ? 8 : -8, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
             /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(

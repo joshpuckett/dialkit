@@ -15,7 +15,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, above: false });
 
   const hasPresets = presets.length > 0;
   const activePreset = presets.find((p) => p.id === activePresetId);
@@ -24,10 +24,20 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
     if (!hasPresets) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
-      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      // Flip above the trigger when there isn't room below (mirrors SelectControl).
+      // +1 row for the default "Version 1" entry; 36px/row + 8px padding.
+      const dropdownHeight = 8 + (presets.length + 1) * 36;
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const above = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+      setPos({
+        top: above ? rect.top - 4 : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        above,
+      });
     }
     setIsOpen(true);
-  }, [hasPresets]);
+  }, [hasPresets, presets.length]);
 
   const close = useCallback(() => setIsOpen(false), []);
 
@@ -101,10 +111,17 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
             <motion.div
               ref={dropdownRef}
               className="dialkit-root dialkit-preset-dropdown"
-              style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width }}
-              initial={{ opacity: 0, y: 4, scale: 0.97 }}
+              style={{
+                position: 'fixed',
+                left: pos.left,
+                minWidth: pos.width,
+                ...(pos.above
+                  ? { bottom: window.innerHeight - pos.top, transformOrigin: 'bottom' }
+                  : { top: pos.top, transformOrigin: 'top' }),
+              }}
+              initial={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 4, scale: 0.97, pointerEvents: 'none' as any }}
+              exit={{ opacity: 0, y: pos.above ? 8 : -8, scale: 0.97, pointerEvents: 'none' as any }}
               transition={{ type: 'spring', visualDuration: 0.15, bounce: 0 }}
             >
               <div
