@@ -3,15 +3,15 @@
 /* Dialkit Theme - Dark glassmorphic design */
 .dialkit-root {
   /* Surfaces */
-  --dial-surface: rgba(255, 255, 255, 0.05);
-  --dial-surface-hover: rgba(255, 255, 255, 0.1);
-  --dial-surface-active: rgba(255, 255, 255, 0.11);
-  --dial-surface-subtle: rgba(255, 255, 255, 0.06);
+  --dial-surface: rgba(255, 255, 255, 0.03);
+  --dial-surface-hover: rgba(255, 255, 255, 0.06);
+  --dial-surface-active: rgba(255, 255, 255, 0.08);
+  --dial-surface-subtle: rgba(255, 255, 255, 0.04);
 
   /* Text hierarchy - 3 levels */
   --dial-text-root: #FFFFFF;   /* Root title */
   --dial-text-section: rgba(255, 255, 255, 0.7); /* Section titles + carets */
-  --dial-text-label: rgba(255, 255, 255, 0.7);   /* Input labels */
+  --dial-text-label: rgba(255, 255, 255, 0.6);   /* Input labels */
   --dial-text-focus: #ffffff;
 
   /* Legacy aliases */
@@ -20,12 +20,12 @@
   --dial-text-tertiary: rgba(255, 255, 255, 0.4);
 
   /* Borders */
-  --dial-border: rgba(255, 255, 255, 0.1);
-  --dial-border-hover: rgba(255, 255, 255, 0.15);
+  --dial-border: rgba(255, 255, 255, 0.06);
+  --dial-border-hover: rgba(255, 255, 255, 0.12);
 
   /* Glassmorphic panel */
-  --dial-glass-bg: #212121;
-  --dial-dropdown-bg: #2a2a2a;
+  --dial-glass-bg: #0d0d0d;
+  --dial-dropdown-bg: #1a1a1a;
   --dial-backdrop-blur: 20px;
   --dial-radius: 8px;
   --dial-row-height: 36px;
