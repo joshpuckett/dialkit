@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Slider,
@@ -36,11 +37,27 @@ type SliderVariant = {
   id: string; title: string; desc: string; code: string;
   label: string; value: number; min: number; max: number; step: number;
   shortcut?: ShortcutConfig; shortcutActive?: boolean;
+  unit?: string;
+  formatValue?: (value: number) => string;
+  renderIcon?: (value: number) => ReactNode;
 };
 
 const auto = (label: string, value: number): Omit<SliderVariant, 'id' | 'title' | 'desc' | 'code'> => {
   const { min, max, step } = inferRange(value);
   return { label, value, min, max, step };
+};
+
+/** A volume glyph whose wave count tracks the value — demonstrates `valueIcon`. */
+const volumeIcon = (v: number): ReactNode => {
+  const waves = v <= 0 ? 0 : v < 50 ? 1 : 2;
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6 H5 L8.5 3 V13 L5 10 H3 Z" fill="currentColor" stroke="none" />
+      {waves >= 1 && <path d="M10.5 6.2 Q11.7 8 10.5 9.8" />}
+      {waves >= 2 && <path d="M12.4 4.8 Q14.3 8 12.4 11.2" />}
+      {waves === 0 && <path d="M10.5 6 L13.5 10 M13.5 6 L10.5 10" />}
+    </svg>
+  );
 };
 
 const SLIDER_VARIANTS: SliderVariant[] = [
@@ -55,6 +72,12 @@ const SLIDER_VARIANTS: SliderVariant[] = [
   { id: 'auto-large', title: 'Auto · large', desc: 'Values over 100 infer 0 → value × 3 with steps of 10.', code: 'width: 320   // → [0, 960], step 10', ...auto('width', 320) },
   { id: 'shortcut', title: 'Shortcut pill', desc: 'A keyboard shortcut adds a pill showing key + interaction.', code: "radius: { key: 'b', mode: 'fine' }", label: 'radius', value: 16, min: 0, max: 64, step: 1, shortcut: { key: 'b', interaction: 'scroll', mode: 'fine' } },
   { id: 'shortcut-active', title: 'Shortcut · active', desc: 'The pill highlights while its key is held. Try S + drag.', code: "speed: { key: 's', interaction: 'drag' }", label: 'speed', value: 1.5, min: 0, max: 3, step: 0.1, shortcut: { key: 's', interaction: 'drag', mode: 'coarse' }, shortcutActive: true },
+  { id: 'unit-percent', title: 'Unit · percent', desc: 'A `unit` string is appended after the value as a muted suffix.', code: "opacity: [70, 0, 100], unit: '%'", label: 'opacity', value: 70, min: 0, max: 100, step: 1, unit: '%' },
+  { id: 'unit-seconds', title: 'Unit · seconds', desc: 'Units pair with any range — here a fractional duration in seconds.', code: "duration: [3.6, 0, 10, 0.1], unit: 's'", label: 'duration', value: 3.6, min: 0, max: 10, step: 0.1, unit: 's' },
+  { id: 'unit-pixels', title: 'Unit · pixels', desc: 'Pixel suffixes read naturally for sizes, radii and offsets.', code: "radius: [16, 0, 64], unit: 'px'", label: 'radius', value: 16, min: 0, max: 64, step: 1, unit: 'px' },
+  { id: 'format-custom', title: 'Custom format', desc: 'A `formatValue` callback owns the full label — here a multiplier.', code: "formatValue: (v) => `${v.toFixed(1)}×`", label: 'zoom', value: 1.5, min: 0.5, max: 4, step: 0.1, formatValue: (v) => `${v.toFixed(1)}×` },
+  { id: 'format-degrees', title: 'Format · degrees', desc: 'Formatters can round and add any glyph the unit prop can’t express.', code: "formatValue: (v) => `${Math.round(v)}°`", label: 'angle', value: 45, min: 0, max: 360, step: 1, formatValue: (v) => `${Math.round(v)}°` },
+  { id: 'icon-value', title: 'Icon value', desc: 'A `valueIcon` node replaces the text — it reacts to the value and is not editable.', code: 'valueIcon: <VolumeGlyph value={v} />', label: 'volume', value: 65, min: 0, max: 100, step: 1, renderIcon: volumeIcon },
 ];
 
 // ── Select variants ───────────────────────────────────────────────
@@ -200,7 +223,7 @@ export function Library() {
         <Section index="01" title="Sliders" count={SLIDER_VARIANTS.length} hint="Drag to set · click to snap · hover the value 800ms then click to type.">
           {SLIDER_VARIANTS.map((v) => (
             <Card key={v.id} title={v.title} desc={v.desc} code={v.code}>
-              <Slider label={v.label} value={numbers[v.id]} onChange={(val) => setNumber(v.id, val)} min={v.min} max={v.max} step={v.step} shortcut={v.shortcut} shortcutActive={v.shortcutActive} />
+              <Slider label={v.label} value={numbers[v.id]} onChange={(val) => setNumber(v.id, val)} min={v.min} max={v.max} step={v.step} shortcut={v.shortcut} shortcutActive={v.shortcutActive} unit={v.unit} formatValue={v.formatValue} valueIcon={v.renderIcon?.(numbers[v.id])} />
             </Card>
           ))}
         </Section>

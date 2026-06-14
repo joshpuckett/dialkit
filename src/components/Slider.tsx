@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/DialStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
@@ -11,6 +12,17 @@ interface SliderProps {
   max?: number;
   step?: number;
   unit?: string;
+  /**
+   * Override the displayed value text. When provided, the formatter owns the
+   * full label and `unit` is not auto-appended. Inline editing still operates
+   * on the raw numeric value.
+   */
+  formatValue?: (value: number) => string;
+  /**
+   * Render a custom node (e.g. an icon or gauge) in the value slot instead of
+   * the editable numeric text. Sliders with a `valueIcon` are not editable.
+   */
+  valueIcon?: ReactNode;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
 }
@@ -28,6 +40,8 @@ export function Slider({
   max = 1,
   step = 0.01,
   unit,
+  formatValue,
+  valueIcon,
   shortcut,
   shortcutActive,
 }: SliderProps) {
@@ -299,7 +313,9 @@ export function Slider({
     handleInputSubmit();
   };
 
-  const displayValue = value.toFixed(decimalsForStep(step));
+  const displayValue = formatValue
+    ? formatValue(value)
+    : value.toFixed(decimalsForStep(step));
 
   // Handle opacity: not active → 0, active → 0.5, dragging → 0.9
   // Value dodge: fade when handle overlaps label (left) or value (right)
@@ -399,7 +415,14 @@ export function Slider({
           )}
         </span>
 
-        {showInput ? (
+        {valueIcon != null ? (
+          <span
+            ref={valueSpanRef}
+            className="dialkit-slider-value dialkit-slider-value-icon"
+          >
+            {valueIcon}
+          </span>
+        ) : showInput ? (
           <input
             ref={inputRef}
             type="text"
@@ -422,6 +445,7 @@ export function Slider({
             style={{ cursor: isValueEditable ? 'text' : 'default' }}
           >
             {displayValue}
+            {unit && <span className="dialkit-slider-unit">{unit}</span>}
           </span>
         )}
       </motion.div>

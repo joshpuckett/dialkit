@@ -393,6 +393,24 @@
   border-bottom-color: var(--dial-text-label);
 }
 
+.dialkit-slider-unit {
+  margin-left: 2px;
+  color: var(--dial-text-tertiary);
+}
+
+.dialkit-slider-value-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: none;
+  padding-bottom: 0;
+  pointer-events: none;
+}
+
+.dialkit-slider-value-icon svg {
+  display: block;
+}
+
 .dialkit-slider-input {
   position: absolute;
   right: 10px;
