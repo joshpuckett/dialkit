@@ -441,7 +441,7 @@ export function Slider({
             onMouseEnter={() => setIsValueHovered(true)}
             onMouseLeave={() => setIsValueHovered(false)}
             onClick={handleValueClick}
-            onMouseDown={(e) => isValueEditable && e.stopPropagation()}
+            onPointerDown={(e) => isValueEditable && e.stopPropagation()}
             style={{ cursor: isValueEditable ? 'text' : 'default' }}
           >
             {displayValue}
