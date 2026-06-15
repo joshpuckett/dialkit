@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
+import { useDialScope } from '../hooks/DialScope';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 
@@ -26,9 +27,11 @@ interface DialRootProps {
 
 export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault }: DialRootProps) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = useState<PanelConfig[]>([]);
+  const scopeId = useDialScope();
+  const [allPanels, setAllPanels] = useState<PanelConfig[]>([]);
   const [mounted, setMounted] = useState(false);
   const inline = mode === 'inline';
+  const panels = allPanels.filter((p) => p.scopeId === scopeId);
 
   // Drag state
   const panelRef = useRef<HTMLDivElement>(null);
@@ -42,10 +45,10 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   // Subscribe to global panel changes
   useEffect(() => {
     setMounted(true);
-    setPanels(DialStore.getPanels());
+    setAllPanels(DialStore.getPanels());
 
     const unsubscribe = DialStore.subscribeGlobal(() => {
-      setPanels(DialStore.getPanels());
+      setAllPanels(DialStore.getPanels());
     });
 
     return unsubscribe;

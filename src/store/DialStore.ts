@@ -1,5 +1,7 @@
 // Lightweight state store with subscriptions for dialkit
 
+export const DEFAULT_DIAL_SCOPE = '__dialkit_default__';
+
 export type SpringConfig = {
   type: 'spring';
   stiffness?: number;
@@ -90,6 +92,7 @@ export type ControlMeta = {
 export type PanelConfig = {
   id: string;
   name: string;
+  scopeId: string;
   controls: ControlMeta[];
   values: Record<string, DialValue>;
   shortcuts: Record<string, ShortcutConfig>;
@@ -117,23 +120,23 @@ class DialStoreClass {
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
 
-  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, scopeId: string = DEFAULT_DIAL_SCOPE): void {
     const controls = this.parseConfig(config, '', shortcuts);
     const values = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
+    this.panels.set(id, { id, name, scopeId, controls, values, shortcuts: shortcuts ?? {} });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
   }
 
-  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, scopeId?: string): void {
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config, shortcuts);
+      this.registerPanel(id, name, config, shortcuts, scopeId);
       return;
     }
 
@@ -165,7 +168,7 @@ class DialStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
+    const nextPanel: PanelConfig = { id, name, scopeId: scopeId ?? existing.scopeId, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 

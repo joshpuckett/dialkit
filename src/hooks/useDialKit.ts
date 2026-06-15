@@ -1,5 +1,6 @@
 import { useEffect, useId, useSyncExternalStore, useRef } from 'react';
 import { DialStore, DialConfig, DialValue, ResolvedValues, SpringConfig, EasingConfig, SelectConfig, ColorConfig, TextConfig, ActionConfig, ShortcutConfig } from '../store/DialStore';
+import { useDialScope } from './DialScope';
 
 export interface UseDialOptions {
   onAction?: (action: string) => void;
@@ -12,6 +13,7 @@ export function useDialKit<T extends DialConfig>(
   options?: UseDialOptions
 ): ResolvedValues<T> {
   const instanceId = useId();
+  const scopeId = useDialScope();
   const panelId = `${name}-${instanceId}`;
   const configRef = useRef(config);
   const serializedConfig = JSON.stringify(config);
@@ -24,9 +26,9 @@ export function useDialKit<T extends DialConfig>(
 
   // Register panel on mount
   useEffect(() => {
-    DialStore.registerPanel(panelId, name, configRef.current, shortcutsRef.current);
+    DialStore.registerPanel(panelId, name, configRef.current, shortcutsRef.current, scopeId);
     return () => DialStore.unregisterPanel(panelId);
-  }, [panelId, name]);
+  }, [panelId, name, scopeId]);
 
   // Update panel when config structure or shortcuts change
   const mountedRef = useRef(false);
@@ -35,9 +37,9 @@ export function useDialKit<T extends DialConfig>(
       mountedRef.current = true;
       return;
     }
-    DialStore.updatePanel(panelId, name, configRef.current, shortcutsRef.current);
+    DialStore.updatePanel(panelId, name, configRef.current, shortcutsRef.current, scopeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelId, name, serializedConfig, serializedShortcuts]);
+  }, [panelId, name, serializedConfig, serializedShortcuts, scopeId]);
 
   // Subscribe to action events
   useEffect(() => {

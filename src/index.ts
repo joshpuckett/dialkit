@@ -2,6 +2,9 @@
 export { useDialKit } from './hooks/useDialKit';
 export type { UseDialOptions } from './hooks/useDialKit';
 
+// Scope provider for routing useDialKit panels to a specific DialRoot
+export { DialScope, DialScopeContext, useDialScope } from './hooks/DialScope';
+
 // Root component (user mounts once)
 export { DialRoot } from './components/DialRoot';
 export type { DialPosition, DialMode, DialTheme } from './components/DialRoot';
