@@ -311,6 +311,52 @@ In inline mode, the `position` prop is ignored and the collapse-to-icon behavior
 
 ---
 
+## DialScope
+
+By default, every `useDialKit` call registers into a single global scope and every `DialRoot` shows all of them. `DialScope` lets you fence a `DialRoot` to only the `useDialKit` calls inside its subtree — useful for rendering an inline panel next to each component on a docs or playground page.
+
+```jsx
+import { DialScope, DialRoot, useDialKit } from 'dialkit';
+
+function CardDemo() {
+  const { radius } = useDialKit('Card', { radius: [12, 0, 48] });
+  return <div style={{ borderRadius: radius }} />;
+}
+
+function ButtonDemo() {
+  const { padding } = useDialKit('Button', { padding: [12, 4, 32] });
+  return <button style={{ padding }}>Click</button>;
+}
+
+export default function Page() {
+  return (
+    <>
+      <DialScope>
+        <CardDemo />
+        <DialRoot mode="inline" /> {/* shows only "Card" */}
+      </DialScope>
+
+      <DialScope>
+        <ButtonDemo />
+        <DialRoot mode="inline" /> {/* shows only "Button" */}
+      </DialScope>
+    </>
+  );
+}
+```
+
+Each `DialScope` generates a stable id automatically. Pass an explicit `id` when the hook and the root can't share a subtree:
+
+```jsx
+<DialScope id="card"><CardDemo /></DialScope>
+{/* …elsewhere… */}
+<DialScope id="card"><DialRoot mode="inline" /></DialScope>
+```
+
+`DialScope` is React-only for now.
+
+---
+
 ## Panel Toolbar
 
 When the panel is open, the toolbar provides:
