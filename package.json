@@ -60,6 +60,7 @@
   "scripts": {
     "build": "rm -rf dist && tsup && npm run build:svelte",
     "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map",
+    "prepare": "npm run build",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json"
   },

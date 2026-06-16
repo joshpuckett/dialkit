@@ -54,4 +54,29 @@ export default defineConfig([
     external: ['vue', 'motion-v'],
     tsconfig: 'tsconfig.vue.json',
   },
+  // Shared leaf modules emitted to dist root. The packaged Svelte components keep
+  // their `../../icons` / `../../shortcut-utils` import specifiers (svelte-package
+  // does not reach outside src/svelte), so those files must exist at dist root.
+  // React/Solid/Vue bundle them inline, so this standalone emission is for Svelte.
+  // shortcut-utils references the DialStore singleton — externalize it to the shared
+  // dist/store rather than inlining a second, desynced store instance.
+  {
+    entry: { icons: 'src/icons.ts', 'shortcut-utils': 'src/shortcut-utils.ts' },
+    outDir: 'dist',
+    format: ['esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [
+      {
+        name: 'externalize-dialstore',
+        setup(build) {
+          build.onResolve({ filter: /store\/DialStore$/ }, () => ({
+            path: 'dialkit/store',
+            external: true,
+          }));
+        },
+      },
+    ],
+  },
 ]);
