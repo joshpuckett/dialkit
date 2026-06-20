@@ -79,6 +79,63 @@ Returns a fully typed object matching your config shape with live values. Updati
 
 ---
 
+## useDialKitController
+
+Use the controller API when your app code also needs to update DialKit values, such as reset buttons, URL sync, or app-defined preset buttons.
+
+```tsx
+import { useDialKitController } from 'dialkit';
+
+function Card() {
+  const dial = useDialKitController('Card', {
+    blur: [24, 0, 100],
+    scale: 1.2,
+    color: '#ff5500',
+    visible: true,
+    shadow: {
+      radius: [16, 0, 64],
+    },
+  });
+
+  return (
+    <>
+      <button onClick={() => dial.setValues({
+        blur: 48,
+        scale: 1,
+        shadow: { radius: 28 },
+      })}>
+        Apply preset
+      </button>
+      <button onClick={() => dial.resetValues()}>Reset</button>
+
+      <div style={{
+        filter: `blur(${dial.values.blur}px)`,
+        transform: `scale(${dial.values.scale})`,
+        color: dial.values.color,
+        opacity: dial.values.visible ? 1 : 0,
+        borderRadius: dial.values.shadow.radius,
+      }}>
+        ...
+      </div>
+    </>
+  );
+}
+```
+
+Controller methods:
+
+| Method | Description |
+|--------|-------------|
+| `values` | The same live resolved values returned by `useDialKit` |
+| `setValue(path, value)` | Updates one control by dot path, like `'shadow.radius'` |
+| `setValues(values)` | Updates multiple controls with a typed nested partial object |
+| `resetValues()` | Restores the current config defaults and clears the active preset |
+| `getValues()` | Reads the latest resolved values outside render callbacks |
+
+Programmatic updates use the same state as panel edits. If a saved preset is active, updates are saved into that preset; otherwise they update the base "Version 1" values. Action controls are triggers, so they are not set by `setValues`.
+
+---
+
 ## Control Types
 
 ### Slider
@@ -515,6 +572,21 @@ function Card() {
 
 `createDialKit` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders) work identically to the React version.
 
+Use `createDialKitController` when Solid code needs to update values:
+
+```tsx
+import { createDialKitController } from 'dialkit/solid';
+
+const dial = createDialKitController('Card', {
+  blur: [24, 0, 100],
+  shadow: { radius: [16, 0, 64] },
+});
+
+dial.setValues({ blur: 48, shadow: { radius: 28 } });
+dial.resetValues();
+dial.values().blur;
+```
+
 ---
 
 ## Svelte
@@ -555,6 +627,29 @@ npm install dialkit
 ```
 
 `createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
+
+Use `createDialKitController` when Svelte code needs to update values:
+
+```svelte
+<script>
+  import { createDialKitController } from 'dialkit/svelte';
+
+  const dial = createDialKitController('Card', {
+    blur: [24, 0, 100],
+    shadow: { radius: [16, 0, 64] }
+  });
+
+  const params = dial.values;
+</script>
+
+<button onclick={() => dial.setValues({ blur: 48, shadow: { radius: 28 } })}>
+  Apply preset
+</button>
+
+<div style:filter={`blur(${params.blur}px)`} style:border-radius={`${params.shadow.radius}px`}>
+  ...
+</div>
+```
 
 ---
 
@@ -617,6 +712,25 @@ const params = useDialKit('Card', {
 
 `useDialKit` returns a reactive object. All control types, presets, folders, keyboard shortcuts, and transitions work identically to the other frameworks.
 
+Use `useDialKitController` when Vue code needs to update values:
+
+```vue
+<script setup>
+import { useDialKitController } from 'dialkit/vue';
+
+const { values, setValues, resetValues } = useDialKitController('Card', {
+  blur: [24, 0, 100],
+  shadow: { radius: [16, 0, 64] },
+});
+</script>
+
+<template>
+  <button @click="setValues({ blur: 48, shadow: { radius: 28 } })">Apply preset</button>
+  <button @click="resetValues()">Reset</button>
+  <div :style="{ filter: `blur(${values.blur}px)`, borderRadius: `${values.shadow.radius}px` }" />
+</template>
+```
+
 ---
 
 ## Types
@@ -626,6 +740,8 @@ All config and value types are exported:
 ```tsx
 import type {
   SpringConfig,
+  EasingConfig,
+  TransitionConfig,
   ActionConfig,
   SelectConfig,
   ColorConfig,
@@ -634,6 +750,8 @@ import type {
   ShortcutMode,
   DialConfig,
   DialValue,
+  DialKitController,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,

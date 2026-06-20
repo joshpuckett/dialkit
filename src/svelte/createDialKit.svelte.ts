@@ -1,8 +1,9 @@
-import { DialStore } from 'dialkit/store';
+import { DialStore, flattenDialValueUpdates, resolveDialValues } from 'dialkit/store';
 import type {
   ActionConfig,
   ColorConfig,
   DialConfig,
+  DialKitValueUpdates,
   DialValue,
   EasingConfig,
   ResolvedValues,
@@ -19,6 +20,14 @@ export interface CreateDialOptions {
 
 export type DialKitValues<T> = T;
 
+export interface DialKitController<T extends DialConfig> {
+  values: DialKitValues<ResolvedValues<T>>;
+  setValue: (path: string, value: DialValue) => void;
+  setValues: (values: DialKitValueUpdates<T>) => void;
+  resetValues: () => void;
+  getValues: () => ResolvedValues<T>;
+}
+
 let dialKitInstance = 0;
 
 export function createDialKit<T extends DialConfig>(
@@ -26,8 +35,16 @@ export function createDialKit<T extends DialConfig>(
   config: T,
   options?: CreateDialOptions
 ): DialKitValues<ResolvedValues<T>> {
+  return createDialKitController(name, config, options).values;
+}
+
+export function createDialKitController<T extends DialConfig>(
+  name: string,
+  config: T,
+  options?: CreateDialOptions
+): DialKitController<T> {
   const panelId = `${name}-${++dialKitInstance}`;
-  const resolve = () => buildResolvedValues(config, DialStore.getValues(panelId), '') as ResolvedValues<T>;
+  const resolve = () => resolveDialValues(config, DialStore.getValues(panelId));
 
   let values = $state<ResolvedValues<T>>(resolve());
 
@@ -50,41 +67,21 @@ export function createDialKit<T extends DialConfig>(
     };
   });
 
-  return buildReactiveValues(config, () => values, '') as DialKitValues<ResolvedValues<T>>;
-}
-
-function buildResolvedValues(
-  config: DialConfig,
-  flatValues: Record<string, DialValue>,
-  prefix: string
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  for (const [key, configValue] of Object.entries(config)) {
-    if (key === '_collapsed') continue;
-    const path = prefix ? `${prefix}.${key}` : key;
-
-    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
-      result[key] = flatValues[path] ?? configValue[0];
-    } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (isSpringConfig(configValue) || isEasingConfig(configValue)) {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (isActionConfig(configValue)) {
-      result[key] = flatValues[path] ?? configValue;
-    } else if (isSelectConfig(configValue)) {
-      const defaultValue = configValue.default ?? getFirstOptionValue(configValue.options);
-      result[key] = flatValues[path] ?? defaultValue;
-    } else if (isColorConfig(configValue)) {
-      result[key] = flatValues[path] ?? configValue.default ?? '#000000';
-    } else if (isTextConfig(configValue)) {
-      result[key] = flatValues[path] ?? configValue.default ?? '';
-    } else if (typeof configValue === 'object' && configValue !== null) {
-      result[key] = buildResolvedValues(configValue as DialConfig, flatValues, path);
-    }
-  }
-
-  return result;
+  return {
+    values: buildReactiveValues(config, () => values, '') as DialKitValues<ResolvedValues<T>>,
+    setValue(path, value) {
+      DialStore.updateValue(panelId, path, value);
+    },
+    setValues(nextValues) {
+      DialStore.updateValues(panelId, flattenDialValueUpdates(config, nextValues));
+    },
+    resetValues() {
+      DialStore.resetValues(panelId);
+    },
+    getValues() {
+      return resolve();
+    },
+  };
 }
 
 function buildReactiveValues<T extends DialConfig>(
@@ -169,9 +166,4 @@ function isColorConfig(value: unknown): value is ColorConfig {
 
 function isTextConfig(value: unknown): value is TextConfig {
   return hasType(value, 'text');
-}
-
-function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
-  const first = options[0];
-  return typeof first === 'string' ? first : first.value;
 }

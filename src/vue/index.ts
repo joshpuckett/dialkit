@@ -1,5 +1,5 @@
-export { useDialKit } from './useDialKit';
-export type { UseDialOptions } from './useDialKit';
+export { useDialKit, useDialKitController } from './useDialKit';
+export type { DialKitController, UseDialOptions } from './useDialKit';
 export { vDialKit } from './directives/dialkit';
 export type { DialKitDirectiveOptions, DialKitDirectiveValue } from './directives/dialkit';
 
@@ -35,6 +35,7 @@ export type {
   Preset,
   DialValue,
   DialConfig,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,

@@ -63,6 +63,20 @@ export type ResolvedValues<T extends DialConfig> = {
                 : T[K];
 };
 
+export type DialKitValueUpdates<T extends DialConfig> = {
+  [K in keyof T as K extends '_collapsed' ? never : K]?: T[K] extends [number, number, number, number?]
+    ? number
+    : T[K] extends SpringConfig | EasingConfig
+      ? TransitionConfig
+      : T[K] extends ActionConfig
+        ? never
+        : T[K] extends SelectConfig | ColorConfig | TextConfig
+          ? string
+          : T[K] extends DialConfig
+            ? DialKitValueUpdates<T[K]>
+            : T[K];
+};
+
 export type ShortcutMode = 'fine' | 'normal' | 'coarse';
 export type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
 
@@ -107,6 +121,142 @@ export type Preset = {
 // Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
 
+export function resolveDialValues<T extends DialConfig>(
+  config: T,
+  flatValues: Record<string, DialValue>
+): ResolvedValues<T> {
+  return resolveConfigValues(config, flatValues, '') as ResolvedValues<T>;
+}
+
+export function flattenDialValueUpdates<T extends DialConfig>(
+  config: T,
+  updates: DialKitValueUpdates<T>
+): Record<string, DialValue> {
+  const values: Record<string, DialValue> = {};
+  if (typeof updates === 'object' && updates !== null) {
+    flattenConfigUpdates(config, updates as Record<string, unknown>, '', values);
+  }
+  return values;
+}
+
+function resolveConfigValues(
+  config: DialConfig,
+  flatValues: Record<string, DialValue>,
+  prefix: string
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === '_collapsed') continue;
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (Array.isArray(configValue) && configValue.length <= 4 && typeof configValue[0] === 'number') {
+      result[key] = flatValues[path] ?? configValue[0];
+    } else if (typeof configValue === 'number' || typeof configValue === 'boolean' || typeof configValue === 'string') {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isSpringConfigValue(configValue) || isEasingConfigValue(configValue)) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isActionConfigValue(configValue)) {
+      result[key] = flatValues[path] ?? configValue;
+    } else if (isSelectConfigValue(configValue)) {
+      const defaultValue = configValue.default ?? getFirstOptionValue(configValue.options);
+      result[key] = flatValues[path] ?? defaultValue;
+    } else if (isColorConfigValue(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? '#000000';
+    } else if (isTextConfigValue(configValue)) {
+      result[key] = flatValues[path] ?? configValue.default ?? '';
+    } else if (typeof configValue === 'object' && configValue !== null) {
+      result[key] = resolveConfigValues(configValue as DialConfig, flatValues, path);
+    }
+  }
+
+  return result;
+}
+
+function flattenConfigUpdates(
+  config: DialConfig,
+  updates: Record<string, unknown>,
+  prefix: string,
+  values: Record<string, DialValue>
+): void {
+  for (const [key, configValue] of Object.entries(config)) {
+    if (key === '_collapsed' || !(key in updates)) continue;
+
+    const nextValue = updates[key];
+    if (nextValue === undefined) continue;
+
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (isActionConfigValue(configValue)) {
+      continue;
+    }
+
+    if (isLeafConfigValue(configValue)) {
+      values[path] = nextValue as DialValue;
+      continue;
+    }
+
+    if (
+      typeof configValue === 'object' &&
+      configValue !== null &&
+      typeof nextValue === 'object' &&
+      nextValue !== null &&
+      !Array.isArray(nextValue)
+    ) {
+      flattenConfigUpdates(configValue as DialConfig, nextValue as Record<string, unknown>, path, values);
+    }
+  }
+}
+
+function isLeafConfigValue(value: unknown): boolean {
+  return (
+    (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'string' ||
+    isSpringConfigValue(value) ||
+    isEasingConfigValue(value) ||
+    isActionConfigValue(value) ||
+    isSelectConfigValue(value) ||
+    isColorConfigValue(value) ||
+    isTextConfigValue(value)
+  );
+}
+
+function hasType(value: unknown, type: string): boolean {
+  return typeof value === 'object' && value !== null && 'type' in value && (value as { type: string }).type === type;
+}
+
+function isSpringConfigValue(value: unknown): value is SpringConfig {
+  return hasType(value, 'spring');
+}
+
+function isEasingConfigValue(value: unknown): value is EasingConfig {
+  return hasType(value, 'easing');
+}
+
+function isActionConfigValue(value: unknown): value is ActionConfig {
+  return hasType(value, 'action');
+}
+
+function isSelectConfigValue(value: unknown): value is SelectConfig {
+  return hasType(value, 'select') && 'options' in (value as object) && Array.isArray((value as SelectConfig).options);
+}
+
+function isColorConfigValue(value: unknown): value is ColorConfig {
+  return hasType(value, 'color');
+}
+
+function isTextConfigValue(value: unknown): value is TextConfig {
+  return hasType(value, 'text');
+}
+
+function getFirstOptionValue(options: (string | { value: string; label: string })[]): string {
+  const first = options[0];
+  if (first === undefined) return '';
+  return typeof first === 'string' ? first : first.value;
+}
+
 class DialStoreClass {
   private panels: Map<string, PanelConfig> = new Map();
   private listeners: Map<string, Set<Listener>> = new Map();
@@ -116,6 +266,7 @@ class DialStoreClass {
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
+  private defaultValues: Map<string, Record<string, DialValue>> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
     const controls = this.parseConfig(config, '', shortcuts);
@@ -127,6 +278,7 @@ class DialStoreClass {
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
+    this.defaultValues.set(id, { ...values });
     this.notifyGlobal();
   }
 
@@ -140,6 +292,7 @@ class DialStoreClass {
     const controls = this.parseConfig(config, '', shortcuts);
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
+    this.initTransitionModes(config, '', defaultValues);
     const nextValues: Record<string, DialValue> = {};
 
     for (const [path, defaultValue] of Object.entries(defaultValues)) {
@@ -186,6 +339,7 @@ class DialStoreClass {
     }
 
     this.baseValues.set(id, nextBaseValues);
+    this.defaultValues.set(id, { ...defaultValues });
 
     this.notify(id);
     this.notifyGlobal();
@@ -197,28 +351,71 @@ class DialStoreClass {
     this.snapshots.delete(id);
     this.actionListeners.delete(id);
     this.baseValues.delete(id);
+    this.defaultValues.delete(id);
     this.notifyGlobal();
   }
 
   updateValue(panelId: string, path: string, value: DialValue): void {
+    this.updateValues(panelId, { [path]: value });
+  }
+
+  updateValues(panelId: string, updates: Record<string, DialValue>): void {
     const panel = this.panels.get(panelId);
     if (!panel) return;
 
-    panel.values[path] = value;
+    const validUpdates: Record<string, DialValue> = {};
+
+    for (const [path, value] of Object.entries(updates)) {
+      if (!Object.prototype.hasOwnProperty.call(panel.values, path)) {
+        continue;
+      }
+
+      const control = this.findControlByPath(panel.controls, path);
+      if (control?.type === 'action') {
+        continue;
+      }
+
+      panel.values[path] = value;
+      validUpdates[path] = value;
+    }
+
+    if (Object.keys(validUpdates).length === 0) {
+      return;
+    }
 
     // Auto-save to active preset or base values
     const activeId = this.activePreset.get(panelId);
     if (activeId) {
       const presets = this.presets.get(panelId) ?? [];
       const preset = presets.find(p => p.id === activeId);
-      if (preset) preset.values[path] = value;
+      if (preset) {
+        for (const [path, value] of Object.entries(validUpdates)) {
+          preset.values[path] = value;
+        }
+      }
     } else {
       const base = this.baseValues.get(panelId);
-      if (base) base[path] = value;
+      if (base) {
+        for (const [path, value] of Object.entries(validUpdates)) {
+          base[path] = value;
+        }
+      }
     }
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
+  }
+
+  resetValues(panelId: string): void {
+    const panel = this.panels.get(panelId);
+    const defaults = this.defaultValues.get(panelId);
+    if (!panel || !defaults) return;
+
+    panel.values = { ...defaults };
+    this.snapshots.set(panelId, { ...panel.values });
+    this.baseValues.set(panelId, { ...defaults });
+    this.activePreset.set(panelId, null);
     this.notify(panelId);
   }
 

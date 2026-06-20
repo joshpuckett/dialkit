@@ -1,6 +1,6 @@
 // Main hook
-export { useDialKit } from './hooks/useDialKit';
-export type { UseDialOptions } from './hooks/useDialKit';
+export { useDialKit, useDialKitController } from './hooks/useDialKit';
+export type { DialKitController, UseDialOptions } from './hooks/useDialKit';
 
 // Root component (user mounts once)
 export { DialRoot } from './components/DialRoot';
@@ -37,6 +37,7 @@ export type {
   Preset,
   DialValue,
   DialConfig,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,

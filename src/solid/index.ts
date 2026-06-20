@@ -1,6 +1,6 @@
 // Core API
-export { createDialKit } from './createDialKit';
-export type { CreateDialOptions } from './createDialKit';
+export { createDialKit, createDialKitController } from './createDialKit';
+export type { CreateDialOptions, DialKitController } from './createDialKit';
 
 // Root component
 export { DialRoot } from './components/DialRoot';
@@ -22,6 +22,8 @@ export { PresetManager } from './components/PresetManager';
 export { DialStore } from '../store/DialStore';
 export type {
   SpringConfig,
+  EasingConfig,
+  TransitionConfig,
   ActionConfig,
   SelectConfig,
   ColorConfig,
@@ -30,6 +32,7 @@ export type {
   Preset,
   DialValue,
   DialConfig,
+  DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,
   PanelConfig,
