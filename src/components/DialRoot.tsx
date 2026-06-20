@@ -38,6 +38,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; elX: number; elY: number } | null>(null);
   const didDragRef = useRef(false);
+  const dragTargetRef = useRef<HTMLElement | null>(null);
 
   // Subscribe to global panel changes
   useEffect(() => {
@@ -55,9 +56,11 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   useEffect(() => {
     if (!panelRef.current || inline) return;
     const observer = new MutationObserver(() => {
-      const inner = panelRef.current?.querySelector('.dialkit-panel-inner');
-      if (!inner) return;
-      const collapsed = inner.getAttribute('data-collapsed') === 'true';
+      const inners = panelRef.current?.querySelectorAll('.dialkit-panel-inner');
+      if (!inners || inners.length === 0) return;
+      const collapsed = Array.from(inners).every(
+        (el) => el.getAttribute('data-collapsed') === 'true'
+      );
 
       if (!collapsed) {
         // Opening — save drag position, determine corner, snap
@@ -80,10 +83,11 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   }, [inline, dragOffset, position]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only drag the collapsed bubble
-    const inner = panelRef.current?.querySelector('.dialkit-panel-inner');
+    // Only drag the collapsed bubble that was actually pressed
+    const inner = (e.target as HTMLElement).closest<HTMLElement>('.dialkit-panel-inner');
     if (!inner || inner.getAttribute('data-collapsed') !== 'true') return;
 
+    dragTargetRef.current = inner;
     const rect = panelRef.current!.getBoundingClientRect();
     dragStartRef.current = {
       pointerX: e.clientX,
@@ -119,12 +123,13 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     // If we actually dragged, prevent the click from opening the panel
     if (didDragRef.current) {
       e.stopPropagation();
-      const inner = panelRef.current?.querySelector('.dialkit-panel-inner');
+      const inner = dragTargetRef.current;
       if (inner) {
         const blocker = (ev: Event) => { ev.stopPropagation(); };
         inner.addEventListener('click', blocker, { capture: true, once: true });
       }
     }
+    dragTargetRef.current = null;
   }, []);
 
   // Don't render on server
