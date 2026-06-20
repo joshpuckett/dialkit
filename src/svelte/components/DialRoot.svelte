@@ -28,12 +28,13 @@
       ? viteMode !== 'production'
       : true;
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault, onOpenChange } = $props<{
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
     theme?: DialTheme;
     productionEnabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
   }>();
 
   const inline = $derived(mode === 'inline');
@@ -48,6 +49,8 @@
   let dragStart: PanelDragStart | null = null;
   let didDrag = false;
   let dragTarget: HTMLElement | null = null;
+  let panelOpenStates = new Map<string, boolean>();
+  let rootOpen: boolean | undefined;
 
   const dragStyle = $derived(
     dragOffset
@@ -78,6 +81,16 @@
     });
 
     return unsub;
+  });
+
+  $effect(() => {
+    const fallbackOpen = inline || defaultOpen;
+    const nextStates = new Map<string, boolean>();
+    for (const panel of panels) {
+      nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
+    }
+    panelOpenStates = nextStates;
+    rootOpen = Array.from(nextStates.values()).some(Boolean);
   });
 
   $effect(() => {
@@ -148,6 +161,18 @@
 
     dragTarget = null;
   }
+
+  function handlePanelOpenChange(panelId: string, open: boolean) {
+    panelOpenStates.set(panelId, open);
+    const fallbackOpen = inline || defaultOpen;
+    const nextRootOpen = panels.some((panel) => (
+      panelOpenStates.get(panel.id) ?? fallbackOpen
+    ));
+
+    if (rootOpen === nextRootOpen) return;
+    rootOpen = nextRootOpen;
+    onOpenChange?.(nextRootOpen);
+  }
 </script>
 
 {#if productionEnabled && mounted && panels.length > 0}
@@ -167,7 +192,12 @@
           onpointercancel={!inline ? handlePointerUp : undefined}
         >
           {#each panels as panel (panel.id)}
-            <Panel {panel} defaultOpen={inline || defaultOpen} {inline} />
+            <Panel
+              {panel}
+              defaultOpen={inline || defaultOpen}
+              {inline}
+              onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+            />
           {/each}
         </div>
       </div>

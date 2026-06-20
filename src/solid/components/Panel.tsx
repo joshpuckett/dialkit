@@ -18,6 +18,7 @@ interface PanelProps {
   panel: PanelConfig;
   defaultOpen?: boolean;
   inline?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function Panel(props: PanelProps) {
@@ -132,6 +133,11 @@ export function Panel(props: PanelProps) {
     if (!copyButtonRef) return;
     copyTapAnim?.stop();
     copyTapAnim = animate(copyButtonRef, { scale: 1 }, tapTransition);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsPanelOpen(open);
+    props.onOpenChange?.(open);
   };
 
   const renderControl = (control: ControlMeta) => {
@@ -306,7 +312,7 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="dialkit-panel-wrapper">
-      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
+      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
         {renderControls()}
       </Folder>
     </div>

@@ -8,7 +8,12 @@
   import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
-  let { panel, defaultOpen = true, inline = false } = $props<{ panel: PanelConfig; defaultOpen?: boolean; inline?: boolean }>();
+  let { panel, defaultOpen = true, inline = false, onOpenChange } = $props<{
+    panel: PanelConfig;
+    defaultOpen?: boolean;
+    inline?: boolean;
+    onOpenChange?: (open: boolean) => void;
+  }>();
 
   const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
 
@@ -72,10 +77,15 @@
       copied = false;
     }, 1500);
   };
+
+  const handleOpenChange = (open: boolean) => {
+    isPanelOpen = open;
+    onOpenChange?.(open);
+  };
 </script>
 
 <div class="dialkit-panel-wrapper">
-  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={(open) => (isPanelOpen = open)}>
+  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
     {#snippet toolbar()}
       <button
         class="dialkit-toolbar-add"

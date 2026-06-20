@@ -33,6 +33,7 @@ interface DialRootProps {
   mode?: DialMode;
   theme?: DialTheme;
   productionEnabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function DialRoot(props: DialRootProps) {
@@ -48,6 +49,8 @@ export function DialRoot(props: DialRootProps) {
   let dragStart: PanelDragStart | null = null;
   let didDrag = false;
   let dragTarget: HTMLElement | null = null;
+  let panelOpenStates = new Map<string, boolean>();
+  let rootOpen: boolean | undefined;
 
   onMount(() => {
     setMounted(true);
@@ -56,6 +59,16 @@ export function DialRoot(props: DialRootProps) {
       setPanels(DialStore.getPanels());
     });
     onCleanup(unsub);
+  });
+
+  createEffect(() => {
+    const fallbackOpen = inline() || (props.defaultOpen ?? true);
+    const nextStates = new Map<string, boolean>();
+    for (const panel of panels()) {
+      nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
+    }
+    panelOpenStates = nextStates;
+    rootOpen = Array.from(nextStates.values()).some(Boolean);
   });
 
   createEffect(() => {
@@ -128,6 +141,18 @@ export function DialRoot(props: DialRootProps) {
     dragTarget = null;
   };
 
+  const handlePanelOpenChange = (panelId: string, open: boolean) => {
+    panelOpenStates.set(panelId, open);
+    const fallbackOpen = inline() || (props.defaultOpen ?? true);
+    const nextRootOpen = panels().some((panel) => (
+      panelOpenStates.get(panel.id) ?? fallbackOpen
+    ));
+
+    if (rootOpen === nextRootOpen) return;
+    rootOpen = nextRootOpen;
+    props.onOpenChange?.(nextRootOpen);
+  };
+
   const dragStyle = () => {
     const offset = dragOffset();
     return offset
@@ -156,7 +181,14 @@ export function DialRoot(props: DialRootProps) {
           onPointerCancel={!inline() ? handlePointerUp : undefined}
         >
           <For each={panels()}>
-            {(panel) => <Panel panel={panel} defaultOpen={inline() || (props.defaultOpen ?? true)} inline={inline()} />}
+            {(panel) => (
+              <Panel
+                panel={panel}
+                defaultOpen={inline() || (props.defaultOpen ?? true)}
+                inline={inline()}
+                onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+              />
+            )}
           </For>
         </div>
       </div>

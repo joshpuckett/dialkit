@@ -50,7 +50,8 @@ export const DialRoot = defineComponent({
       default: isDevDefault,
     },
   },
-  setup(props) {
+  emits: ['openChange'],
+  setup(props, { emit }) {
     const panels = ref<PanelConfig[]>([]);
     const mounted = ref(false);
     const panelRef = ref<HTMLDivElement | null>(null);
@@ -63,6 +64,18 @@ export const DialRoot = defineComponent({
     let dragStart: PanelDragStart | null = null;
     let didDrag = false;
     let dragTarget: HTMLElement | null = null;
+    let panelOpenStates = new Map<string, boolean>();
+    let rootOpen: boolean | undefined;
+
+    const syncPanelOpenStates = () => {
+      const fallbackOpen = props.mode === 'inline' || props.defaultOpen;
+      const nextStates = new Map<string, boolean>();
+      for (const panel of panels.value) {
+        nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
+      }
+      panelOpenStates = nextStates;
+      rootOpen = Array.from(nextStates.values()).some(Boolean);
+    };
 
     const connectObserver = () => {
       if (observer || props.mode === 'inline' || !panelRef.value) return;
@@ -133,6 +146,18 @@ export const DialRoot = defineComponent({
       dragTarget = null;
     };
 
+    const handlePanelOpenChange = (panelId: string, open: boolean) => {
+      panelOpenStates.set(panelId, open);
+      const fallbackOpen = props.mode === 'inline' || props.defaultOpen;
+      const nextRootOpen = panels.value.some((panel) => (
+        panelOpenStates.get(panel.id) ?? fallbackOpen
+      ));
+
+      if (rootOpen === nextRootOpen) return;
+      rootOpen = nextRootOpen;
+      emit('openChange', nextRootOpen);
+    };
+
     const getDragStyle = () => dragOffset.value
       ? {
         top: `${dragOffset.value.y}px`,
@@ -146,8 +171,10 @@ export const DialRoot = defineComponent({
     onMounted(() => {
       mounted.value = true;
       panels.value = DialStore.getPanels();
+      syncPanelOpenStates();
       unsubscribe = DialStore.subscribeGlobal(() => {
         panels.value = DialStore.getPanels();
+        syncPanelOpenStates();
       });
       nextTick(connectObserver);
     });
@@ -178,6 +205,7 @@ export const DialRoot = defineComponent({
           panel,
           defaultOpen: props.mode === 'inline' || props.defaultOpen,
           inline: props.mode === 'inline',
+          onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
         }))),
       ]),
     });

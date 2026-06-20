@@ -13,6 +13,7 @@ export interface DialKitDirectiveOptions {
   position?: DialPosition;
   defaultOpen?: boolean;
   mode?: DialMode;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export type DialKitDirectiveValue = DialMode | DialKitDirectiveOptions | undefined;

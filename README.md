@@ -326,8 +326,20 @@ const values = useDialKit('Controls', {
 | `defaultOpen` | `boolean` | `true` |
 | `mode` | `'popover' \| 'inline'` | `'popover'` |
 | `productionEnabled` | `boolean` | `false` in production, `true` otherwise |
+| `onOpenChange` | `(open: boolean) => void` | `undefined` |
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
+
+Use `onOpenChange` when you need to persist whether the floating panel is open or collapsed:
+
+```tsx
+<DialRoot
+  defaultOpen={localStorage.getItem('dialkit-open') !== '0'}
+  onOpenChange={(open) => {
+    localStorage.setItem('dialkit-open', open ? '1' : '0');
+  }}
+/>
+```
 
 DialKit is automatically hidden in production builds. To enable it in production, pass `productionEnabled`:
 
@@ -570,7 +582,7 @@ function Card() {
 }
 ```
 
-`createDialKit` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders) work identically to the React version.
+`createDialKit` returns an accessor — call `params()` to read the current values. All control types, config shapes, and panel features (presets, copy, folders, and `DialRoot` props like `onOpenChange`) work identically to the React version.
 
 Use `createDialKitController` when Solid code needs to update values:
 
@@ -626,7 +638,7 @@ npm install dialkit
 </div>
 ```
 
-`createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, and transitions match the React/Solid entries.
+`createDialKit` returns a reactive object — access values directly (e.g. `params.blur`). Styles are injected automatically by `DialRoot` (no CSS import needed). Cleanup is automatic when the component unmounts. All control types, presets, folders, transitions, and `DialRoot` props like `onOpenChange` match the React/Solid entries.
 
 Use `createDialKitController` when Svelte code needs to update values:
 
@@ -681,7 +693,7 @@ import Card from './Card.vue';
 
 <template>
   <Card />
-  <DialRoot />
+  <DialRoot @open-change="(open) => localStorage.setItem('dialkit-open', open ? '1' : '0')" />
 </template>
 ```
 

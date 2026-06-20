@@ -23,9 +23,10 @@ interface DialRootProps {
   mode?: DialMode;
   theme?: DialTheme;
   productionEnabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, onOpenChange }: DialRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -40,6 +41,8 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; elX: number; elY: number } | null>(null);
   const didDragRef = useRef(false);
   const dragTargetRef = useRef<HTMLElement | null>(null);
+  const panelOpenStatesRef = useRef<Map<string, boolean>>(new Map());
+  const rootOpenRef = useRef<boolean | null>(null);
 
   // Subscribe to global panel changes
   useEffect(() => {
@@ -52,6 +55,16 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    const fallbackOpen = inline || defaultOpen;
+    const nextStates = new Map<string, boolean>();
+    for (const panel of panels) {
+      nextStates.set(panel.id, panelOpenStatesRef.current.get(panel.id) ?? fallbackOpen);
+    }
+    panelOpenStatesRef.current = nextStates;
+    rootOpenRef.current = Array.from(nextStates.values()).some(Boolean);
+  }, [defaultOpen, inline, panels]);
 
   // Watch for panel open/close — snap to corner on open, restore drag position on close
   useEffect(() => {
@@ -127,6 +140,18 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     dragTargetRef.current = null;
   }, []);
 
+  const handlePanelOpenChange = useCallback((panelId: string, open: boolean) => {
+    panelOpenStatesRef.current.set(panelId, open);
+    const fallbackOpen = inline || defaultOpen;
+    const nextRootOpen = panels.some((panel) => (
+      panelOpenStatesRef.current.get(panel.id) ?? fallbackOpen
+    ));
+
+    if (rootOpenRef.current === nextRootOpen) return;
+    rootOpenRef.current = nextRootOpen;
+    onOpenChange?.(nextRootOpen);
+  }, [defaultOpen, inline, onOpenChange, panels]);
+
   // Don't render on server
   if (!mounted || typeof window === 'undefined') {
     return null;
@@ -161,7 +186,13 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
         onPointerCancel={!inline ? handlePointerUp : undefined}
       >
         {panels.map((panel) => (
-          <Panel key={panel.id} panel={panel} defaultOpen={inline || defaultOpen} inline={inline} />
+          <Panel
+            key={panel.id}
+            panel={panel}
+            defaultOpen={inline || defaultOpen}
+            inline={inline}
+            onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+          />
         ))}
       </div>
     </div>

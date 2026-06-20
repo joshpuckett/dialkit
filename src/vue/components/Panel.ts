@@ -31,7 +31,8 @@ export const Panel = defineComponent({
       default: false,
     },
   },
-  setup(props) {
+  emits: ['openChange'],
+  setup(props, { emit }) {
     const shortcutCtx = useShortcutContext();
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
@@ -81,6 +82,10 @@ export const Panel = defineComponent({
       copiedTimeout = window.setTimeout(() => {
         copied.value = false;
       }, 1500);
+    };
+
+    const handleOpenChange = (open: boolean) => {
+      emit('openChange', open);
     };
 
     const renderControl = (control: ControlMeta) => {
@@ -263,6 +268,7 @@ export const Panel = defineComponent({
           isRoot: true,
           inline: props.inline,
           toolbar: () => toolbarNode,
+          onOpenChange: handleOpenChange,
         }, {
           default: () => props.panel.controls.map(renderControl),
         }),
