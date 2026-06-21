@@ -35,6 +35,7 @@ export type {
   Preset,
   DialValue,
   DialConfig,
+  DialKitPersistOptions,
   DialKitValueUpdates,
   ResolvedValues,
   ControlMeta,

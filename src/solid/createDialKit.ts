@@ -2,6 +2,7 @@ import { createSignal, createMemo, onMount, onCleanup, createUniqueId, type Acce
 import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
+  DialKitPersistOptions,
   DialKitValueUpdates,
   DialValue,
   ResolvedValues,
@@ -9,6 +10,8 @@ import type {
 } from '../store/DialStore';
 
 export interface CreateDialOptions {
+  id?: string;
+  persist?: DialKitPersistOptions;
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
@@ -35,14 +38,18 @@ export function createDialKitController<T extends DialConfig>(
   options?: CreateDialOptions
 ): DialKitController<T> {
   const id = createUniqueId();
-  const panelId = `${name}-${id}`;
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${id}`;
 
   const [flatValues, setFlatValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(panelId)
   );
 
   onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+    });
     setFlatValues(DialStore.getValues(panelId));
 
     const unsubValues = DialStore.subscribe(panelId, () => {

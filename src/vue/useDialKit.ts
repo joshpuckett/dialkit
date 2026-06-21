@@ -2,6 +2,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch, type Computed
 import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
+  DialKitPersistOptions,
   DialKitValueUpdates,
   DialValue,
   ResolvedValues,
@@ -9,6 +10,8 @@ import type {
 } from '../store/DialStore';
 
 export interface UseDialOptions {
+  id?: string;
+  persist?: DialKitPersistOptions;
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
@@ -36,20 +39,26 @@ export function useDialKitController<T extends DialConfig>(
   config: T,
   options?: UseDialOptions
 ): DialKitController<T> {
-  const panelId = `${name}-${++dialKitInstance}`;
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
   const configRef = shallowRef(config);
   const onActionRef = ref(options?.onAction);
   const shortcutsRef = shallowRef(options?.shortcuts);
+  const persistRef = shallowRef(options?.persist);
   const flatValues = ref<Record<string, DialValue>>(DialStore.getValues(panelId));
   const mounted = ref(false);
   const serializedConfig = computed(() => JSON.stringify(config));
   const serializedShortcuts = computed(() => JSON.stringify(options?.shortcuts));
+  const serializedPersist = computed(() => JSON.stringify(options?.persist));
 
   let unsubscribeValues: (() => void) | undefined;
   let unsubscribeActions: (() => void) | undefined;
 
   const register = () => {
-    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value);
+    DialStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, {
+      retainOnUnmount: hasStableId,
+      persist: persistRef.value,
+    });
     flatValues.value = DialStore.getValues(panelId);
 
     unsubscribeValues = DialStore.subscribe(panelId, () => {
@@ -69,11 +78,19 @@ export function useDialKitController<T extends DialConfig>(
     shortcutsRef.value = next;
   });
 
-  watch([serializedConfig, serializedShortcuts], () => {
+  watch(() => options?.persist, (next) => {
+    persistRef.value = next;
+  });
+
+  watch([serializedConfig, serializedShortcuts, serializedPersist], () => {
     configRef.value = config;
     shortcutsRef.value = options?.shortcuts;
+    persistRef.value = options?.persist;
     if (mounted.value) {
-      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value);
+      DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, {
+        retainOnUnmount: hasStableId,
+        persist: persistRef.value,
+      });
       flatValues.value = DialStore.getValues(panelId);
     }
   });

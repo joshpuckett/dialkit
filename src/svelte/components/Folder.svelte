@@ -28,6 +28,7 @@
   let isOpen = $state(defaultOpen);
   let isCollapsed = $state(!defaultOpen);
   let contentHeight = $state<number | undefined>(undefined);
+  let hasInitializedRootSize = $state(!isRoot || !defaultOpen);
 
   let contentRef: HTMLDivElement | undefined;
   let panelRef: HTMLDivElement | undefined;
@@ -77,10 +78,15 @@
 
     const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
     const nextHeight = isOpen ? Math.min(measured + panelHeightOffset, windowHeight - 32) : 42;
+    const springOptions = !hasInitializedRootSize && isOpen ? { instant: true } : undefined;
 
-    panelWidth.set(isOpen ? 280 : 42);
-    panelHeight.set(nextHeight);
-    panelRadius.set(isOpen ? 14 : 21);
+    panelWidth.set(isOpen ? 280 : 42, springOptions);
+    panelHeight.set(nextHeight, springOptions);
+    panelRadius.set(isOpen ? 14 : 21, springOptions);
+
+    if (isOpen || !defaultOpen) {
+      hasInitializedRootSize = true;
+    }
   });
 
   const handleToggle = () => {
@@ -102,8 +108,9 @@
     panelScale.set(1);
   };
 
+  const panelHeightStyle = $derived(!hasInitializedRootSize && isOpen ? 'auto' : `${panelHeight.current}px`);
   const panelStyle = $derived(
-    `width:${panelWidth.current}px;height:${panelHeight.current}px;border-radius:${panelRadius.current}px;` +
+    `width:${panelWidth.current}px;height:${panelHeightStyle};max-height:${Math.max(windowHeight - 32, 42)}px;border-radius:${panelRadius.current}px;` +
       `box-shadow:${isOpen ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)'};` +
       `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
       `transform:scale(${panelScale.current});`

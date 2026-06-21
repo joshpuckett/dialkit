@@ -31,6 +31,7 @@ export type {
   SelectConfig,
   ColorConfig,
   TextConfig,
+  DialKitPersistOptions,
   ShortcutConfig,
   ShortcutMode,
   ShortcutInteraction,

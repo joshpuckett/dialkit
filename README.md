@@ -72,10 +72,71 @@ const params = useDialKit(name, config, options?)
 |-------|------|-------------|
 | `name` | `string` | Panel title displayed in the UI |
 | `config` | `DialConfig` | Parameter definitions (see Control Types below) |
+| `options.id` | `string` | Stable logical id for sharing values across remounts/pages |
+| `options.persist` | `DialKitPersistOptions` | Persist values to browser storage |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
+
+---
+
+## Stable IDs and Persistence
+
+By default, a DialKit panel is tied to the lifecycle of the component that calls `useDialKit`. Pass `id` when multiple mounts should reconnect to the same logical panel, and pass `persist: true` when values should survive reloads and browser sessions.
+
+```tsx
+// dials/useOnboardingDials.ts
+import { useDialKit } from 'dialkit';
+
+export function useOnboardingDials() {
+  return useDialKit('Onboarding', {
+    name: { type: 'text', default: 'Avery', placeholder: 'Name' },
+    avatarScale: [1, 0.6, 1.6, 0.01],
+    accent: { type: 'color', default: '#6C5CE7' },
+  }, {
+    id: 'onboarding',
+    persist: true,
+  });
+}
+```
+
+Use that helper anywhere the shared values are needed:
+
+```tsx
+function PageTwo() {
+  const onboarding = useOnboardingDials();
+
+  const page = useDialKit('Page Two', {
+    cardRadius: [16, 0, 64],
+  });
+
+  return (
+    <Card
+      name={onboarding.name}
+      radius={page.cardRadius}
+      accent={onboarding.accent}
+    />
+  );
+}
+```
+
+When `PageTwo` is mounted, the single `<DialRoot />` shows both `Onboarding` and `Page Two` as top-level sections. If another page calls `useOnboardingDials()`, DialKit reconnects to the same `id` and keeps the shared values.
+
+`persist: true` stores values, presets, and the active preset in `localStorage` using `dialkit:${id}` as the key. Use the object form to customize storage:
+
+```tsx
+useDialKit('Onboarding', config, {
+  id: 'onboarding',
+  persist: {
+    key: 'my-app:onboarding-dials',
+    storage: 'sessionStorage',
+    presets: false,
+  },
+});
+```
+
+The `id` string has no special format; it only needs to be reused wherever you want the same logical panel. Without `id` or `persist`, DialKit behaves exactly as before.
 
 ---
 

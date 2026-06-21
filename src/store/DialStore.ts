@@ -118,6 +118,31 @@ export type Preset = {
   values: Record<string, DialValue>;
 };
 
+export type DialKitPersistOptions = boolean | {
+  key?: string;
+  storage?: 'localStorage' | 'sessionStorage';
+  presets?: boolean;
+};
+
+export type DialStorePanelOptions = {
+  retainOnUnmount?: boolean;
+  persist?: DialKitPersistOptions;
+};
+
+type PersistConfig = {
+  key: string;
+  storage: 'localStorage' | 'sessionStorage';
+  presets: boolean;
+};
+
+type PersistedPanelState = {
+  version: 1;
+  values?: Record<string, DialValue>;
+  baseValues?: Record<string, DialValue>;
+  presets?: Preset[];
+  activePresetId?: string | null;
+};
+
 // Stable empty object for unregistered panels (React 19 useSyncExternalStore requirement)
 const EMPTY_VALUES: Record<string, DialValue> = Object.freeze({});
 
@@ -267,25 +292,51 @@ class DialStoreClass {
   private activePreset: Map<string, string | null> = new Map();
   private baseValues: Map<string, Record<string, DialValue>> = new Map();
   private defaultValues: Map<string, Record<string, DialValue>> = new Map();
+  private registrationCounts: Map<string, number> = new Map();
+  private retainedPanels: Set<string> = new Set();
+  private persistConfigs: Map<string, PersistConfig> = new Map();
 
-  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
+    this.configurePanelRetention(id, options);
+    this.registrationCounts.set(id, (this.registrationCounts.get(id) ?? 0) + 1);
+
     const controls = this.parseConfig(config, '', shortcuts);
-    const values = this.flattenValues(config, '');
+    const controlsByPath = this.mapControlsByPath(controls);
+    const defaultValues = this.flattenValues(config, '');
 
     // Set initial transition modes based on config types
-    this.initTransitionModes(config, '', values);
+    this.initTransitionModes(config, '', defaultValues);
+
+    const persisted = this.loadPersistedPanel(id);
+    const previousValues = this.panels.get(id)?.values ?? this.snapshots.get(id) ?? persisted?.values ?? {};
+    const values = this.reconcileValues(defaultValues, previousValues, controlsByPath);
+
+    const previousBaseValues = this.baseValues.get(id) ?? persisted?.baseValues ?? persisted?.values ?? {};
+    const baseValues = this.reconcileValues(defaultValues, previousBaseValues, controlsByPath);
 
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {} });
     this.snapshots.set(id, { ...values });
-    this.baseValues.set(id, { ...values });
-    this.defaultValues.set(id, { ...values });
+    this.baseValues.set(id, baseValues);
+    this.defaultValues.set(id, { ...defaultValues });
+
+    const existingPresets = this.presets.get(id) ?? persisted?.presets;
+    if (existingPresets) {
+      this.presets.set(id, this.reconcilePresets(existingPresets, defaultValues, controlsByPath));
+    }
+    if (!this.activePreset.has(id) && persisted?.activePresetId !== undefined) {
+      this.activePreset.set(id, persisted.activePresetId);
+    }
+
+    this.persistPanel(id);
+    this.notify(id);
     this.notifyGlobal();
   }
 
-  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>): void {
+  updatePanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
+    this.configurePanelRetention(id, options);
     const existing = this.panels.get(id);
     if (!existing) {
-      this.registerPanel(id, name, config, shortcuts);
+      this.registerPanel(id, name, config, shortcuts, options);
       return;
     }
 
@@ -293,44 +344,14 @@ class DialStoreClass {
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
     this.initTransitionModes(config, '', defaultValues);
-    const nextValues: Record<string, DialValue> = {};
-
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextValues[path] = this.normalizePreservedValue(
-        existing.values[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
-
-    // Set mode defaults for new transition controls first.
-    this.initTransitionModes(config, '', nextValues);
-
-    for (const [path, mode] of Object.entries(existing.values)) {
-      if (!path.endsWith('.__mode')) {
-        continue;
-      }
-
-      const transitionPath = path.slice(0, -'__mode'.length - 1);
-      const transitionControl = controlsByPath.get(transitionPath);
-      if (transitionControl?.type === 'transition') {
-        nextValues[path] = mode;
-      }
-    }
+    const nextValues = this.reconcileValues(defaultValues, existing.values, controlsByPath);
 
     const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
     const previousBaseValues = this.baseValues.get(id) ?? {};
-    const nextBaseValues: Record<string, DialValue> = {};
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextBaseValues[path] = this.normalizePreservedValue(
-        previousBaseValues[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
+    const nextBaseValues = this.reconcileValues(defaultValues, previousBaseValues, controlsByPath);
 
     for (const [path, value] of Object.entries(nextValues)) {
       if (path.endsWith('.__mode')) {
@@ -340,18 +361,34 @@ class DialStoreClass {
 
     this.baseValues.set(id, nextBaseValues);
     this.defaultValues.set(id, { ...defaultValues });
+    this.presets.set(id, this.reconcilePresets(this.presets.get(id) ?? [], defaultValues, controlsByPath));
 
+    this.persistPanel(id);
     this.notify(id);
     this.notifyGlobal();
   }
 
   unregisterPanel(id: string): void {
+    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
+    if (nextCount > 0) {
+      this.registrationCounts.set(id, nextCount);
+      return;
+    }
+
+    this.registrationCounts.delete(id);
     this.panels.delete(id);
     this.listeners.delete(id);
-    this.snapshots.delete(id);
     this.actionListeners.delete(id);
-    this.baseValues.delete(id);
-    this.defaultValues.delete(id);
+
+    if (!this.retainedPanels.has(id)) {
+      this.snapshots.delete(id);
+      this.baseValues.delete(id);
+      this.defaultValues.delete(id);
+      this.presets.delete(id);
+      this.activePreset.delete(id);
+      this.persistConfigs.delete(id);
+    }
+
     this.notifyGlobal();
   }
 
@@ -404,6 +441,7 @@ class DialStoreClass {
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
     this.snapshots.set(panelId, { ...panel.values });
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -416,6 +454,7 @@ class DialStoreClass {
     this.snapshots.set(panelId, { ...panel.values });
     this.baseValues.set(panelId, { ...defaults });
     this.activePreset.set(panelId, null);
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -435,6 +474,7 @@ class DialStoreClass {
 
     panel.values[`${path}.__mode`] = mode;
     this.snapshots.set(panelId, { ...panel.values });
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -511,6 +551,7 @@ class DialStoreClass {
 
     // Force re-render by creating new snapshot reference
     this.snapshots.set(panelId, { ...panel.values });
+    this.persistPanel(panelId);
     this.notify(panelId);
 
     return id;
@@ -528,6 +569,7 @@ class DialStoreClass {
     panel.values = { ...preset.values };
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -545,6 +587,7 @@ class DialStoreClass {
     if (panel) {
       this.snapshots.set(panelId, { ...panel.values });
     }
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -564,6 +607,7 @@ class DialStoreClass {
       this.snapshots.set(panelId, { ...panel.values });
     }
     this.activePreset.set(panelId, null);
+    this.persistPanel(panelId);
     this.notify(panelId);
   }
 
@@ -605,6 +649,126 @@ class DialStoreClass {
       }
     }
     return results;
+  }
+
+  private configurePanelRetention(id: string, options: DialStorePanelOptions): void {
+    if (options.retainOnUnmount) {
+      this.retainedPanels.add(id);
+    }
+
+    const persistConfig = this.normalizePersistConfig(id, options.persist);
+    if (persistConfig) {
+      this.persistConfigs.set(id, persistConfig);
+      this.retainedPanels.add(id);
+    }
+  }
+
+  private reconcileValues(
+    defaultValues: Record<string, DialValue>,
+    previousValues: Record<string, DialValue>,
+    controlsByPath: Map<string, ControlMeta>
+  ): Record<string, DialValue> {
+    const nextValues: Record<string, DialValue> = {};
+
+    for (const [path, defaultValue] of Object.entries(defaultValues)) {
+      if (path.endsWith('.__mode')) {
+        const transitionPath = path.slice(0, -'.__mode'.length);
+        const transitionControl = controlsByPath.get(transitionPath);
+        nextValues[path] = transitionControl?.type === 'transition' && previousValues[path] !== undefined
+          ? previousValues[path]
+          : defaultValue;
+        continue;
+      }
+
+      nextValues[path] = this.normalizePreservedValue(
+        previousValues[path],
+        defaultValue,
+        controlsByPath.get(path)
+      );
+    }
+
+    return nextValues;
+  }
+
+  private reconcilePresets(
+    presets: Preset[],
+    defaultValues: Record<string, DialValue>,
+    controlsByPath: Map<string, ControlMeta>
+  ): Preset[] {
+    return presets.map((preset) => ({
+      ...preset,
+      values: this.reconcileValues(defaultValues, preset.values, controlsByPath),
+    }));
+  }
+
+  private normalizePersistConfig(id: string, persist: DialKitPersistOptions | undefined): PersistConfig | null {
+    if (!persist) return null;
+    const options = typeof persist === 'object' ? persist : {};
+    return {
+      key: options.key ?? `dialkit:${id}`,
+      storage: options.storage ?? 'localStorage',
+      presets: options.presets ?? true,
+    };
+  }
+
+  private loadPersistedPanel(id: string): PersistedPanelState | null {
+    const config = this.persistConfigs.get(id);
+    if (!config) return null;
+
+    const storage = this.getStorage(config.storage);
+    if (!storage) return null;
+
+    try {
+      const raw = storage.getItem(config.key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as PersistedPanelState;
+      if (parsed?.version !== 1 || typeof parsed !== 'object') return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistPanel(id: string): void {
+    const config = this.persistConfigs.get(id);
+    if (!config) return;
+
+    const storage = this.getStorage(config.storage);
+    if (!storage) return;
+
+    const values = this.snapshots.get(id) ?? this.panels.get(id)?.values;
+    if (!values) return;
+
+    const state: PersistedPanelState = {
+      version: 1,
+      values,
+      baseValues: this.baseValues.get(id) ?? values,
+      activePresetId: this.activePreset.get(id) ?? null,
+    };
+
+    if (config.presets) {
+      state.presets = this.presets.get(id) ?? [];
+    }
+
+    try {
+      storage.setItem(config.key, JSON.stringify(state));
+    } catch {
+      // Ignore storage quota/security errors; DialKit should still work in-memory.
+    }
+  }
+
+  private getStorage(kind: 'localStorage' | 'sessionStorage'): Storage | null {
+    if (typeof globalThis === 'undefined' || !('window' in globalThis)) {
+      return null;
+    }
+
+    try {
+      return kind === 'sessionStorage'
+        ? globalThis.window?.sessionStorage ?? null
+        : globalThis.window?.localStorage ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private findControlByPath(controls: ControlMeta[], path: string): ControlMeta | null {

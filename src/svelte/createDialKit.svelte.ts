@@ -3,6 +3,7 @@ import type {
   ActionConfig,
   ColorConfig,
   DialConfig,
+  DialKitPersistOptions,
   DialKitValueUpdates,
   DialValue,
   EasingConfig,
@@ -14,6 +15,8 @@ import type {
 } from 'dialkit/store';
 
 export interface CreateDialOptions {
+  id?: string;
+  persist?: DialKitPersistOptions;
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
@@ -43,13 +46,17 @@ export function createDialKitController<T extends DialConfig>(
   config: T,
   options?: CreateDialOptions
 ): DialKitController<T> {
-  const panelId = `${name}-${++dialKitInstance}`;
+  const hasStableId = options?.id !== undefined;
+  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
   const resolve = () => resolveDialValues(config, DialStore.getValues(panelId));
 
   let values = $state<ResolvedValues<T>>(resolve());
 
   $effect(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts);
+    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
+      retainOnUnmount: hasStableId,
+      persist: options?.persist,
+    });
     values = resolve();
 
     const unsubValues = DialStore.subscribe(panelId, () => {
