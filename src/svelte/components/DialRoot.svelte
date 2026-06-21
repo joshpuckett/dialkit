@@ -3,6 +3,7 @@
   import type { PanelConfig } from 'dialkit/store';
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
+  import Folder from './Folder.svelte';
   import Panel from './Panel.svelte';
   import ShortcutListener from './ShortcutListener.svelte';
   import {
@@ -173,6 +174,13 @@
     rootOpen = nextRootOpen;
     onOpenChange?.(nextRootOpen);
   }
+
+  function handleRootOpenChange(open: boolean) {
+    if (rootOpen === open) return;
+    rootOpen = open;
+    onOpenChange?.(open);
+  }
+
 </script>
 
 {#if productionEnabled && mounted && panels.length > 0}
@@ -185,20 +193,42 @@
           data-mode={mode}
           data-position={inline ? undefined : (dragOffset ? undefined : activePosition)}
           data-origin-x={originX}
+          data-multiple={panels.length > 1 ? 'true' : undefined}
           style={dragStyle}
           onpointerdown={!inline ? handlePointerDown : undefined}
           onpointermove={!inline ? handlePointerMove : undefined}
           onpointerup={!inline ? handlePointerUp : undefined}
           onpointercancel={!inline ? handlePointerUp : undefined}
         >
-          {#each panels as panel (panel.id)}
-            <Panel
-              {panel}
-              defaultOpen={inline || defaultOpen}
-              {inline}
-              onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
-            />
-          {/each}
+          {#if panels.length > 1}
+            <div class="dialkit-panel-wrapper">
+              <Folder
+                title="DialKit"
+                defaultOpen={inline || defaultOpen}
+                isRoot={true}
+                {inline}
+                onOpenChange={handleRootOpenChange}
+                panelHeightOffset={2}
+              >
+                {#each panels as panel (panel.id)}
+                  <Panel
+                    {panel}
+                    defaultOpen={true}
+                    variant="section"
+                  />
+                {/each}
+              </Folder>
+            </div>
+          {:else}
+            {#each panels as panel (panel.id)}
+              <Panel
+                {panel}
+                defaultOpen={inline || defaultOpen}
+                {inline}
+                onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+              />
+            {/each}
+          {/if}
         </div>
       </div>
     </ShortcutListener>

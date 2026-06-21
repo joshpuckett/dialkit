@@ -30,6 +30,10 @@ export const Panel = defineComponent({
       type: Boolean,
       default: false,
     },
+    variant: {
+      type: String as PropType<'root' | 'section'>,
+      default: 'root',
+    },
   },
   emits: ['openChange'],
   setup(props, { emit }) {
@@ -260,6 +264,22 @@ export const Panel = defineComponent({
           'Copy',
         ]),
       ]);
+
+      if (props.variant === 'section') {
+        return h(Folder, {
+          title: props.panel.name,
+          defaultOpen: props.defaultOpen,
+          onOpenChange: handleOpenChange,
+        }, {
+          default: () => [
+            h('div', {
+              class: 'dialkit-panel-section-toolbar',
+              onClick: (event: Event) => event.stopPropagation(),
+            }, [toolbarNode]),
+            ...props.panel.controls.map(renderControl),
+          ],
+        });
+      }
 
       return h('div', { class: 'dialkit-panel-wrapper' }, [
         h(Folder, {

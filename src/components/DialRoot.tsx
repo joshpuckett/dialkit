@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
+import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 import { blockPanelDragClick, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, hasPanelDragMoved } from '../panel-drag';
@@ -152,6 +153,12 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     onOpenChange?.(nextRootOpen);
   }, [defaultOpen, inline, onOpenChange, panels]);
 
+  const handleRootOpenChange = useCallback((open: boolean) => {
+    if (rootOpenRef.current === open) return;
+    rootOpenRef.current = open;
+    onOpenChange?.(open);
+  }, [onOpenChange]);
+
   // Don't render on server
   if (!mounted || typeof window === 'undefined') {
     return null;
@@ -169,6 +176,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     bottom: 'auto' as const,
   } : undefined;
   const originX = getPanelOriginX(activePosition, dragOffset);
+  const hasMultiplePanels = panels.length > 1;
 
   const content = (
   <ShortcutListener>
@@ -179,21 +187,44 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
         data-position={inline ? undefined : (dragOffset ? undefined : activePosition)}
         data-origin-x={inline ? undefined : originX}
         data-mode={mode}
+        data-multiple={hasMultiplePanels ? 'true' : undefined}
         style={dragStyle}
         onPointerDown={!inline ? handlePointerDown : undefined}
         onPointerMove={!inline ? handlePointerMove : undefined}
         onPointerUp={!inline ? handlePointerUp : undefined}
         onPointerCancel={!inline ? handlePointerUp : undefined}
       >
-        {panels.map((panel) => (
-          <Panel
-            key={panel.id}
-            panel={panel}
-            defaultOpen={inline || defaultOpen}
-            inline={inline}
-            onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
-          />
-        ))}
+        {hasMultiplePanels ? (
+          <div className="dialkit-panel-wrapper">
+            <Folder
+              title="DialKit"
+              defaultOpen={inline || defaultOpen}
+              isRoot={true}
+              inline={inline}
+              onOpenChange={handleRootOpenChange}
+              panelHeightOffset={2}
+            >
+              {panels.map((panel) => (
+                <Panel
+                  key={panel.id}
+                  panel={panel}
+                  defaultOpen={true}
+                  variant="section"
+                />
+              ))}
+            </Folder>
+          </div>
+        ) : (
+          panels.map((panel) => (
+            <Panel
+              key={panel.id}
+              panel={panel}
+              defaultOpen={inline || defaultOpen}
+              inline={inline}
+              onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+            />
+          ))
+        )}
       </div>
     </div>
   </ShortcutListener>

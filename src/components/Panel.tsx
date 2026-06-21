@@ -19,9 +19,10 @@ interface PanelProps {
   defaultOpen?: boolean;
   inline?: boolean;
   onOpenChange?: (open: boolean) => void;
+  variant?: 'root' | 'section';
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root' }: PanelProps) {
   const [copied, setCopied] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
   const shortcutCtx = useContext(ShortcutContext);
@@ -254,6 +255,17 @@ Apply these values as the new defaults in the useDialKit call.`;
 
     </>
   );
+
+  if (variant === 'section') {
+    return (
+      <Folder title={panel.name} defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
+        <div className="dialkit-panel-section-toolbar" onClick={(e) => e.stopPropagation()}>
+          {toolbar}
+        </div>
+        {renderControls()}
+      </Folder>
+    );
+  }
 
   return (
     <div className="dialkit-panel-wrapper">

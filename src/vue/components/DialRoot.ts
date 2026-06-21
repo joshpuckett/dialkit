@@ -1,6 +1,7 @@
 import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
+import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 import {
@@ -158,6 +159,12 @@ export const DialRoot = defineComponent({
       emit('openChange', nextRootOpen);
     };
 
+    const handleRootOpenChange = (open: boolean) => {
+      if (rootOpen === open) return;
+      rootOpen = open;
+      emit('openChange', open);
+    };
+
     const getDragStyle = () => dragOffset.value
       ? {
         top: `${dragOffset.value.y}px`,
@@ -195,18 +202,39 @@ export const DialRoot = defineComponent({
           'data-position': props.mode === 'inline' ? undefined : (dragOffset.value ? undefined : activePosition.value),
           'data-origin-x': originX.value,
           'data-mode': props.mode,
+          'data-multiple': panels.value.length > 1 ? 'true' : undefined,
           style: getDragStyle(),
           onPointerdown: props.mode === 'inline' ? undefined : handlePointerDown,
           onPointermove: props.mode === 'inline' ? undefined : handlePointerMove,
           onPointerup: props.mode === 'inline' ? undefined : handlePointerUp,
           onPointercancel: props.mode === 'inline' ? undefined : handlePointerUp,
-        }, panels.value.map((panel) => h(Panel, {
-          key: panel.id,
-          panel,
-          defaultOpen: props.mode === 'inline' || props.defaultOpen,
-          inline: props.mode === 'inline',
-          onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
-        }))),
+        }, panels.value.length > 1
+          ? [
+            h('div', { class: 'dialkit-panel-wrapper' }, [
+              h(Folder, {
+                title: 'DialKit',
+                defaultOpen: props.mode === 'inline' || props.defaultOpen,
+                isRoot: true,
+                inline: props.mode === 'inline',
+                onOpenChange: handleRootOpenChange,
+                panelHeightOffset: 2,
+              }, {
+                default: () => panels.value.map((panel) => h(Panel, {
+                  key: panel.id,
+                  panel,
+                  defaultOpen: true,
+                  variant: 'section',
+                })),
+              }),
+            ]),
+          ]
+          : panels.value.map((panel) => h(Panel, {
+            key: panel.id,
+            panel,
+            defaultOpen: props.mode === 'inline' || props.defaultOpen,
+            inline: props.mode === 'inline',
+            onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
+          }))),
       ]),
     });
 

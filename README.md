@@ -330,6 +330,32 @@ const values = useDialKit('Controls', {
 
 Mount once at your app root. In the default `popover` mode, the panel renders via a portal on `document.body`. It collapses to a small icon button and expands to 280px wide on click.
 
+### Multiple panels
+
+If multiple `useDialKit` calls are registered under the same root, DialKit renders one shared shell and shows each panel as a collapsible top-level section. No extra API is needed:
+
+```tsx
+function PhotoStack() {
+  const photo = useDialKit('Photo Stack', {
+    blur: [12, 0, 40],
+    scale: [1, 0.5, 2],
+  });
+
+  const stage = useDialKit('Stage', {
+    pagePadding: [40, 16, 96],
+    background: '#ffffff',
+  });
+
+  return (
+    <div style={{ padding: stage.pagePadding, background: stage.background }}>
+      <img style={{ filter: `blur(${photo.blur}px)`, transform: `scale(${photo.scale})` }} />
+    </div>
+  );
+}
+```
+
+The mounted `<DialRoot />` stays the same. With a single registered panel, the panel title and layout stay unchanged. This behavior works the same way in React, Solid, Svelte, and Vue.
+
 Use `onOpenChange` when you need to persist whether the floating panel is open or collapsed:
 
 ```tsx

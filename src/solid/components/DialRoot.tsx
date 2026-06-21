@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
 import { ShortcutListener } from './ShortcutListener';
+import { Folder } from './Folder';
 import { Panel } from './Panel';
 import {
   blockPanelDragClick,
@@ -153,6 +154,12 @@ export function DialRoot(props: DialRootProps) {
     props.onOpenChange?.(nextRootOpen);
   };
 
+  const handleRootOpenChange = (open: boolean) => {
+    if (rootOpen === open) return;
+    rootOpen = open;
+    props.onOpenChange?.(open);
+  };
+
   const dragStyle = () => {
     const offset = dragOffset();
     return offset
@@ -174,22 +181,49 @@ export function DialRoot(props: DialRootProps) {
           data-position={inline() ? undefined : (dragOffset() ? undefined : activePosition())}
           data-origin-x={inline() ? undefined : getPanelOriginX(activePosition(), dragOffset())}
           data-mode={props.mode ?? 'popover'}
+          data-multiple={panels().length > 1 ? 'true' : undefined}
           style={dragStyle()}
           onPointerDown={!inline() ? handlePointerDown : undefined}
           onPointerMove={!inline() ? handlePointerMove : undefined}
           onPointerUp={!inline() ? handlePointerUp : undefined}
           onPointerCancel={!inline() ? handlePointerUp : undefined}
         >
-          <For each={panels()}>
-            {(panel) => (
-              <Panel
-                panel={panel}
+          <Show
+            when={panels().length > 1}
+            fallback={
+              <For each={panels()}>
+                {(panel) => (
+                  <Panel
+                    panel={panel}
+                    defaultOpen={inline() || (props.defaultOpen ?? true)}
+                    inline={inline()}
+                    onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                  />
+                )}
+              </For>
+            }
+          >
+            <div class="dialkit-panel-wrapper">
+              <Folder
+                title="DialKit"
                 defaultOpen={inline() || (props.defaultOpen ?? true)}
+                isRoot={true}
                 inline={inline()}
-                onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
-              />
-            )}
-          </For>
+                onOpenChange={handleRootOpenChange}
+                panelHeightOffset={2}
+              >
+                <For each={panels()}>
+                  {(panel) => (
+                    <Panel
+                      panel={panel}
+                      defaultOpen={true}
+                      variant="section"
+                    />
+                  )}
+                </For>
+              </Folder>
+            </div>
+          </Show>
         </div>
       </div>
     </ShortcutListener>

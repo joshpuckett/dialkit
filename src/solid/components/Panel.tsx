@@ -19,6 +19,7 @@ interface PanelProps {
   defaultOpen?: boolean;
   inline?: boolean;
   onOpenChange?: (open: boolean) => void;
+  variant?: 'root' | 'section';
 }
 
 export function Panel(props: PanelProps) {
@@ -309,6 +310,17 @@ export function Panel(props: PanelProps) {
 
     </>
   );
+
+  if (props.variant === 'section') {
+    return (
+      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} onOpenChange={handleOpenChange}>
+        <div class="dialkit-panel-section-toolbar" onClick={(e) => e.stopPropagation()}>
+          {toolbar}
+        </div>
+        {renderControls()}
+      </Folder>
+    );
+  }
 
   return (
     <div class="dialkit-panel-wrapper">

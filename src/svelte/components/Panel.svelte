@@ -8,11 +8,12 @@
   import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
-  let { panel, defaultOpen = true, inline = false, onOpenChange } = $props<{
+  let { panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root' } = $props<{
     panel: PanelConfig;
     defaultOpen?: boolean;
     inline?: boolean;
     onOpenChange?: (open: boolean) => void;
+    variant?: 'root' | 'section';
   }>();
 
   const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
@@ -84,76 +85,92 @@
   };
 </script>
 
-<div class="dialkit-panel-wrapper">
-  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
-    {#snippet toolbar()}
-      <button
-        class="dialkit-toolbar-add"
-        onclick={handleAddPreset}
-        onpointerdown={() => addScale.set(0.9)}
-        onpointerup={() => addScale.set(1)}
-        onpointercancel={() => addScale.set(1)}
-        onpointerleave={() => addScale.set(1)}
-        title="Add preset"
-        style:transform={`scale(${addScale.current})`}
+{#snippet panelToolbar()}
+  <button
+    class="dialkit-toolbar-add"
+    onclick={handleAddPreset}
+    onpointerdown={() => addScale.set(0.9)}
+    onpointerup={() => addScale.set(1)}
+    onpointercancel={() => addScale.set(1)}
+    onpointerleave={() => addScale.set(1)}
+    title="Add preset"
+    style:transform={`scale(${addScale.current})`}
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d={ICON_ADD_PRESET[0]} />
+      <path d={ICON_ADD_PRESET[1]} />
+      <path d={ICON_ADD_PRESET[2]} />
+      <path d={ICON_ADD_PRESET[3]} />
+      <path d={ICON_ADD_PRESET[4]} />
+    </svg>
+  </button>
+
+  <PresetManager panelId={panel.id} {presets} {activePresetId} />
+
+  <button
+    class="dialkit-toolbar-copy"
+    onclick={handleCopy}
+    onpointerdown={() => copyScale.set(0.95)}
+    onpointerup={() => copyScale.set(1)}
+    onpointercancel={() => copyScale.set(1)}
+    onpointerleave={() => copyScale.set(1)}
+    title="Copy parameters"
+    style:transform={`scale(${copyScale.current})`}
+  >
+    <span class="dialkit-toolbar-copy-icon-wrap">
+      <svg
+        class="dialkit-toolbar-copy-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        style:opacity={clipboardOpacity.current}
+        style:transform={`scale(${clipboardScale.current})`}
+        style:filter={`blur(${(1 - clipboardOpacity.current) * 4}px)`}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d={ICON_ADD_PRESET[0]} />
-          <path d={ICON_ADD_PRESET[1]} />
-          <path d={ICON_ADD_PRESET[2]} />
-          <path d={ICON_ADD_PRESET[3]} />
-          <path d={ICON_ADD_PRESET[4]} />
-        </svg>
-      </button>
+        <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d={ICON_CLIPBOARD.sparkle} fill="currentColor"/>
+        <path d={ICON_CLIPBOARD.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
 
-      <PresetManager panelId={panel.id} {presets} {activePresetId} />
-
-      <button
-        class="dialkit-toolbar-copy"
-        onclick={handleCopy}
-        onpointerdown={() => copyScale.set(0.95)}
-        onpointerup={() => copyScale.set(1)}
-        onpointercancel={() => copyScale.set(1)}
-        onpointerleave={() => copyScale.set(1)}
-        title="Copy parameters"
-        style:transform={`scale(${copyScale.current})`}
+      <svg
+        class="dialkit-toolbar-copy-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        style:opacity={checkOpacity.current}
+        style:transform={`scale(${checkScale.current})`}
+        style:filter={`blur(${(1 - checkOpacity.current) * 4}px)`}
       >
-        <span class="dialkit-toolbar-copy-icon-wrap">
-          <svg
-            class="dialkit-toolbar-copy-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            style:opacity={clipboardOpacity.current}
-            style:transform={`scale(${clipboardScale.current})`}
-            style:filter={`blur(${(1 - clipboardOpacity.current) * 4}px)`}
-          >
-            <path d={ICON_CLIPBOARD.board} stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d={ICON_CLIPBOARD.sparkle} fill="currentColor"/>
-            <path d={ICON_CLIPBOARD.body} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+        <path d={ICON_CHECK} />
+      </svg>
+    </span>
+    Copy
+  </button>
+{/snippet}
 
-          <svg
-            class="dialkit-toolbar-copy-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style:opacity={checkOpacity.current}
-            style:transform={`scale(${checkScale.current})`}
-            style:filter={`blur(${(1 - checkOpacity.current) * 4}px)`}
-          >
-            <path d={ICON_CHECK} />
-          </svg>
-        </span>
-        Copy
-      </button>
+{#snippet panelControls()}
+  {#each panel.controls as control (control.path)}
+    <ControlRenderer panelId={panel.id} {control} {values} />
+  {/each}
+{/snippet}
 
-    {/snippet}
-
-    {#each panel.controls as control (control.path)}
-      <ControlRenderer panelId={panel.id} {control} {values} />
-    {/each}
+{#if variant === 'section'}
+  <Folder title={panel.name} {defaultOpen} onOpenChange={handleOpenChange}>
+    <div class="dialkit-panel-section-toolbar" onclick={(e) => e.stopPropagation()}>
+      {@render panelToolbar()}
+    </div>
+    {@render panelControls()}
   </Folder>
-</div>
+{:else}
+  <div class="dialkit-panel-wrapper">
+    <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
+      {#snippet toolbar()}
+        {@render panelToolbar()}
+      {/snippet}
+
+      {@render panelControls()}
+    </Folder>
+  </div>
+{/if}

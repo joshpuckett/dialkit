@@ -61,6 +61,14 @@ export function PhotoStack() {
     },
   });
 
+  const stage = useDialKit('Stage', {
+    pagePadding: [40, 16, 96],
+    stackGap: [24, 8, 72],
+    titleInset: [8, 0, 48],
+    lightBackground: { type: 'color' as const, default: '#ffffff' },
+    darkBackground: { type: 'color' as const, default: '#0d0d0d' },
+  });
+
   const visibleCount = 2;
   const visiblePhotos = [];
   for (let i = 0; i < visibleCount; i++) {
@@ -76,7 +84,7 @@ export function PhotoStack() {
   };
   const shape = shapeSizes[params.photoShape as keyof typeof shapeSizes] ?? shapeSizes.portrait;
 
-  const bgColor = params.darkMode ? '#0d0d0d' : '#ffffff';
+  const bgColor = params.darkMode ? stage.darkBackground : stage.lightBackground;
   const textColor = params.darkMode ? '#ffffff' : '#1a1a1a';
   const subtextColor = params.darkMode ? '#666' : '#888';
 
@@ -94,14 +102,14 @@ export function PhotoStack() {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-start',
-      gap: 24,
+      gap: stage.stackGap,
       height: '100vh',
       width: '100%',
-      padding: 40,
+      padding: stage.pagePadding,
       background: bgColor,
       transition: 'background 0.3s ease',
     }}>
-      <div style={{ paddingLeft: 8 }}>
+      <div style={{ paddingLeft: stage.titleInset }}>
         <h1 style={{
           fontSize: 48,
           fontWeight: 600,

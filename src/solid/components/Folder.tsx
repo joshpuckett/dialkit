@@ -10,6 +10,7 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: JSX.Element;
+  panelHeightOffset?: number;
 }
 
 export function Folder(props: FolderProps) {
@@ -128,6 +129,7 @@ export function Folder(props: FolderProps) {
     <div
       ref={(el) => { if (props.isRoot) contentRef = el; }}
       class={`dialkit-folder ${props.isRoot ? 'dialkit-folder-root' : ''}`}
+      data-open={String(isOpen())}
     >
       <div
         class={`dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`}
@@ -243,7 +245,7 @@ export function Folder(props: FolderProps) {
 
       const open = isOpen();
       const measuredOpenHeight = contentHeight() !== undefined
-        ? Math.min(contentHeight()! + 10, windowHeight() - 32)
+        ? Math.min(contentHeight()! + (props.panelHeightOffset ?? 10), windowHeight() - 32)
         : panelRef.getBoundingClientRect().height;
 
       const target = {

@@ -12,6 +12,7 @@
     inline = false,
     onOpenChange,
     toolbar,
+    panelHeightOffset = 10,
     children,
   } = $props<{
     title: string;
@@ -20,6 +21,7 @@
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
     toolbar?: Snippet;
+    panelHeightOffset?: number;
     children?: Snippet;
   }>();
 
@@ -74,7 +76,7 @@
     if (!isRoot) return;
 
     const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
-    const nextHeight = isOpen ? Math.min(measured + 10, windowHeight - 32) : 42;
+    const nextHeight = isOpen ? Math.min(measured + panelHeightOffset, windowHeight - 32) : 42;
 
     panelWidth.set(isOpen ? 280 : 42);
     panelHeight.set(nextHeight);
@@ -110,7 +112,7 @@
 
 {#if isRoot && inline}
   <div class="dialkit-panel-inner dialkit-panel-inline">
-    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
+    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root" data-open={String(isOpen)}>
       <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
         <div class="dialkit-folder-header-top">
           <div class="dialkit-folder-title-row">
@@ -118,9 +120,11 @@
           </div>
         </div>
 
-        <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
-          {#if toolbar}{@render toolbar()}{/if}
-        </div>
+        {#if toolbar}
+          <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
+            {@render toolbar()}
+          </div>
+        {/if}
       </div>
 
       <div class="dialkit-folder-content">
@@ -142,7 +146,7 @@
     onpointerleave={handleCollapsedTapEnd}
     onclick={() => { if (!isOpen) handleToggle(); }}
   >
-    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root">
+    <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root" data-open={String(isOpen)}>
       <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
         <div class="dialkit-folder-header-top">
           {#if isOpen}
@@ -163,9 +167,9 @@
           </svg>
         </div>
 
-        {#if isOpen}
+        {#if isOpen && toolbar}
           <div class="dialkit-panel-toolbar" onclick={(e) => e.stopPropagation()}>
-            {#if toolbar}{@render toolbar()}{/if}
+            {@render toolbar()}
           </div>
         {/if}
       </div>
@@ -180,7 +184,7 @@
     </div>
   </div>
 {:else}
-  <div class="dialkit-folder">
+  <div class="dialkit-folder" data-open={String(isOpen)}>
     <div class="dialkit-folder-header" onclick={handleToggle}>
       <div class="dialkit-folder-header-top">
         <div class="dialkit-folder-title-row">

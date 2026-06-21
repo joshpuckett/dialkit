@@ -10,9 +10,10 @@ interface FolderProps {
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: ReactNode;
+  panelHeightOffset?: number;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, panelHeightOffset = 10 }: FolderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -53,7 +54,11 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
   };
 
   const folderContent = (
-    <div ref={isRoot ? contentRef : undefined} className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}>
+    <div
+      ref={isRoot ? contentRef : undefined}
+      className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}
+      data-open={String(isOpen)}
+    >
       <div className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`} onClick={handleToggle}>
         <div className="dialkit-folder-header-top">
           {isRoot ? (
@@ -135,7 +140,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
     }
 
     const panelStyle = isOpen
-      ? { width: 280, height: contentHeight !== undefined ? Math.min(contentHeight + 10, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--dial-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
+      ? { width: 280, height: contentHeight !== undefined ? Math.min(contentHeight + panelHeightOffset, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--dial-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
       : { width: 42, height: 42, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden' as const, cursor: 'pointer' as const };
 
     return (
