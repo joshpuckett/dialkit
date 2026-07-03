@@ -109,7 +109,13 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     dragStartRef.current = getPanelDragStart(e.clientX, e.clientY, panel);
     didDragRef.current = false;
     draggingRef.current = true;
-    handle.setPointerCapture(e.pointerId);
+    // The pointer may already be gone (fast release, synthetic events) — capture
+    // is best-effort and must not throw.
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      /* no active pointer to capture */
+    }
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -127,8 +133,12 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     dragStartRef.current = null;
     const dragTarget = dragTargetRef.current;
 
-    if (dragTarget?.hasPointerCapture(e.pointerId)) {
-      dragTarget.releasePointerCapture(e.pointerId);
+    try {
+      if (dragTarget?.hasPointerCapture(e.pointerId)) {
+        dragTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      /* pointer already released */
     }
 
     // If we actually dragged, prevent the click from opening the panel

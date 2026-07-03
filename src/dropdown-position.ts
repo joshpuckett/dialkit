@@ -1,35 +1,48 @@
-export type DropdownPosition = {
-  top: number;
-  left: number;
-  width: number;
-  above: boolean;
-};
+import { computePosition, autoUpdate, offset, flip, shift, size, type Placement } from '@floating-ui/dom';
 
-export type DropdownPositionOptions = {
-  dropdownHeight?: number;
+export type AttachDropdownOptions = {
+  placement?: Placement;
   gap?: number;
-  allowAbove?: boolean;
+  matchWidth?: boolean;
+  padding?: number;
+  onPlacement?: (placement: Placement) => void;
 };
 
-export function getDropdownPosition(
+/**
+ * Tether a floating element to a trigger using Floating UI. `autoUpdate` keeps
+ * it glued through scrolling ancestors, resize, and layout shifts, and
+ * flip/shift keep it on-screen. Returns a cleanup function to detach.
+ */
+export function attachDropdown(
   trigger: HTMLElement,
-  portalRoot: HTMLElement,
-  options: DropdownPositionOptions = {}
-): DropdownPosition {
-  const { dropdownHeight = 0, gap = 4, allowAbove = true } = options;
-  const triggerRect = trigger.getBoundingClientRect();
-  const rootRect = portalRoot.getBoundingClientRect();
-  const spaceBelow = window.innerHeight - triggerRect.bottom - gap;
-  const above = allowAbove && spaceBelow < dropdownHeight && triggerRect.top > spaceBelow;
+  floating: HTMLElement,
+  options: AttachDropdownOptions = {}
+): () => void {
+  const { placement = 'bottom-start', gap = 4, matchWidth = false, padding = 8, onPlacement } = options;
 
-  return {
-    top: above
-      ? triggerRect.top - rootRect.top - dropdownHeight - gap
-      : triggerRect.bottom - rootRect.top + gap,
-    left: triggerRect.left - rootRect.left,
-    width: triggerRect.width,
-    above,
+  const middleware = [offset(gap), flip({ padding }), shift({ padding })];
+  if (matchWidth) {
+    middleware.push(
+      size({
+        apply({ rects, elements }) {
+          elements.floating.style.minWidth = `${rects.reference.width}px`;
+        },
+      })
+    );
+  }
+
+  const update = () => {
+    computePosition(trigger, floating, { strategy: 'fixed', placement, middleware }).then(
+      ({ x, y, placement: resolved }) => {
+        floating.style.position = 'fixed';
+        floating.style.left = `${x}px`;
+        floating.style.top = `${y}px`;
+        onPlacement?.(resolved);
+      }
+    );
   };
+
+  return autoUpdate(trigger, floating, update);
 }
 
 export function getDialKitPortalRoot(trigger: HTMLElement | null | undefined): HTMLElement | null {

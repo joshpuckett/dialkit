@@ -39,6 +39,7 @@ export function Slider({
   const [isInteracting, setIsInteracting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [isValueHovered, setIsValueHovered] = useState(false);
   const [isValueEditable, setIsValueEditable] = useState(false);
   const [showInput, setShowInput] = useState(false);
@@ -53,7 +54,7 @@ export function Slider({
   const scaleRef = useRef(1);
 
   const percentage = ((value - min) / (max - min)) * 100;
-  const isActive = isInteracting || isHovered;
+  const isActive = isInteracting || isHovered || isFocused;
 
   // Motion values for imperative animation
   const fillPercent = useMotionValue(percentage);
@@ -299,6 +300,38 @@ export function Slider({
     handleInputSubmit();
   };
 
+  const handleTrackKeyDown = (e: React.KeyboardEvent) => {
+    let next: number | null = null;
+    const bigStep = step * 10;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        next = value + step;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        next = value - step;
+        break;
+      case 'PageUp':
+        next = value + bigStep;
+        break;
+      case 'PageDown':
+        next = value - bigStep;
+        break;
+      case 'Home':
+        next = min;
+        break;
+      case 'End':
+        next = max;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const clamped = Math.max(min, Math.min(max, next));
+    onChange(roundValue(clamped, step));
+  };
+
   const displayValue = value.toFixed(decimalsForStep(step));
 
   // Handle opacity: not active → 0, active → 0.5, dragging → 0.9
@@ -361,6 +394,16 @@ export function Slider({
         onPointerUp={handlePointerUp}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onKeyDown={handleTrackKeyDown}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        tabIndex={showInput ? -1 : 0}
+        role="slider"
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={unit ? `${displayValue}${unit}` : displayValue}
         style={{ width: rubberBandWidth, x: rubberBandX }}
       >
         <div className="dialkit-slider-hashmarks">{hashMarks}</div>

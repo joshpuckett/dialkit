@@ -11,6 +11,7 @@
     min = 0,
     max = 1,
     step = 0.01,
+    unit,
     shortcut,
     shortcutActive = false,
   } = $props<{
@@ -41,6 +42,7 @@
   let isInteracting = $state(false);
   let isDragging = $state(false);
   let isHovered = $state(false);
+  let isFocused = $state(false);
   let isValueHovered = $state(false);
   let isValueEditable = $state(false);
   let showInput = $state(false);
@@ -116,7 +118,7 @@
   });
 
   const percentage = $derived(((value - min) / (max - min)) * 100);
-  const isActive = $derived(isInteracting || isHovered);
+  const isActive = $derived(isInteracting || isHovered || isFocused);
 
   const leftThreshold = $derived.by(() => {
     const trackWidth = wrapperRef?.offsetWidth;
@@ -260,6 +262,38 @@
     inputValue = value.toFixed(decimalsForStep(step));
   };
 
+  const handleTrackKeyDown = (e: KeyboardEvent) => {
+    let next: number;
+    const bigStep = step * 10;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        next = value + step;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        next = value - step;
+        break;
+      case 'PageUp':
+        next = value + bigStep;
+        break;
+      case 'PageDown':
+        next = value - bigStep;
+        break;
+      case 'Home':
+        next = min;
+        break;
+      case 'End':
+        next = max;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const clamped = Math.max(min, Math.min(max, next));
+    onChange(roundValue(clamped, step));
+  };
+
   const displayValue = $derived(value.toFixed(decimalsForStep(step)));
 
   const trackStyle = $derived(`width:calc(100% + ${Math.abs(rubberStretchPx.current)}px);transform:translateX(${rubberStretchPx.current < 0 ? rubberStretchPx.current : 0}px);`);
@@ -277,6 +311,16 @@
     onpointercancel={handlePointerCancel}
     onmouseenter={() => (isHovered = true)}
     onmouseleave={() => (isHovered = false)}
+    onkeydown={handleTrackKeyDown}
+    onfocus={() => (isFocused = true)}
+    onblur={() => (isFocused = false)}
+    tabindex={showInput ? -1 : 0}
+    role="slider"
+    aria-label={label}
+    aria-valuemin={min}
+    aria-valuemax={max}
+    aria-valuenow={value}
+    aria-valuetext={unit ? `${displayValue}${unit}` : displayValue}
   >
     <div class="dialkit-slider-hashmarks">
       {#each hashMarks as mark (mark.key)}

@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, ShortcutConfig } from '../store/DialStore';
+import { useFloatingDropdown } from '../hooks/useFloatingDropdown';
 
 interface ShortcutsMenuProps {
   panelId: string;
@@ -28,15 +29,11 @@ function formatInteraction(sc: ShortcutConfig): string {
 
 export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const { triggerRef, floatingRef } = useFloatingDropdown<HTMLButtonElement, HTMLDivElement>(isOpen, {
+    placement: 'bottom-end',
+  });
 
   const open = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    }
     setIsOpen(true);
   }, []);
 
@@ -55,7 +52,7 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
       const target = e.target as Node;
       if (
         triggerRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
+        floatingRef.current?.contains(target)
       ) return;
       close();
     };
@@ -114,9 +111,9 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
         <AnimatePresence>
           {isOpen && (
             <motion.div
-              ref={dropdownRef}
+              ref={floatingRef}
               className="dialkit-root dialkit-shortcuts-dropdown"
-              style={{ position: 'fixed', top: pos.top, right: pos.right }}
+              style={{ position: 'fixed', top: 0, left: 0 }}
               initial={{ opacity: 0, y: 4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.97, pointerEvents: 'none' as any }}

@@ -122,5 +122,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/joshpuckett/dialkit"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.6"
   }
 }

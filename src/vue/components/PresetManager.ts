@@ -3,6 +3,9 @@ import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_TRASH } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { Preset } from '../../store/DialStore';
+import { useFloatingDropdown } from '../useFloatingDropdown';
+
+let uid = 0;
 
 export const PresetManager = defineComponent({
   name: 'DialKitPresetManager',
@@ -20,25 +23,59 @@ export const PresetManager = defineComponent({
   },
   setup(props) {
     const isOpen = ref(false);
-    const pos = ref({ top: 0, left: 0, width: 0 });
+    const activeIndex = ref(-1);
 
     const triggerRef = ref<HTMLElement | null>(null);
     const dropdownRef = ref<HTMLElement | null>(null);
 
+    const baseId = `dialkit-preset-${uid++}`;
+    const listboxId = `${baseId}-listbox`;
+    const optionId = (index: number) => `${baseId}-opt-${index}`;
+
     const hasPresets = () => props.presets.length > 0;
     const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
 
-    const open = () => {
-      if (!hasPresets()) return;
-      const rect = triggerRef.value?.getBoundingClientRect();
-      if (rect) {
-        pos.value = { top: rect.bottom + 4, left: rect.left, width: rect.width };
-      }
-      isOpen.value = true;
-    };
+    // Flat selectable list: the implicit "Version 1" plus each preset.
+    const items = (): { id: string | null; name: string }[] => [
+      { id: null, name: 'Version 1' },
+      ...props.presets.map((p) => ({ id: p.id, name: p.name })),
+    ];
+    const selectedIndex = () => Math.max(0, items().findIndex((it) => it.id === props.activePresetId));
+
+    useFloatingDropdown(isOpen, triggerRef, dropdownRef, {
+      placement: 'bottom-start',
+      matchWidth: true,
+    });
 
     const close = () => {
       isOpen.value = false;
+    };
+
+    const openMenu = (toIndex: number) => {
+      if (!hasPresets()) return;
+      activeIndex.value = toIndex;
+      isOpen.value = true;
+      // macOS Safari/Firefox don't focus a <button> on click — force it.
+      triggerRef.value?.focus();
+    };
+
+    const toggle = () => {
+      if (isOpen.value) close();
+      else openMenu(selectedIndex());
+    };
+
+    const handleSelect = (presetId: string | null) => {
+      if (presetId) {
+        DialStore.loadPreset(props.panelId, presetId);
+      } else {
+        DialStore.clearActivePreset(props.panelId);
+      }
+      close();
+    };
+
+    const handleDelete = (event: MouseEvent, presetId: string) => {
+      event.stopPropagation();
+      DialStore.deletePreset(props.panelId, presetId);
     };
 
     const setDropdownRef = (node: unknown) => {
@@ -56,11 +93,75 @@ export const PresetManager = defineComponent({
       dropdownRef.value = null;
     };
 
-    const toggle = () => {
-      if (isOpen.value) close();
-      else open();
+    // Keep the active item scrolled into view.
+    watch([isOpen, activeIndex], () => {
+      if (isOpen.value && activeIndex.value >= 0) {
+        document.getElementById(optionId(activeIndex.value))?.scrollIntoView({ block: 'nearest' });
+      }
+    }, { flush: 'post' });
+
+    const handleTriggerKeyDown = (e: KeyboardEvent) => {
+      const list = items();
+      if (!isOpen.value) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openMenu(selectedIndex());
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          openMenu(list.length - 1);
+        }
+        return;
+      }
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          activeIndex.value = (activeIndex.value + 1) % list.length;
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          activeIndex.value = (activeIndex.value - 1 + list.length) % list.length;
+          break;
+        case 'Home':
+          e.preventDefault();
+          activeIndex.value = 0;
+          break;
+        case 'End':
+          e.preventDefault();
+          activeIndex.value = list.length - 1;
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (activeIndex.value >= 0) handleSelect(list[activeIndex.value].id);
+          break;
+        case 'Delete':
+        case 'Backspace': {
+          const target = list[activeIndex.value];
+          if (target?.id) {
+            e.preventDefault();
+            DialStore.deletePreset(props.panelId, target.id);
+            activeIndex.value = Math.max(0, activeIndex.value - 1);
+          }
+          break;
+        }
+        case 'Escape':
+          e.preventDefault();
+          close();
+          break;
+        case 'Tab':
+          close();
+          break;
+      }
     };
 
+    // Close when focus leaves the trigger.
+    const handleTriggerBlur = (e: FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (dropdownRef.value?.contains(next)) return;
+      close();
+    };
+
+    // Close on mousedown outside trigger + dropdown.
     watch(isOpen, (open, _, onCleanup) => {
       if (!open) return;
 
@@ -76,28 +177,20 @@ export const PresetManager = defineComponent({
       });
     });
 
-    const handleSelect = (presetId: string | null) => {
-      if (presetId) {
-        DialStore.loadPreset(props.panelId, presetId);
-      } else {
-        DialStore.clearActivePreset(props.panelId);
-      }
-      close();
-    };
-
-    const handleDelete = (event: MouseEvent, presetId: string) => {
-      event.stopPropagation();
-      DialStore.deletePreset(props.panelId, presetId);
-    };
-
     return () => h('div', { class: 'dialkit-preset-manager' }, [
       h('button', {
         ref: triggerRef,
         class: 'dialkit-preset-trigger',
-        onClick: toggle,
         'data-open': String(isOpen.value),
         'data-has-preset': String(!!activePreset()),
         'data-disabled': String(!hasPresets()),
+        'aria-haspopup': 'listbox',
+        'aria-expanded': isOpen.value,
+        'aria-controls': isOpen.value ? listboxId : undefined,
+        'aria-activedescendant': isOpen.value && activeIndex.value >= 0 ? optionId(activeIndex.value) : undefined,
+        onClick: toggle,
+        onKeydown: handleTriggerKeyDown,
+        onBlur: handleTriggerBlur,
       }, [
         h('span', { class: 'dialkit-preset-label' }, activePreset()?.name ?? 'Version 1'),
         h(motion.svg, {
@@ -119,34 +212,33 @@ export const PresetManager = defineComponent({
             ? [h(motion.div, {
               key: 'dialkit-preset-dropdown',
               ref: setDropdownRef,
+              id: listboxId,
               class: 'dialkit-root dialkit-preset-dropdown',
-              style: {
-                position: 'fixed',
-                top: `${pos.value.top}px`,
-                left: `${pos.value.left}px`,
-                minWidth: `${pos.value.width}px`,
-              },
+              role: 'listbox',
+              style: { position: 'fixed', top: 0, left: 0 },
               initial: { opacity: 0, y: 4, scale: 0.97 },
               animate: { opacity: 1, y: 0, scale: 1 },
               exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: 'none' },
               transition: { type: 'spring', visualDuration: 0.15, bounce: 0 },
+            }, items().map((item, index) => h('div', {
+              key: item.id ?? '__none__',
+              id: optionId(index),
+              class: 'dialkit-preset-item',
+              role: 'option',
+              'aria-selected': index === selectedIndex(),
+              'data-active': String(index === activeIndex.value),
+              'data-selected': String(index === selectedIndex()),
+              onMousedown: (e: MouseEvent) => e.preventDefault(),
+              onMouseenter: () => { activeIndex.value = index; },
+              onClick: () => handleSelect(item.id),
             }, [
-              h('div', {
-                class: 'dialkit-preset-item',
-                'data-active': String(!props.activePresetId),
-                onClick: () => handleSelect(null),
-              }, [h('span', { class: 'dialkit-preset-name' }, 'Version 1')]),
-
-              ...props.presets.map((preset) => h('div', {
-                key: preset.id,
-                class: 'dialkit-preset-item',
-                'data-active': String(preset.id === props.activePresetId),
-                onClick: () => handleSelect(preset.id),
-              }, [
-                h('span', { class: 'dialkit-preset-name' }, preset.name),
-                h('button', {
+              h('span', { class: 'dialkit-preset-name' }, item.name),
+              item.id
+                ? h('button', {
                   class: 'dialkit-preset-delete',
-                  onClick: (event: MouseEvent) => handleDelete(event, preset.id),
+                  tabindex: -1,
+                  onMousedown: (e: MouseEvent) => e.preventDefault(),
+                  onClick: (event: MouseEvent) => handleDelete(event, item.id as string),
                   title: 'Delete preset',
                 }, [
                   h('svg', {
@@ -157,9 +249,9 @@ export const PresetManager = defineComponent({
                     'stroke-linecap': 'round',
                     'stroke-linejoin': 'round',
                   }, ICON_TRASH.map((d) => h('path', { d }))),
-                ]),
-              ])),
-            ])]
+                ])
+                : null,
+            ])))]
             : [],
         }),
       ]),

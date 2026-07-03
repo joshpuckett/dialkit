@@ -16,6 +16,9 @@
   --dial-text-label: rgba(255, 255, 255, 0.7);   /* Input labels */
   --dial-text-focus: #ffffff;
 
+  /* Keyboard focus indicator */
+  --dial-focus-ring: #5b9dff;
+
   /* Legacy aliases */
   --dial-text-primary: rgba(255, 255, 255, 0.95);
   --dial-text-secondary: rgba(255, 255, 255, 0.6);
@@ -39,6 +42,61 @@
   font-family: system-ui, -apple-system, 'SF Pro Display', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Keyboard focus indicators ──
+   A single visible ring for any keyboard-focused interactive element.
+   Uses :focus-visible so it never shows on mouse/touch interaction. */
+.dialkit-root :focus-visible {
+  /* Inset ring: the panel scrolls (overflow clips both axes), so an outward
+     offset ring gets cut off near the edges. Drawing it inside the element's
+     box keeps the full ring visible on every control. */
+  outline: 2px solid var(--dial-focus-ring);
+  /* Inset by only 1px so the ring hugs the element's edge (rather than biting
+     into the text) while staying inside the panel's scroll clip. */
+  outline-offset: -1px;
+  /* No border-radius override: the outline natively follows the element's own
+     corner radius, so the ring matches rounded and square controls alike. */
+}
+
+/* Inline transparent inputs sit flush inside a row and fill its width — a box
+   ring hugs the text and reads heavy. Show focus as an accent underline
+   instead (box-shadow avoids any layout shift). */
+.dialkit-root .dialkit-color-hex-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1.5px 0 var(--dial-focus-ring);
+  color: var(--dial-text-focus);
+}
+
+.dialkit-root .dialkit-slider-input:focus-visible {
+  outline: none;
+  border-bottom-color: var(--dial-focus-ring);
+  color: var(--dial-text-focus);
+}
+
+/* The text control's input spans the whole row, so ring the row itself
+   (like the select trigger) rather than the text. */
+.dialkit-root .dialkit-text-input:focus-visible {
+  outline: none;
+}
+
+.dialkit-root .dialkit-text-control:focus-within {
+  outline: 2px solid var(--dial-focus-ring);
+  outline-offset: -1px;
+  border-radius: var(--dial-radius);
+}
+
+/* The preset name field is a real bordered box — thicken its border to the
+   accent instead of an inset ring so text keeps its padding. */
+.dialkit-root .dialkit-preset-input:focus-visible {
+  outline: none;
+  border-color: var(--dial-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--dial-focus-ring);
+}
+
+/* Remove the ring only for pointer focus; keep it for keyboard. */
+.dialkit-root :focus:not(:focus-visible) {
+  outline: none;
 }
 
 .dialkit-panel {
@@ -921,7 +979,8 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.dialkit-select-option:hover {
+.dialkit-select-option:hover,
+.dialkit-select-option[data-active="true"] {
   background: var(--dial-surface-hover);
 }
 
@@ -1345,6 +1404,7 @@
   --dial-text-section: rgba(0, 0, 0, 0.65);
   --dial-text-label: rgba(0, 0, 0, 0.6);
   --dial-text-focus: #000000;
+  --dial-focus-ring: #0a6cff;
 
   --dial-text-primary: rgba(0, 0, 0, 0.9);
   --dial-text-secondary: rgba(0, 0, 0, 0.55);
@@ -1390,6 +1450,7 @@
     --dial-text-section: rgba(0, 0, 0, 0.65);
     --dial-text-label: rgba(0, 0, 0, 0.6);
     --dial-text-focus: #000000;
+    --dial-focus-ring: #0a6cff;
 
     --dial-text-primary: rgba(0, 0, 0, 0.9);
     --dial-text-secondary: rgba(0, 0, 0, 0.55);

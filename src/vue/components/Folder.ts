@@ -45,6 +45,13 @@ export const Folder = defineComponent({
       emit('openChange', next);
     };
 
+    const handleToggleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handleToggle();
+      }
+    };
+
     let ro: ResizeObserver | null = null;
 
     onMounted(() => {
@@ -72,9 +79,18 @@ export const Folder = defineComponent({
       ro?.disconnect();
     });
 
-    const renderHeader = () => h('div', {
+    const renderHeader = () => {
+      // The header toggles the folder. For a root panel it's only interactive
+      // while open (collapsing it); the collapsed circle handles re-opening.
+      const headerInteractive = props.isRoot ? isOpen.value && !props.inline : true;
+      return h('div', {
       class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`,
       onClick: handleToggle,
+      role: headerInteractive ? 'button' : undefined,
+      tabindex: headerInteractive ? 0 : undefined,
+      'aria-expanded': headerInteractive ? isOpen.value : undefined,
+      'aria-label': headerInteractive ? props.title : undefined,
+      onKeydown: headerInteractive ? handleToggleKeyDown : undefined,
     }, [
       h('div', { class: 'dialkit-folder-header-top' }, [
         props.isRoot
@@ -115,6 +131,7 @@ export const Folder = defineComponent({
         ? h('div', { class: 'dialkit-panel-toolbar', onClick: (event: Event) => event.stopPropagation() }, [props.toolbar()])
         : null,
     ]);
+    };
 
     const renderChildren = () => h('div', { class: 'dialkit-folder-inner' }, slots.default ? slots.default() : []);
 
@@ -177,6 +194,11 @@ export const Folder = defineComponent({
           class: 'dialkit-panel-inner',
           style: panelStyle,
           onClick: !isOpen.value ? handleToggle : undefined,
+          role: !isOpen.value ? 'button' : undefined,
+          tabindex: !isOpen.value ? 0 : undefined,
+          'aria-expanded': !isOpen.value ? false : undefined,
+          'aria-label': !isOpen.value ? props.title : undefined,
+          onKeydown: !isOpen.value ? handleToggleKeyDown : undefined,
           'data-collapsed': String(isCollapsed.value),
           whilePress: !isOpen.value ? { scale: 0.9 } : undefined,
           transition: { type: 'spring', visualDuration: 0.15, bounce: 0.3 },
