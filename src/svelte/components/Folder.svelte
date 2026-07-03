@@ -97,6 +97,17 @@
     onOpenChange?.(next);
   };
 
+  const handleToggleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleToggle();
+    }
+  };
+
+  // The header toggles the folder. For a root panel it's only interactive
+  // while open (collapsing it); the collapsed circle handles re-opening.
+  const headerInteractive = $derived(isRoot ? isOpen && !inline : true);
+
   const handleCollapsedTapStart = () => {
     if (isOpen) return;
     (document.activeElement as HTMLElement | null)?.blur?.();
@@ -152,9 +163,22 @@
     onpointercancel={handleCollapsedTapEnd}
     onpointerleave={handleCollapsedTapEnd}
     onclick={() => { if (!isOpen) handleToggle(); }}
+    role={!isOpen ? 'button' : undefined}
+    tabindex={!isOpen ? 0 : undefined}
+    aria-expanded={!isOpen ? false : undefined}
+    aria-label={!isOpen ? title : undefined}
+    onkeydown={!isOpen ? handleToggleKeyDown : undefined}
   >
     <div bind:this={contentRef} class="dialkit-folder dialkit-folder-root" data-open={String(isOpen)}>
-      <div class="dialkit-folder-header dialkit-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
+      <div
+        class="dialkit-folder-header dialkit-panel-header"
+        onclick={(e) => { e.stopPropagation(); handleToggle(); }}
+        role={headerInteractive ? 'button' : undefined}
+        tabindex={headerInteractive ? 0 : undefined}
+        aria-expanded={headerInteractive ? isOpen : undefined}
+        aria-label={headerInteractive ? title : undefined}
+        onkeydown={headerInteractive ? handleToggleKeyDown : undefined}
+      >
         <div class="dialkit-folder-header-top">
           {#if isOpen}
             <div class="dialkit-folder-title-row">
@@ -192,7 +216,15 @@
   </div>
 {:else}
   <div class="dialkit-folder" data-open={String(isOpen)}>
-    <div class="dialkit-folder-header" onclick={handleToggle}>
+    <div
+      class="dialkit-folder-header"
+      onclick={handleToggle}
+      role="button"
+      tabindex={0}
+      aria-expanded={isOpen}
+      aria-label={title}
+      onkeydown={handleToggleKeyDown}
+    >
       <div class="dialkit-folder-header-top">
         <div class="dialkit-folder-title-row">
           <span class="dialkit-folder-title">{title}</span>

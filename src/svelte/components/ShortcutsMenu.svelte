@@ -2,13 +2,13 @@
   import { DialStore } from 'dialkit/store';
   import type { ShortcutConfig } from 'dialkit/store';
   import Portal from '../Portal.svelte';
+  import { attachDropdown } from '../../dropdown-position';
 
   let { panelId } = $props<{ panelId: string }>();
 
   let isOpen = $state(false);
-  let triggerEl: HTMLButtonElement | undefined;
-  let dropdownEl: HTMLDivElement | undefined;
-  let pos = $state({ top: 0, right: 0 });
+  let triggerEl = $state<HTMLButtonElement | undefined>(undefined);
+  let dropdownEl = $state<HTMLDivElement | undefined>(undefined);
 
   function formatShortcutKey(sc: ShortcutConfig): string {
     if (!sc.key) return '\u2014';
@@ -30,10 +30,6 @@
   }
 
   function open() {
-    const rect = triggerEl?.getBoundingClientRect();
-    if (rect) {
-      pos = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
-    }
     isOpen = true;
   }
 
@@ -45,6 +41,12 @@
     if (isOpen) close();
     else open();
   }
+
+  // Tether the floating dropdown to the trigger via Floating UI while open.
+  $effect(() => {
+    if (!isOpen || !triggerEl || !dropdownEl) return;
+    return attachDropdown(triggerEl, dropdownEl, { placement: 'bottom-end' });
+  });
 
   // Close on mousedown outside
   $effect(() => {
@@ -105,9 +107,7 @@
       <div
         bind:this={dropdownEl}
         class="dialkit-root dialkit-shortcuts-dropdown"
-        style:position="fixed"
-        style:top="{pos.top}px"
-        style:right="{pos.right}px"
+        style="position:fixed;top:0;left:0;"
       >
         <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
         <div class="dialkit-shortcuts-list">

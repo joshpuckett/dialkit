@@ -41,6 +41,7 @@ export function Slider(props: SliderProps) {
   const [isInteracting, setIsInteracting] = createSignal(false);
   const [isDragging, setIsDragging] = createSignal(false);
   const [isHovered, setIsHovered] = createSignal(false);
+  const [isFocused, setIsFocused] = createSignal(false);
   const [isValueHovered, setIsValueHovered] = createSignal(false);
   const [isValueEditable, setIsValueEditable] = createSignal(false);
   const [showInput, setShowInput] = createSignal(false);
@@ -77,7 +78,7 @@ export function Slider(props: SliderProps) {
   });
 
   const percentage = () => ((props.value - min()) / (max() - min())) * 100;
-  const isActive = () => isInteracting() || isHovered();
+  const isActive = () => isInteracting() || isHovered() || isFocused();
 
   let pointerDownPos: { x: number; y: number } | null = null;
   let isClickFlag = true;
@@ -292,6 +293,38 @@ export function Slider(props: SliderProps) {
     }
   };
 
+  const handleTrackKeyDown = (e: KeyboardEvent) => {
+    let next: number | null = null;
+    const bigStep = step() * 10;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        next = props.value + step();
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        next = props.value - step();
+        break;
+      case 'PageUp':
+        next = props.value + bigStep;
+        break;
+      case 'PageDown':
+        next = props.value - bigStep;
+        break;
+      case 'Home':
+        next = min();
+        break;
+      case 'End':
+        next = max();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const clamped = Math.max(min(), Math.min(max(), next));
+    props.onChange(roundValue(clamped, step()));
+  };
+
   const displayValue = () => props.value.toFixed(decimalsForStep(step()));
 
   // Value dodge: fade handle when it overlaps label or value text
@@ -373,6 +406,16 @@ export function Slider(props: SliderProps) {
         onPointerCancel={handlePointerCancel}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onKeyDown={handleTrackKeyDown}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        tabindex={showInput() ? -1 : 0}
+        role="slider"
+        aria-label={props.label}
+        aria-valuemin={min()}
+        aria-valuemax={max()}
+        aria-valuenow={props.value}
+        aria-valuetext={props.unit ? `${displayValue()}${props.unit}` : displayValue()}
       >
         <div class="dialkit-slider-hashmarks">{hashMarks()}</div>
 

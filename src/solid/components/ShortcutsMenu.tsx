@@ -1,6 +1,7 @@
-import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { animate } from 'motion';
+import { useFloatingDropdown } from '../floating';
 import { DialStore, ShortcutConfig } from '../../store/DialStore';
 
 interface ShortcutsMenuProps {
@@ -28,7 +29,6 @@ function formatInteraction(sc: ShortcutConfig): string {
 
 export function ShortcutsMenu(props: ShortcutsMenuProps) {
   const [isOpen, setIsOpen] = createSignal(false);
-  const [pos, setPos] = createSignal({ top: 0, right: 0 });
 
   let triggerRef!: HTMLButtonElement;
   let dropdownRef: HTMLDivElement | undefined;
@@ -42,15 +42,17 @@ export function ShortcutsMenu(props: ShortcutsMenuProps) {
 
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
 
-  const open = () => {
-    const rect = triggerRef?.getBoundingClientRect();
-    if (rect) {
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    }
-    setIsOpen(true);
-  };
+  const open = () => setIsOpen(true);
 
   const close = () => setIsOpen(false);
+
+  // Floating UI positioning while open.
+  useFloatingDropdown(
+    isOpen,
+    () => triggerRef,
+    () => dropdownRef,
+    { placement: 'bottom-end' }
+  );
 
   const toggle = () => {
     if (isOpen()) close();
@@ -172,11 +174,7 @@ export function ShortcutsMenu(props: ShortcutsMenuProps) {
             el.style.pointerEvents = 'none';
           }}
           class="dialkit-root dialkit-shortcuts-dropdown"
-          style={{
-            position: 'fixed',
-            top: `${pos().top}px`,
-            right: `${pos().right}px`,
-          }}
+          style={{ position: 'fixed', top: '0', left: '0' }}
         >
           <div class="dialkit-shortcuts-title">Keyboard Shortcuts</div>
           <div class="dialkit-shortcuts-list">

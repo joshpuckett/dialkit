@@ -1,8 +1,11 @@
 import { Teleport, defineComponent, h, onMounted, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
+import { getDialKitPortalRoot } from '../../dropdown-position';
+import { useFloatingDropdown } from '../useFloatingDropdown';
 
 type SelectOption = string | { value: string; label: string };
+
+let uid = 0;
 
 function toTitleCase(value: string): string {
   return value.replace(/\b\w/g, (char) => char.toUpperCase());
@@ -27,28 +30,52 @@ export const SelectControl = defineComponent({
   emits: ['change'],
   setup(props, { emit }) {
     const isOpen = ref(false);
-    const pos = ref<{ top: number; left: number; width: number; above: boolean } | null>(null);
+    const activeIndex = ref(-1);
     const portalTarget = ref<HTMLElement | null>(null);
 
     const triggerRef = ref<HTMLElement | null>(null);
     const dropdownRef = ref<HTMLElement | null>(null);
 
+    const baseId = `dialkit-select-${uid++}`;
+    const listboxId = `${baseId}-listbox`;
+    const optionId = (index: number) => `${baseId}-opt-${index}`;
+
     const normalizedOptions = () => normalizeOptions(props.options);
+    const selectedIndex = () => normalizedOptions().findIndex((option) => option.value === props.value);
     const selectedLabel = () => normalizedOptions().find((option) => option.value === props.value)?.label ?? props.value;
 
-    const updatePos = () => {
-      if (!triggerRef.value || !portalTarget.value) return;
-      const dropdownHeight = 8 + normalizedOptions().length * 36;
-      pos.value = getDropdownPosition(triggerRef.value, portalTarget.value, { dropdownHeight });
-    };
+    useFloatingDropdown(isOpen, triggerRef, dropdownRef, {
+      placement: 'bottom-start',
+      matchWidth: true,
+    });
 
-    const openDropdown = () => {
-      updatePos();
+    // Focus never leaves the trigger — the active option is tracked with
+    // aria-activedescendant. Keep the active option scrolled into view.
+    watch([isOpen, activeIndex], () => {
+      if (isOpen.value && activeIndex.value >= 0) {
+        document.getElementById(optionId(activeIndex.value))?.scrollIntoView({ block: 'nearest' });
+      }
+    }, { flush: 'post' });
+
+    const openMenu = (toIndex: number) => {
+      activeIndex.value = toIndex;
       isOpen.value = true;
+      // macOS Safari/Firefox don't focus a <button> on click, so force it.
+      triggerRef.value?.focus();
     };
 
     const closeDropdown = () => {
       isOpen.value = false;
+    };
+
+    const commit = (index: number) => {
+      emit('change', normalizedOptions()[index].value);
+      isOpen.value = false;
+    };
+
+    const toggleDropdown = () => {
+      if (isOpen.value) closeDropdown();
+      else openMenu(selectedIndex() >= 0 ? selectedIndex() : 0);
     };
 
     const setDropdownRef = (node: unknown) => {
@@ -66,30 +93,70 @@ export const SelectControl = defineComponent({
       dropdownRef.value = null;
     };
 
-    const toggleDropdown = () => {
-      if (isOpen.value) closeDropdown();
-      else openDropdown();
+    const handleTriggerKeyDown = (e: KeyboardEvent) => {
+      const len = normalizedOptions().length;
+      if (!isOpen.value) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openMenu(selectedIndex() >= 0 ? selectedIndex() : 0);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          openMenu(selectedIndex() >= 0 ? selectedIndex() : len - 1);
+        }
+        return;
+      }
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          activeIndex.value = (activeIndex.value + 1) % len;
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          activeIndex.value = (activeIndex.value - 1 + len) % len;
+          break;
+        case 'Home':
+          e.preventDefault();
+          activeIndex.value = 0;
+          break;
+        case 'End':
+          e.preventDefault();
+          activeIndex.value = len - 1;
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (activeIndex.value >= 0) commit(activeIndex.value);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          isOpen.value = false;
+          break;
+        case 'Tab':
+          isOpen.value = false;
+          break;
+      }
     };
 
+    // Close when focus leaves the trigger.
+    const handleTriggerBlur = (e: FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (dropdownRef.value?.contains(next)) return;
+      isOpen.value = false;
+    };
+
+    // Close on click outside (covers non-focusable areas).
     watch(isOpen, (open, _, onCleanup) => {
       if (!open) return;
 
-      const handleViewportChange = () => updatePos();
       const handleDocumentClick = (event: MouseEvent) => {
         const target = event.target as Node;
         if (triggerRef.value?.contains(target) || dropdownRef.value?.contains(target)) return;
         closeDropdown();
       };
 
-      updatePos();
       document.addEventListener('mousedown', handleDocumentClick);
-      window.addEventListener('resize', handleViewportChange);
-      window.addEventListener('scroll', handleViewportChange, true);
-
       onCleanup(() => {
         document.removeEventListener('mousedown', handleDocumentClick);
-        window.removeEventListener('resize', handleViewportChange);
-        window.removeEventListener('scroll', handleViewportChange, true);
       });
     });
 
@@ -102,7 +169,13 @@ export const SelectControl = defineComponent({
         ref: triggerRef,
         class: 'dialkit-select-trigger',
         'data-open': String(isOpen.value),
+        'aria-haspopup': 'listbox',
+        'aria-expanded': isOpen.value,
+        'aria-controls': isOpen.value ? listboxId : undefined,
+        'aria-activedescendant': isOpen.value && activeIndex.value >= 0 ? optionId(activeIndex.value) : undefined,
         onClick: toggleDropdown,
+        onKeydown: handleTriggerKeyDown,
+        onBlur: handleTriggerBlur,
       }, [
         h('span', { class: 'dialkit-select-label' }, props.label),
         h('div', { class: 'dialkit-select-right' }, [
@@ -123,30 +196,31 @@ export const SelectControl = defineComponent({
       portalTarget.value
         ? h(Teleport, { to: portalTarget.value }, [
           h(AnimatePresence, null, {
-            default: () => (isOpen.value && pos.value)
+            default: () => isOpen.value
               ? [h(motion.div, {
                 key: 'dialkit-select-dropdown',
                 ref: setDropdownRef,
+                id: listboxId,
                 class: 'dialkit-select-dropdown',
-                initial: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
-                animate: { opacity: 1, y: 0, scale: 1 },
-                exit: { opacity: 0, y: pos.value.above ? 8 : -8, scale: 0.95 },
+                role: 'listbox',
+                initial: { opacity: 0, scale: 0.95 },
+                animate: { opacity: 1, scale: 1 },
+                exit: { opacity: 0, scale: 0.95 },
                 transition: { type: 'spring', visualDuration: 0.15, bounce: 0 },
-                style: {
-                  position: 'absolute',
-                  left: `${pos.value.left}px`,
-                  top: `${pos.value.top}px`,
-                  width: `${pos.value.width}px`,
-                  transformOrigin: pos.value.above ? 'bottom' : 'top',
-                },
-              }, normalizedOptions().map((option) => h('button', {
+                style: { position: 'fixed', top: 0, left: 0 },
+              }, normalizedOptions().map((option, index) => h('button', {
                 key: option.value,
+                id: optionId(index),
+                type: 'button',
                 class: 'dialkit-select-option',
+                role: 'option',
+                'aria-selected': option.value === props.value,
+                tabindex: -1,
                 'data-selected': String(option.value === props.value),
-                onClick: () => {
-                  emit('change', option.value);
-                  closeDropdown();
-                },
+                'data-active': String(index === activeIndex.value),
+                onMousedown: (e: MouseEvent) => e.preventDefault(),
+                onClick: () => commit(index),
+                onMouseenter: () => { activeIndex.value = index; },
               }, option.label)))]
               : [],
           }),

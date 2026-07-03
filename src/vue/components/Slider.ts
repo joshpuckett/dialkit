@@ -37,6 +37,7 @@ export const Slider = defineComponent({
     const isInteracting = ref(false);
     const isDragging = ref(false);
     const isHovered = ref(false);
+    const isFocused = ref(false);
     const isValueHovered = ref(false);
     const isValueEditable = ref(false);
     const showInput = ref(false);
@@ -49,7 +50,7 @@ export const Slider = defineComponent({
     const handleScaleYMv = motionValue(1);
 
     const percentage = computed(() => ((props.value - min.value) / (max.value - min.value)) * 100);
-    const isActive = computed(() => isInteracting.value || isHovered.value);
+    const isActive = computed(() => isInteracting.value || isHovered.value || isFocused.value);
     const displayValue = computed(() => props.value.toFixed(decimalsForStep(step.value)));
     let pointerDownPos: { x: number; y: number } | null = null;
     let isClickFlag = true;
@@ -274,13 +275,45 @@ export const Slider = defineComponent({
       }
     };
 
+    const handleTrackKeyDown = (event: KeyboardEvent) => {
+      let next: number | null = null;
+      const bigStep = step.value * 10;
+      switch (event.key) {
+        case 'ArrowRight':
+        case 'ArrowUp':
+          next = props.value + step.value;
+          break;
+        case 'ArrowLeft':
+        case 'ArrowDown':
+          next = props.value - step.value;
+          break;
+        case 'PageUp':
+          next = props.value + bigStep;
+          break;
+        case 'PageDown':
+          next = props.value - bigStep;
+          break;
+        case 'Home':
+          next = min.value;
+          break;
+        case 'End':
+          next = max.value;
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      const clamped = Math.max(min.value, Math.min(max.value, next));
+      emit('change', roundValue(clamped, step.value));
+    };
+
     watch(() => props.value, () => {
       if (!isInteracting.value && !snapAnim) {
         fillPercent.jump(percentage.value);
       }
     });
 
-    watch([isInteracting, isHovered, isDragging, () => props.value], () => {
+    watch([isInteracting, isHovered, isDragging, isFocused, () => props.value], () => {
       animateHandleState();
     });
 
@@ -376,6 +409,20 @@ export const Slider = defineComponent({
           isHovered.value = false;
           animateHandleState();
         },
+        onKeydown: handleTrackKeyDown,
+        onFocus: () => {
+          isFocused.value = true;
+        },
+        onBlur: () => {
+          isFocused.value = false;
+        },
+        tabindex: showInput.value ? -1 : 0,
+        role: 'slider',
+        'aria-label': props.label,
+        'aria-valuemin': min.value,
+        'aria-valuemax': max.value,
+        'aria-valuenow': props.value,
+        'aria-valuetext': props.unit ? `${displayValue.value}${props.unit}` : displayValue.value,
       }, [
         h('div', { class: 'dialkit-slider-hashmarks' }, hashMarks.value),
         h('div', {

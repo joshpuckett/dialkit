@@ -17,12 +17,46 @@ export const SegmentedControl = defineComponent({
       type: String,
       required: true,
     },
+    label: {
+      type: String,
+      required: false,
+      default: undefined,
+    },
   },
   emits: ['change'],
   setup(props, { emit }) {
     const containerRef = ref<HTMLElement | null>(null);
     const pillRef = ref<HTMLElement | null>(null);
     const buttonRefs = new Map<string, HTMLElement>();
+    const buttonEls: (HTMLElement | null)[] = [];
+
+    // Radiogroup arrow-key navigation: moving focus also moves selection,
+    // matching the WAI-ARIA radio pattern.
+    const handleKeyDown = (e: KeyboardEvent, index: number) => {
+      const len = props.options.length;
+      let nextIndex: number | null = null;
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+          nextIndex = (index + 1) % len;
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          nextIndex = (index - 1 + len) % len;
+          break;
+        case 'Home':
+          nextIndex = 0;
+          break;
+        case 'End':
+          nextIndex = len - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      emit('change', props.options[nextIndex].value);
+      buttonEls[nextIndex]?.focus();
+    };
 
     const pillReady = ref(false);
     let hasAnimated = false;
@@ -110,7 +144,14 @@ export const SegmentedControl = defineComponent({
       { flush: 'post' }
     );
 
-    return () => h('div', { ref: containerRef, class: 'dialkit-segmented' }, [
+    const activeIndex = () => Math.max(0, props.options.findIndex((o) => o.value === props.value));
+
+    return () => h('div', {
+      ref: containerRef,
+      class: 'dialkit-segmented',
+      role: 'radiogroup',
+      'aria-label': props.label,
+    }, [
       h('div', {
         ref: pillRef,
         class: 'dialkit-segmented-pill',
@@ -120,19 +161,29 @@ export const SegmentedControl = defineComponent({
           visibility: pillReady.value ? 'visible' : 'hidden',
         },
       }),
-      ...props.options.map((option) => h('button', {
-        ref: ((el: Element | null) => {
-          if (el instanceof HTMLElement) {
-            buttonRefs.set(option.value, el);
-            return;
-          }
+      ...props.options.map((option, index) => {
+        const isActive = props.value === option.value;
+        return h('button', {
+          ref: ((el: Element | null) => {
+            if (el instanceof HTMLElement) {
+              buttonRefs.set(option.value, el);
+              buttonEls[index] = el;
+              return;
+            }
 
-          buttonRefs.delete(option.value);
-        }) as any,
-        class: 'dialkit-segmented-button',
-        'data-active': String(props.value === option.value),
-        onClick: () => emit('change', option.value),
-      }, option.label)),
+            buttonRefs.delete(option.value);
+            buttonEls[index] = null;
+          }) as any,
+          type: 'button',
+          role: 'radio',
+          'aria-checked': isActive,
+          tabindex: index === activeIndex() ? 0 : -1,
+          class: 'dialkit-segmented-button',
+          'data-active': String(isActive),
+          onClick: () => emit('change', option.value),
+          onKeydown: (e: KeyboardEvent) => handleKeyDown(e, index),
+        }, option.label);
+      }),
     ]);
   },
 });

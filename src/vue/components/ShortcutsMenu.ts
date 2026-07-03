@@ -1,11 +1,12 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, Teleport, type PropType } from 'vue';
+import { defineComponent, h, onUnmounted, ref, Teleport, type PropType } from 'vue';
 import { DialStore, ShortcutConfig } from '../../store/DialStore';
+import { useFloatingDropdown } from '../useFloatingDropdown';
 
 function formatShortcutKey(sc: ShortcutConfig): string {
-  if (!sc.key) return '\u2014';
-  const mod = sc.modifier === 'alt' ? '\u2325'
-    : sc.modifier === 'shift' ? '\u21E7'
-    : sc.modifier === 'meta' ? '\u2318'
+  if (!sc.key) return '—';
+  const mod = sc.modifier === 'alt' ? '⌥'
+    : sc.modifier === 'shift' ? '⇧'
+    : sc.modifier === 'meta' ? '⌘'
     : '';
   return `${mod}${sc.key.toUpperCase()}`;
 }
@@ -32,15 +33,10 @@ export const ShortcutsMenu = defineComponent({
     const isOpen = ref(false);
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const dropdownRef = ref<HTMLDivElement | null>(null);
-    const pos = ref({ top: 0, right: 0 });
 
-    const open = () => {
-      const rect = triggerRef.value?.getBoundingClientRect();
-      if (rect) {
-        pos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
-      }
-      isOpen.value = true;
-    };
+    useFloatingDropdown(isOpen, triggerRef, dropdownRef, {
+      placement: 'bottom-end',
+    });
 
     const close = () => {
       isOpen.value = false;
@@ -48,7 +44,7 @@ export const ShortcutsMenu = defineComponent({
 
     const toggle = () => {
       if (isOpen.value) close();
-      else open();
+      else isOpen.value = true;
     };
 
     let mousedownHandler: ((e: MouseEvent) => void) | null = null;
@@ -138,8 +134,8 @@ export const ShortcutsMenu = defineComponent({
                 class: 'dialkit-root dialkit-shortcuts-dropdown',
                 style: {
                   position: 'fixed',
-                  top: `${pos.value.top}px`,
-                  right: `${pos.value.right}px`,
+                  top: 0,
+                  left: 0,
                 },
               }, [
                 h('div', { class: 'dialkit-shortcuts-title' }, 'Keyboard Shortcuts'),

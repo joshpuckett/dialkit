@@ -53,13 +53,32 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
     onOpenChange?.(next);
   };
 
+  const handleToggleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleToggle();
+    }
+  };
+
+  // The header toggles the folder. For a root panel it's only interactive
+  // while open (collapsing it); the collapsed circle handles re-opening.
+  const headerInteractive = isRoot ? isOpen && !inline : true;
+
   const folderContent = (
     <div
       ref={isRoot ? contentRef : undefined}
       className={`dialkit-folder ${isRoot ? 'dialkit-folder-root' : ''}`}
       data-open={String(isOpen)}
     >
-      <div className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`} onClick={handleToggle}>
+      <div
+        className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`}
+        onClick={handleToggle}
+        role={headerInteractive ? 'button' : undefined}
+        tabIndex={headerInteractive ? 0 : undefined}
+        aria-expanded={headerInteractive ? isOpen : undefined}
+        aria-label={headerInteractive ? title : undefined}
+        onKeyDown={headerInteractive ? handleToggleKeyDown : undefined}
+      >
         <div className="dialkit-folder-header-top">
           {isRoot ? (
             isOpen && (
@@ -148,6 +167,11 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
         className="dialkit-panel-inner"
         style={panelStyle}
         onClick={!isOpen ? handleToggle : undefined}
+        role={!isOpen ? 'button' : undefined}
+        tabIndex={!isOpen ? 0 : undefined}
+        aria-expanded={!isOpen ? false : undefined}
+        aria-label={!isOpen ? title : undefined}
+        onKeyDown={!isOpen ? handleToggleKeyDown : undefined}
         data-collapsed={isCollapsed}
         whileTap={!isOpen ? { scale: 0.9 } : undefined}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
