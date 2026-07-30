@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
@@ -20,7 +20,6 @@ interface PanelProps {
 
 export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra }: PanelProps) {
   const [copied, setCopied] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panel.id, callback),
@@ -30,9 +29,21 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
     () => DialStore.getValues(panel.id),
     [panel.id]
   );
+  const getOpenSnapshot = useCallback(
+    () => DialStore.getPanelOpen(panel.id),
+    [panel.id]
+  );
 
   // Subscribe to panel value changes
   const values = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  // The store owns open/collapsed state so it can be driven programmatically.
+  const storeOpen = useSyncExternalStore(subscribe, getOpenSnapshot, getOpenSnapshot);
+  const isOpen = storeOpen ?? defaultOpen;
+
+  useEffect(() => {
+    DialStore.initPanelOpen(panel.id, defaultOpen);
+  }, [panel.id, defaultOpen]);
 
   const presets = DialStore.getPresets(panel.id);
   const activePresetId = DialStore.getActivePresetId(panel.id);
@@ -49,9 +60,9 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
   };
 
   const handleOpenChange = useCallback((open: boolean) => {
-    setIsPanelOpen(open);
+    DialStore.setPanelOpen(panel.id, open);
     onOpenChange?.(open);
-  }, [onOpenChange]);
+  }, [onOpenChange, panel.id]);
 
   const renderControls = () => (
     <ControlRenderer panelId={panel.id} controls={panel.controls} values={values} />
@@ -134,7 +145,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
 
   if (variant === 'section') {
     return (
-      <Folder title={panel.name} defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
+      <Folder title={panel.name} open={isOpen} onOpenChange={handleOpenChange}>
         <div className="dialkit-panel-section-toolbar" onClick={(e) => e.stopPropagation()}>
           {toolbar}
         </div>
@@ -145,7 +156,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
 
   return (
     <div className="dialkit-panel-wrapper">
-      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={handleOpenChange} toolbar={toolbar}>
+      <Folder title={panel.name} open={isOpen} isRoot={true} inline={inline} onOpenChange={handleOpenChange} toolbar={toolbar}>
         {renderControls()}
       </Folder>
     </div>

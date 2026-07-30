@@ -21,7 +21,9 @@
   const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
 
   let copied = $state(false);
-  let isPanelOpen = $state(defaultOpen);
+  // The store owns open/collapsed state so it can be driven programmatically.
+  let storeOpen = $state<boolean | undefined>(DialStore.getPanelOpen(panel.id));
+  const isOpen = $derived(storeOpen ?? defaultOpen);
   let values = $state<Record<string, DialValue>>(DialStore.getValues(panel.id));
   let presets = $state<Preset[]>(DialStore.getPresets(panel.id));
   let activePresetId = $state<string | null>(DialStore.getActivePresetId(panel.id));
@@ -40,7 +42,9 @@
       values = DialStore.getValues(panel.id);
       presets = DialStore.getPresets(panel.id);
       activePresetId = DialStore.getActivePresetId(panel.id);
+      storeOpen = DialStore.getPanelOpen(panel.id);
     });
+    DialStore.initPanelOpen(panel.id, defaultOpen);
 
     return () => {
       unsub();
@@ -82,7 +86,7 @@
   };
 
   const handleOpenChange = (open: boolean) => {
-    isPanelOpen = open;
+    DialStore.setPanelOpen(panel.id, open);
     onOpenChange?.(open);
   };
 </script>
@@ -163,7 +167,7 @@
 {/snippet}
 
 {#if variant === 'section'}
-  <Folder title={panel.name} {defaultOpen} onOpenChange={handleOpenChange}>
+  <Folder title={panel.name} open={isOpen} onOpenChange={handleOpenChange}>
     <div class="dialkit-panel-section-toolbar" onclick={(e) => e.stopPropagation()}>
       {@render panelToolbar()}
     </div>
@@ -171,7 +175,7 @@
   </Folder>
 {:else}
   <div class="dialkit-panel-wrapper">
-    <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
+    <Folder title={panel.name} open={isOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
       {#snippet toolbar()}
         {@render panelToolbar()}
       {/snippet}

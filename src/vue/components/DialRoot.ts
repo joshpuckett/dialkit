@@ -70,17 +70,15 @@ export const DialRoot = defineComponent({
     let dragStart: PanelDragStart | null = null;
     let didDrag = false;
     let dragTarget: HTMLElement | null = null;
-    let panelOpenStates = new Map<string, boolean>();
     let rootOpen: boolean | undefined;
 
-    const syncPanelOpenStates = () => {
+    const resolveRootOpen = () => {
       const fallbackOpen = props.mode === 'inline' || props.defaultOpen;
-      const nextStates = new Map<string, boolean>();
-      for (const panel of panels.value) {
-        nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
-      }
-      panelOpenStates = nextStates;
-      rootOpen = Array.from(nextStates.values()).some(Boolean);
+      return panels.value.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen);
+    };
+
+    const syncPanelOpenStates = () => {
+      rootOpen = resolveRootOpen();
     };
 
     const connectObserver = () => {
@@ -152,22 +150,15 @@ export const DialRoot = defineComponent({
       dragTarget = null;
     };
 
-    const handlePanelOpenChange = (panelId: string, open: boolean) => {
-      panelOpenStates.set(panelId, open);
-      const fallbackOpen = props.mode === 'inline' || props.defaultOpen;
-      const nextRootOpen = panels.value.some((panel) => (
-        panelOpenStates.get(panel.id) ?? fallbackOpen
-      ));
-
-      if (rootOpen === nextRootOpen) return;
-      rootOpen = nextRootOpen;
-      emit('openChange', nextRootOpen);
-    };
-
     const handleRootOpenChange = (open: boolean) => {
       if (rootOpen === open) return;
       rootOpen = open;
       emit('openChange', open);
+    };
+
+    // Sections write their own state to the store, so re-derive from it.
+    const handleSectionOpenChange = () => {
+      handleRootOpenChange(resolveRootOpen());
     };
 
     const getDragStyle = () => dragOffset.value
@@ -243,7 +234,7 @@ export const DialRoot = defineComponent({
         defaultOpen: props.mode === 'inline' || props.defaultOpen,
         inline: props.mode === 'inline',
         toolbarExtra: timelineToggle,
-        onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
+        onOpenChange: handleSectionOpenChange,
       }));
     };
 

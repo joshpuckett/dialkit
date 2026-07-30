@@ -54,7 +54,6 @@
   let dragStart: PanelDragStart | null = null;
   let didDrag = false;
   let dragTarget: HTMLElement | null = null;
-  let panelOpenStates = new Map<string, boolean>();
   let rootOpen: boolean | undefined;
 
   const dragStyle = $derived(
@@ -97,12 +96,7 @@
 
   $effect(() => {
     const fallbackOpen = inline || defaultOpen;
-    const nextStates = new Map<string, boolean>();
-    for (const panel of panels) {
-      nextStates.set(panel.id, panelOpenStates.get(panel.id) ?? fallbackOpen);
-    }
-    panelOpenStates = nextStates;
-    rootOpen = Array.from(nextStates.values()).some(Boolean);
+    rootOpen = panels.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen);
   });
 
   $effect(() => {
@@ -174,16 +168,10 @@
     dragTarget = null;
   }
 
-  function handlePanelOpenChange(panelId: string, open: boolean) {
-    panelOpenStates.set(panelId, open);
+  // Sections write their own state to the store, so re-derive from it.
+  function handleSectionOpenChange() {
     const fallbackOpen = inline || defaultOpen;
-    const nextRootOpen = panels.some((panel) => (
-      panelOpenStates.get(panel.id) ?? fallbackOpen
-    ));
-
-    if (rootOpen === nextRootOpen) return;
-    rootOpen = nextRootOpen;
-    onOpenChange?.(nextRootOpen);
+    handleRootOpenChange(panels.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen));
   }
 
   function handleRootOpenChange(open: boolean) {
@@ -262,7 +250,7 @@
                 defaultOpen={inline || defaultOpen}
                 {inline}
                 toolbarExtra={timelineToolbar}
-                onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                onOpenChange={handleSectionOpenChange}
               />
             {/each}
           {/if}

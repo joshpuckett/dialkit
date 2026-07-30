@@ -71,17 +71,16 @@ function DialRootInner(props: DialRootProps) {
 
   onMount(() => setMounted(true));
 
-  // Open state is lifted from the panels/root folder via onOpenChange
-  // callbacks (this replaces the old data-collapsed MutationObserver).
-  // Panels that have not reported yet fall back to defaultOpen.
+  // Panels report through onOpenChange (this replaces the old data-collapsed
+  // MutationObserver); their open state itself lives in the store.
   const fallbackOpen = () => inline() || (props.defaultOpen ?? true);
-  const panelOpenStates = new Map<string, boolean>();
   let rootFolderOpen: boolean | undefined;
+  let reportedOpen: boolean | undefined;
 
   const anyOpen = () => {
     const list = panels();
     if (list.length > 1) return rootFolderOpen ?? fallbackOpen();
-    return list.some((panel) => panelOpenStates.get(panel.id) ?? fallbackOpen());
+    return list.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen());
   };
 
   // On collapse/expand: swap the drag offset between the expanded panel and
@@ -106,23 +105,17 @@ function DialRootInner(props: DialRootProps) {
     }
   };
 
-  const reactToOpenChange = (before: boolean) => {
+  const reactToOpenChange = () => {
     const after = anyOpen();
-    if (after === before) return;
+    if (after === reportedOpen) return;
+    reportedOpen = after;
     applyDragOffsetForOpen(after);
     props.onOpenChange?.(after);
   };
 
-  const handlePanelOpenChange = (panelId: string, open: boolean) => {
-    const before = anyOpen();
-    panelOpenStates.set(panelId, open);
-    reactToOpenChange(before);
-  };
-
   const handleRootOpenChange = (open: boolean) => {
-    const before = anyOpen();
     rootFolderOpen = open;
-    reactToOpenChange(before);
+    reactToOpenChange();
   };
 
   const handlePointerDown = (event: PointerEvent) => {
@@ -225,7 +218,7 @@ function DialRootInner(props: DialRootProps) {
                     defaultOpen={fallbackOpen()}
                     inline={inline()}
                     toolbarExtra={timelineToggle()}
-                    onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                    onOpenChange={reactToOpenChange}
                   />
                 )}
               </For>

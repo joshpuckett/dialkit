@@ -1,6 +1,6 @@
 {
   "name": "dialkit",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Real-time parameter tweaking for React, Solid, Svelte, and Vue apps",
   "type": "module",
   "sideEffects": false,

@@ -129,6 +129,7 @@ export type DialStorePanelOptions = {
   retainOnUnmount?: boolean;
   persist?: DialKitPersistOptions;
   kind?: 'timeline';
+  collapsed?: boolean;
 };
 
 type PersistConfig = {
@@ -321,6 +322,8 @@ class DialStoreClass {
   private registrationCounts: Map<string, number> = new Map();
   private retainedPanels: Set<string> = new Set();
   private persistConfigs: Map<string, PersistConfig> = new Map();
+  // Unset until a `collapsed` option or a host component seeds a default.
+  private panelOpen: Map<string, boolean> = new Map();
 
   registerPanel(id: string, name: string, config: DialConfig, shortcuts?: Record<string, ShortcutConfig>, options: DialStorePanelOptions = {}): void {
     const existingPanel = this.panels.get(id);
@@ -331,6 +334,9 @@ class DialStoreClass {
       );
     }
     this.configurePanelRetention(id, options);
+    if (options.collapsed !== undefined) {
+      this.initPanelOpen(id, !options.collapsed);
+    }
     this.registrationCounts.set(id, (this.registrationCounts.get(id) ?? 0) + 1);
 
     const controls = this.parseConfig(config, '', shortcuts);
@@ -417,6 +423,7 @@ class DialStoreClass {
     if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
 
     if (!this.retainedPanels.has(id)) {
+      this.panelOpen.delete(id);
       this.snapshots.delete(id);
       this.baseValues.delete(id);
       this.defaultValues.delete(id);
@@ -529,6 +536,31 @@ class DialStoreClass {
     // Return the snapshot for useSyncExternalStore compatibility
     // Use stable EMPTY_VALUES to avoid infinite loop in React 19
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;
+  }
+
+  setPanelOpen(panelId: string, open: boolean): void {
+    if (this.panelOpen.get(panelId) === open) return;
+    this.panelOpen.set(panelId, open);
+    this.notify(panelId);
+  }
+
+  togglePanelOpen(panelId: string): void {
+    this.setPanelOpen(panelId, !this.isPanelOpen(panelId));
+  }
+
+  isPanelOpen(panelId: string): boolean {
+    return this.panelOpen.get(panelId) ?? true;
+  }
+
+  getPanelOpen(panelId: string): boolean | undefined {
+    return this.panelOpen.get(panelId);
+  }
+
+  /** Applies a host component's own default; no-op once the panel has state. */
+  initPanelOpen(panelId: string, open: boolean): void {
+    if (this.panelOpen.has(panelId)) return;
+    this.panelOpen.set(panelId, open);
+    this.notify(panelId);
   }
 
   getPanels(kind?: 'panel' | 'timeline'): PanelConfig[] {

@@ -8,6 +8,7 @@ export interface RootPanelProps {
   title: string;
   children: JSX.Element;
   defaultOpen?: boolean;
+  open?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   toolbar?: JSX.Element;
@@ -26,15 +27,21 @@ export function RootPanel(props: RootPanelProps) {
   // configuration (DialRoot never changes mode at runtime).
   const inline = props.inline ?? false;
 
-  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
+  const [isOpen, setIsOpen] = createSignal(props.open ?? props.defaultOpen ?? true);
   const [contentHeight, setContentHeight] = createSignal<number | undefined>(undefined);
   const [windowHeight, setWindowHeight] = createSignal(isServer ? 800 : window.innerHeight);
   let folderRef: HTMLDivElement | undefined;
 
+  // Controlled mode: the parent owns the state, so mirror it into the morph.
+  createEffect(() => {
+    const controlled = props.open;
+    if (controlled !== undefined) setIsOpen(controlled);
+  });
+
   const handleToggle = () => {
     if (inline) return;
     const next = !isOpen();
-    setIsOpen(next);
+    if (props.open === undefined) setIsOpen(next);
     props.onOpenChange?.(next);
   };
 

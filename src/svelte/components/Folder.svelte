@@ -8,6 +8,7 @@
   let {
     title,
     defaultOpen = true,
+    open,
     isRoot = false,
     inline = false,
     onOpenChange,
@@ -17,6 +18,7 @@
   } = $props<{
     title: string;
     defaultOpen?: boolean;
+      open?: boolean;
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
@@ -25,10 +27,12 @@
     children?: Snippet;
   }>();
 
-  let isOpen = $state(defaultOpen);
-  let isCollapsed = $state(!defaultOpen);
+  const initialOpen = open ?? defaultOpen;
+  let uncontrolledOpen = $state(defaultOpen);
+  const isOpen = $derived(open ?? uncontrolledOpen);
+  const isCollapsed = $derived(!isOpen);
   let contentHeight = $state<number | undefined>(undefined);
-  let hasInitializedRootSize = $state(!isRoot || !defaultOpen);
+  let hasInitializedRootSize = $state(!isRoot || !initialOpen);
 
   let contentRef: HTMLDivElement | undefined;
   let panelRef: HTMLDivElement | undefined;
@@ -41,10 +45,10 @@
     return () => window.removeEventListener('resize', onResize);
   });
 
-  const chevronRotation = new Spring(defaultOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
-  const panelWidth = new Spring(defaultOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelHeight = new Spring(defaultOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelRadius = new Spring(defaultOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
+  const chevronRotation = new Spring(initialOpen ? 0 : 180, { stiffness: 0.2, damping: 0.6 });
+  const panelWidth = new Spring(initialOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
+  const panelHeight = new Spring(initialOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
+  const panelRadius = new Spring(initialOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
   const panelScale = new Spring(1, { stiffness: 0.25, damping: 0.7 });
 
   $effect(() => {
@@ -84,7 +88,7 @@
     panelHeight.set(nextHeight, springOptions);
     panelRadius.set(isOpen ? 14 : 21, springOptions);
 
-    if (isOpen || !defaultOpen) {
+    if (isOpen || !initialOpen) {
       hasInitializedRootSize = true;
     }
   });
@@ -92,8 +96,7 @@
   const handleToggle = () => {
     if (inline && isRoot) return;
     const next = !isOpen;
-    isOpen = next;
-    isCollapsed = !next;
+    if (open === undefined) uncontrolledOpen = next;
     onOpenChange?.(next);
   };
 

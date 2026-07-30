@@ -33,6 +33,9 @@ export function Panel(props: PanelProps) {
   );
   const [presets, setPresets] = createSignal(DialStore.getPresets(props.panel.id));
   const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(props.panel.id));
+  // The store owns open/collapsed state so it can be driven programmatically.
+  const [storeOpen, setStoreOpen] = createSignal(DialStore.getPanelOpen(props.panel.id));
+  const isOpen = () => storeOpen() ?? props.defaultOpen ?? true;
   let addButtonRef!: HTMLButtonElement;
   let copyButtonRef!: HTMLButtonElement;
   let copyClipboardIconRef!: HTMLSpanElement;
@@ -50,8 +53,10 @@ export function Panel(props: PanelProps) {
         setValues(DialStore.getValues(props.panel.id));
         setPresets(DialStore.getPresets(props.panel.id));
         setActivePresetId(DialStore.getActivePresetId(props.panel.id));
+        setStoreOpen(DialStore.getPanelOpen(props.panel.id));
       });
     });
+    DialStore.initPanelOpen(props.panel.id, props.defaultOpen ?? true);
     onCleanup(unsub);
   });
 
@@ -120,6 +125,7 @@ export function Panel(props: PanelProps) {
   };
 
   const handleOpenChange = (open: boolean) => {
+    DialStore.setPanelOpen(props.panel.id, open);
     props.onOpenChange?.(open);
   };
 
@@ -308,7 +314,7 @@ export function Panel(props: PanelProps) {
 
   if (props.variant === 'section') {
     return (
-      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} onOpenChange={handleOpenChange}>
+      <Folder title={props.panel.name} open={isOpen()} onOpenChange={handleOpenChange}>
         <div class="dialkit-panel-section-toolbar" onClick={(e) => e.stopPropagation()}>
           {toolbar}
         </div>
@@ -319,7 +325,7 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="dialkit-panel-wrapper">
-      <RootPanel title={props.panel.name} defaultOpen={props.defaultOpen ?? true} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
+      <RootPanel title={props.panel.name} open={isOpen()} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
         {renderControls()}
       </RootPanel>
     </div>

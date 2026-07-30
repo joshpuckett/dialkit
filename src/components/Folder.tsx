@@ -6,6 +6,7 @@ interface FolderProps {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  open?: boolean;
   isRoot?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
@@ -13,9 +14,9 @@ interface FolderProps {
   panelHeightOffset?: number;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, panelHeightOffset = 10 }: FolderProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
+export function Folder({ title, children, defaultOpen = true, open, isRoot = false, inline = false, onOpenChange, toolbar, panelHeightOffset = 10 }: FolderProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const isOpen = open ?? uncontrolledOpen;
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [windowHeight, setWindowHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -44,12 +45,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
   const handleToggle = () => {
     if (inline && isRoot) return;
     const next = !isOpen;
-    setIsOpen(next);
-    if (next) {
-      setIsCollapsed(false);
-    } else {
-      setIsCollapsed(true);
-    }
+    if (open === undefined) setUncontrolledOpen(next);
     onOpenChange?.(next);
   };
 
@@ -148,7 +144,7 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
         className="dialkit-panel-inner"
         style={panelStyle}
         onClick={!isOpen ? handleToggle : undefined}
-        data-collapsed={isCollapsed}
+        data-collapsed={!isOpen}
         whileTap={!isOpen ? { scale: 0.9 } : undefined}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
       >

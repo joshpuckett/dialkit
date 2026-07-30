@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onCleanup, Show, JSX } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup, untrack, Show, JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CHEVRON } from '../../icons';
 import type { AnimationHandle } from '../primitives';
@@ -8,6 +8,7 @@ interface FolderProps {
   title: string;
   children: JSX.Element;
   defaultOpen?: boolean;
+  open?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
   /** @deprecated Use RootPanel instead; kept for backwards compatibility. */
   isRoot?: boolean;
@@ -28,9 +29,10 @@ export function Folder(props: FolderProps) {
     return <RootPanel {...props} />;
   }
 
-  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
-  const [contentMounted, setContentMounted] = createSignal(props.defaultOpen ?? true);
-  let skipFirstAnim = props.defaultOpen ?? true;
+  const initialOpen = props.open ?? props.defaultOpen ?? true;
+  const [isOpen, setIsOpen] = createSignal(initialOpen);
+  const [contentMounted, setContentMounted] = createSignal(initialOpen);
+  let skipFirstAnim = initialOpen;
   let sectionContentRef: HTMLDivElement | undefined;
   let sectionAnim: AnimationHandle | null = null;
   let chevronRef: SVGSVGElement | undefined;
@@ -52,8 +54,7 @@ export function Folder(props: FolderProps) {
     );
   }, { defer: true }));
 
-  const handleToggle = () => {
-    const next = !isOpen();
+  const applyOpen = (next: boolean) => {
     setIsOpen(next);
     if (next) {
       sectionAnim?.stop();
@@ -93,6 +94,17 @@ export function Folder(props: FolderProps) {
     } else {
       setContentMounted(false);
     }
+  };
+
+  // Controlled mode: the parent owns the state, so mirror it into the animation.
+  createEffect(() => {
+    const controlled = props.open;
+    if (controlled !== undefined && controlled !== untrack(isOpen)) applyOpen(controlled);
+  });
+
+  const handleToggle = () => {
+    const next = !isOpen();
+    if (props.open === undefined) applyOpen(next);
     props.onOpenChange?.(next);
   };
 
@@ -113,7 +125,7 @@ export function Folder(props: FolderProps) {
             stroke-width="2.5"
             stroke-linecap="round"
             stroke-linejoin="round"
-            style={{ transform: `rotate(${(props.defaultOpen ?? true) ? 0 : 180}deg)` }}
+            style={{ transform: `rotate(${initialOpen ? 0 : 180}deg)` }}
           >
             <path d={ICON_CHEVRON} />
           </svg>

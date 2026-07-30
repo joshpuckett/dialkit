@@ -1,4 +1,4 @@
-# dialkit v1.4.3
+# dialkit v1.4.4
 
 <img src="https://joshpuckett.me/images/dialkit.png" width="100%" />
 
@@ -76,6 +76,7 @@ const params = useDialKit(name, config, options?)
 | `options.persist` | `DialKitPersistOptions` | Persist values to browser storage |
 | `options.onAction` | `(path: string) => void` | Callback when action buttons are clicked |
 | `options.shortcuts` | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
+| `options.collapsed` | `boolean` | Start this panel collapsed (see [Panel open state](#panel-open-state)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
 
@@ -372,6 +373,33 @@ const values = useDialKit('Controls', {
   style: { type: 'select', options: dynamicOptions },
 });
 ```
+
+---
+
+## Panel open state
+
+Panels are open by default. Pass `collapsed: true` to start one collapsed:
+
+```tsx
+const params = useDialKit('Stage', config, { id: 'stage', collapsed: true });
+```
+
+The same option exists on `createDialKit` in the Solid, Svelte, and Vue adapters.
+
+Open state lives in `DialStore`, so you can drive it from anywhere:
+
+```tsx
+import { DialStore } from 'dialkit';
+
+DialStore.setPanelOpen('stage', false);  // collapse
+DialStore.setPanelOpen('stage', true);   // expand
+DialStore.togglePanelOpen('stage');
+DialStore.isPanelOpen('stage');          // boolean
+```
+
+These take the panel id — the `id` you passed to `useDialKit`, or the generated `${name}-${n}` when you didn't.
+
+Open state is in-memory only. It is never persisted, so a reload returns every panel to its configured default. To start a _folder_ inside a panel collapsed, use the `_collapsed` config key described above.
 
 ---
 

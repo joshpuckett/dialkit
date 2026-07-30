@@ -38,7 +38,6 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; elX: number; elY: number } | null>(null);
   const didDragRef = useRef(false);
   const dragTargetRef = useRef<HTMLElement | null>(null);
-  const panelOpenStatesRef = useRef<Map<string, boolean>>(new Map());
   const rootOpenRef = useRef<boolean | null>(null);
 
   // Subscribe to registered editing surfaces. Timeline-backed panels render
@@ -63,12 +62,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
 
   useEffect(() => {
     const fallbackOpen = inline || defaultOpen;
-    const nextStates = new Map<string, boolean>();
-    for (const panel of panels) {
-      nextStates.set(panel.id, panelOpenStatesRef.current.get(panel.id) ?? fallbackOpen);
-    }
-    panelOpenStatesRef.current = nextStates;
-    rootOpenRef.current = Array.from(nextStates.values()).some(Boolean);
+    rootOpenRef.current = panels.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen);
   }, [defaultOpen, inline, panels]);
 
   // Watch for panel open/close — snap to corner on open, restore drag position on close
@@ -145,23 +139,17 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     dragTargetRef.current = null;
   }, []);
 
-  const handlePanelOpenChange = useCallback((panelId: string, open: boolean) => {
-    panelOpenStatesRef.current.set(panelId, open);
-    const fallbackOpen = inline || defaultOpen;
-    const nextRootOpen = panels.some((panel) => (
-      panelOpenStatesRef.current.get(panel.id) ?? fallbackOpen
-    ));
-
-    if (rootOpenRef.current === nextRootOpen) return;
-    rootOpenRef.current = nextRootOpen;
-    onOpenChange?.(nextRootOpen);
-  }, [defaultOpen, inline, onOpenChange, panels]);
-
   const handleRootOpenChange = useCallback((open: boolean) => {
     if (rootOpenRef.current === open) return;
     rootOpenRef.current = open;
     onOpenChange?.(open);
   }, [onOpenChange]);
+
+  // Sections write their own state to the store, so re-derive from it.
+  const handleSectionOpenChange = useCallback(() => {
+    const fallbackOpen = inline || defaultOpen;
+    handleRootOpenChange(panels.some((panel) => DialStore.getPanelOpen(panel.id) ?? fallbackOpen));
+  }, [defaultOpen, handleRootOpenChange, inline, panels]);
 
   // Don't render on server
   if (!mounted || typeof window === 'undefined') {
@@ -230,6 +218,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
                   panel={panel}
                   defaultOpen={true}
                   variant="section"
+                  onOpenChange={handleSectionOpenChange}
                 />
               ))}
             </Folder>
@@ -242,7 +231,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               defaultOpen={inline || defaultOpen}
               inline={inline}
               toolbarExtra={timelineToggle}
-              onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+              onOpenChange={handleRootOpenChange}
             />
           ))
         )}

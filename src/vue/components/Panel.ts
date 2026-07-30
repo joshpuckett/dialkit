@@ -1,4 +1,4 @@
-import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
+import { Fragment, computed, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
@@ -43,6 +43,9 @@ export const Panel = defineComponent({
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
     const copied = ref(false);
+    const storeOpen = ref<boolean | undefined>(DialStore.getPanelOpen(props.panel.id));
+    // The store owns open/collapsed state so it can be driven programmatically.
+    const isOpen = computed(() => storeOpen.value ?? props.defaultOpen);
     const hasShortcuts = () => Object.keys(DialStore.getPanel(props.panel.id)?.shortcuts ?? {}).length > 0;
 
     let unsubscribe: (() => void) | undefined;
@@ -53,7 +56,9 @@ export const Panel = defineComponent({
         values.value = DialStore.getValues(props.panel.id);
         presets.value = DialStore.getPresets(props.panel.id);
         activePresetId.value = DialStore.getActivePresetId(props.panel.id);
+        storeOpen.value = DialStore.getPanelOpen(props.panel.id);
       });
+      DialStore.initPanelOpen(props.panel.id, props.defaultOpen);
     });
 
     onUnmounted(() => {
@@ -90,6 +95,7 @@ export const Panel = defineComponent({
     };
 
     const handleOpenChange = (open: boolean) => {
+      DialStore.setPanelOpen(props.panel.id, open);
       emit('openChange', open);
     };
 
@@ -270,7 +276,7 @@ export const Panel = defineComponent({
       if (props.variant === 'section') {
         return h(Folder, {
           title: props.panel.name,
-          defaultOpen: props.defaultOpen,
+          open: isOpen.value,
           onOpenChange: handleOpenChange,
         }, {
           default: () => [
@@ -286,7 +292,7 @@ export const Panel = defineComponent({
       return h('div', { class: 'dialkit-panel-wrapper' }, [
         h(Folder, {
           title: props.panel.name,
-          defaultOpen: props.defaultOpen,
+          open: isOpen.value,
           isRoot: true,
           inline: props.inline,
           toolbar: () => toolbarNode,

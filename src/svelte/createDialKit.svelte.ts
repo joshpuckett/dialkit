@@ -19,6 +19,7 @@ export interface CreateDialOptions {
   persist?: DialKitPersistOptions;
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
+  collapsed?: boolean;
 }
 
 export type DialKitValues<T> = T;
@@ -56,6 +57,7 @@ export function createDialKitController<T extends DialConfig>(
     DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
       retainOnUnmount: hasStableId,
       persist: options?.persist,
+      collapsed: options?.collapsed,
     });
     values = resolve();
 
