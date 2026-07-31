@@ -71,7 +71,7 @@
   border-radius: 14px;
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
-  padding: 10px 12px 0 12px;
+  padding: 10px 12px;
   transform: translateZ(0);
   transform-origin: top right;
 }

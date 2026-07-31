@@ -16,7 +16,7 @@ export const Folder = defineComponent({
     },
     panelHeightOffset: {
       type: Number,
-      default: 10,
+      default: 0,
     },
   },
   emits: ['openChange'],

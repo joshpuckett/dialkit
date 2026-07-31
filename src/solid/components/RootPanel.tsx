@@ -114,7 +114,7 @@ export function RootPanel(props: RootPanelProps) {
 
   const measuredOpenHeight = () => (
     contentHeight() !== undefined
-      ? Math.min(contentHeight()! + (props.panelHeightOffset ?? 10), windowHeight() - 32)
+      ? Math.min(contentHeight()! + (props.panelHeightOffset ?? 0), windowHeight() - 32)
       : panelRef.getBoundingClientRect().height
   );
 
@@ -152,7 +152,7 @@ export function RootPanel(props: RootPanelProps) {
   // Track content growth/shrink while open without re-triggering the morph.
   createEffect(on([contentHeight, windowHeight] as const, ([height, winHeight]) => {
     if (height === undefined || !untrack(isOpen)) return;
-    panelRef.style.height = `${Math.min(height + (props.panelHeightOffset ?? 10), winHeight - 32)}px`;
+    panelRef.style.height = `${Math.min(height + (props.panelHeightOffset ?? 0), winHeight - 32)}px`;
   }, { defer: true }));
 
   // Expand-on-tap while collapsed uses a native listener: stopPropagation here
