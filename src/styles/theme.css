@@ -209,16 +209,20 @@
 
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-header {
   position: sticky;
-  top: 33px;
+  top: var(--dial-root-sticky-offset, 33px);
   z-index: 4;
   background: var(--dial-glass-bg);
 }
 
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-content .dialkit-folder > .dialkit-folder-header {
   position: sticky;
-  top: 69px;
+  top: calc(var(--dial-root-sticky-offset, 33px) + 36px);
   z-index: 3;
   background: var(--dial-glass-bg);
+}
+
+.dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root:has(> .dialkit-panel-header .dialkit-panel-toolbar) {
+  --dial-root-sticky-offset: 75px;
 }
 
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header:active {
@@ -252,6 +256,11 @@
 }
 
 .dialkit-folder-title-root {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 15px;
   font-weight: 600;
   color: var(--dial-text-root);
@@ -306,20 +315,28 @@
 }
 
 /* Sticky headers establish a nearer positioning context; remove the panel's
-   12px content inset so the expanded toggle stays at its origin/main anchor. */
+   content inset so the expanded controls stay at their origin/main anchors. */
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header .dialkit-panel-icon {
+  top: 1px;
   right: 0;
 }
 
 .dialkit-root-header-actions {
-  position: absolute;
-  top: 12px;
-  right: 24px;
+  position: static;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 160px;
   height: 16px;
+  margin-left: 8px;
+  margin-right: 24px;
   z-index: 1;
+}
+
+.dialkit-panel[data-mode="inline"] .dialkit-root-header-actions {
+  margin-right: 0;
 }
 
 .dialkit-root-header-actions .dialkit-midi-trigger {
@@ -328,6 +345,7 @@
   min-width: 28px;
   height: 16px;
   padding: 0 4px;
+  font-family: inherit;
   background: transparent;
   border-radius: 0;
 }
@@ -354,7 +372,7 @@
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
-  line-height: 17px;
+  line-height: normal;
   letter-spacing: normal;
   color: var(--dial-text-label);
 }
@@ -445,6 +463,13 @@
   border-top: none;
 }
 
+/* The root header already owns this boundary. Avoid a duplicate divider when
+   a grouped folder is the first control in a single-panel interface. */
+.dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder:first-child {
+  margin-top: 0;
+  border-top: none;
+}
+
 /* Non-root folder header - match row height */
 .dialkit-folder:not(.dialkit-folder-root) > .dialkit-folder-header {
   height: var(--dial-row-height);
@@ -469,6 +494,10 @@
   top: 14px;
 }
 
+.dialkit-panel[data-multiple="true"] .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header .dialkit-panel-icon {
+  top: 14px;
+}
+
 .dialkit-panel[data-multiple="true"] .dialkit-folder-root > .dialkit-panel-header {
   padding-bottom: 0;
   margin-bottom: 0;
@@ -480,10 +509,6 @@
 
 .dialkit-panel[data-multiple="true"] .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-content .dialkit-folder > .dialkit-folder-header {
   top: 88px;
-}
-
-.dialkit-panel[data-multiple="true"] .dialkit-root-header-actions {
-  top: 14px;
 }
 
 .dialkit-panel[data-multiple="true"] .dialkit-folder-root > .dialkit-panel-header > .dialkit-folder-header-top,

@@ -30,8 +30,19 @@ describe('MIDI menu accessibility contract', () => {
   it('expands only the MIDI trigger hit target without changing approved header geometry', () => {
     const theme = read('src/styles/theme.css');
     assert.match(theme, /\.dialkit-root-header-actions \.dialkit-midi-trigger\s*\{[^}]*position: relative;[^}]*height: 16px;/s);
+    assert.match(theme, /\.dialkit-root-header-actions \.dialkit-midi-trigger\s*\{[^}]*font-family: inherit;/s,
+      'the controller status must inherit the same family as parameter labels');
+    assert.match(theme, /\.dialkit-root-header-actions \.dialkit-midi-trigger-status\s*\{[^}]*font-size: 13px;[^}]*font-weight: 500;[^}]*line-height: normal;/s,
+      'the controller status must use the standard parameter-label typography');
     assert.match(theme, /\.dialkit-root-header-actions \.dialkit-midi-trigger::before\s*\{[^}]*position: absolute;[^}]*inset: -4px 0;/s);
-    assert.match(theme, /\.dialkit-root-header-actions\s*\{[^}]*right: 24px;/s, 'the origin-aligned toggle relationship must stay unchanged');
+    assert.match(theme, /\.dialkit-root-header-actions\s*\{[^}]*position: static;[^}]*max-width: 160px;[^}]*margin-right: 24px;/s,
+      'the MIDI status needs a bounded in-flow lane beside the origin-aligned toggle');
+    assert.match(theme, /\.dialkit-folder-title-root\s*\{[^}]*min-width: 0;[^}]*text-overflow: ellipsis;/s,
+      'long root titles must truncate without moving header controls');
+    assert.match(theme, /> \.dialkit-folder-root > \.dialkit-panel-header \.dialkit-panel-icon\s*\{[^}]*top: 1px;[^}]*right: 0;/s,
+      'the sticky root header must preserve the original toggle anchor');
+    assert.match(theme, /\.dialkit-folder-root > \.dialkit-folder-content > \.dialkit-folder-inner > \.dialkit-folder:first-child\s*\{[^}]*border-top: none;/s,
+      'a first grouped control must not duplicate the root-header divider');
     assert.match(theme, /\.dialkit-midi-device:has\(\.dialkit-midi-device-radio:focus-visible\)/, 'native radios need a visible row-level focus indicator');
   });
 });

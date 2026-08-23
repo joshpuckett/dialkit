@@ -83,11 +83,12 @@ describe('MIDI mapping UI parity across framework adapters', () => {
     });
   }
 
-  it('leaves the origin root-header layout untouched and positions MIDI beside its existing icon', () => {
+  it('preserves the origin toggle anchor while fitting title and MIDI status', () => {
     const theme = read('src/styles/theme.css');
-    assert.match(theme, /\.dialkit-root-header-actions\s*\{[^}]*position: absolute;[^}]*top: 12px;[^}]*right: 24px;/s, 'MIDI should sit 8px left of the origin-anchored icon without joining header layout flow');
-    assert.match(theme, /dialkit-panel-inner:not\(\[data-collapsed="true"\]\)[^{]*\.dialkit-panel-icon\s*\{[^}]*right: 0;/s, 'the sticky expanded header should compensate for its new positioning context and preserve the origin icon anchor');
-    assert.match(theme, /\.dialkit-panel\[data-multiple="true"\] \.dialkit-root-header-actions\s*\{[^}]*top: 14px;/s, 'MIDI should follow the origin multi-panel icon offset');
+    assert.match(theme, /\.dialkit-root-header-actions\s*\{[^}]*position: static;[^}]*max-width: 160px;[^}]*margin-right: 24px;/s, 'MIDI should use a bounded in-flow lane beside the origin-anchored icon');
+    assert.match(theme, /\.dialkit-folder-title-root\s*\{[^}]*min-width: 0;[^}]*text-overflow: ellipsis;/s, 'long root titles should truncate before displacing header actions');
+    assert.match(theme, /dialkit-panel-inner:not\(\[data-collapsed="true"\]\)[^{]*\.dialkit-panel-icon\s*\{[^}]*top: 1px;[^}]*right: 0;/s, 'the sticky expanded header should compensate for its new positioning context and preserve the origin icon anchor');
+    assert.match(theme, /\.dialkit-panel\[data-multiple="true"\][^{]*\.dialkit-panel-icon\s*\{[^}]*top: 14px;/s, 'the origin multi-panel icon offset should remain intact');
     assert.match(theme, /dialkit-panel-header\s*\{[^}]*position: sticky;[^}]*top: 0;/s, 'the unchanged origin root header should become sticky at the panel edge');
     assert.ok(theme.includes('top: 44px;') && theme.includes('top: 88px;'), 'multi-panel sections should use the existing 44px header lanes');
     assert.doesNotMatch(theme, /dialkit-panel-header\s*\{[^}]*(?:padding|margin|height|width):/s, 'sticky behavior must not alter root-header geometry');
