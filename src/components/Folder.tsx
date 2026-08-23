@@ -9,11 +9,12 @@ interface FolderProps {
   isRoot?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  headerActions?: ReactNode;
   toolbar?: ReactNode;
   panelHeightOffset?: number;
 }
 
-export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, toolbar, panelHeightOffset = 0 }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, isRoot = false, inline = false, onOpenChange, headerActions, toolbar, panelHeightOffset = 0 }: FolderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,11 @@ export function Folder({ title, children, defaultOpen = true, isRoot = false, in
               <span className="dialkit-folder-title">
                 {title}
               </span>
+            </div>
+          )}
+          {isRoot && isOpen && headerActions && (
+            <div className="dialkit-root-header-actions" onClick={(e) => e.stopPropagation()}>
+              {headerActions}
             </div>
           )}
           {isRoot && !inline && (

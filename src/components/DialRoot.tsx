@@ -1,12 +1,15 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
+import { getSharedMidiController } from '../midi';
+import type { MidiController, MidiMappingOwner } from '../midi';
 import { isDevDefault } from '../env';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
+import { MidiMenu } from './MidiMenu';
 import { blockPanelDragClick, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, hasPanelDragMoved } from '../panel-drag';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -20,10 +23,21 @@ interface DialRootProps {
   theme?: DialTheme;
   productionEnabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Opt in to the Web MIDI mapping UI. Pass `true` to use the shared controller,
+   * or your own controller from `createMidiController()`. Permission is only
+   * requested when the user enters "MIDI Map mode".
+   */
+  midi?: boolean | MidiController;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, onOpenChange }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, onOpenChange, midi }: DialRootProps) {
   if (!productionEnabled) return null;
+  const midiController = useMemo<MidiController | undefined>(
+    () => (midi === true ? getSharedMidiController() : midi || undefined),
+    [midi],
+  );
+  const midiOwner = useRef<MidiMappingOwner>({}).current;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [timelineCount, setTimelineCount] = useState(0);
   const [mounted, setMounted] = useState(false);
@@ -60,6 +74,10 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
       unsubscribeTimelines();
     };
   }, []);
+
+  useEffect(() => () => {
+    midiController?.stopMapping(midiOwner);
+  }, [midiController, midiOwner]);
 
   useEffect(() => {
     const fallbackOpen = inline || defaultOpen;
@@ -182,6 +200,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const originX = getPanelOriginX(activePosition, dragOffset);
   const hasMultiplePanels = panels.length > 1;
   const timelineToggle = timelineCount > 0 ? <TimelineToggleButton /> : null;
+  const midiMenu = midiController ? <MidiMenu controller={midiController} ownerToken={midiOwner} /> : null;
 
   const content = (
   <ShortcutListener>
@@ -207,6 +226,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               isRoot={true}
               inline={inline}
               onOpenChange={handleRootOpenChange}
+              headerActions={midiMenu}
               toolbar={timelineToggle}
               panelHeightOffset={2}
             >
@@ -221,6 +241,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               isRoot={true}
               inline={inline}
               onOpenChange={handleRootOpenChange}
+              headerActions={midiMenu}
               toolbar={timelineToggle}
               panelHeightOffset={2}
             >
@@ -230,6 +251,8 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
                   panel={panel}
                   defaultOpen={true}
                   variant="section"
+                  midi={midiController}
+                  midiOwner={midiOwner}
                 />
               ))}
             </Folder>
@@ -242,7 +265,10 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               defaultOpen={inline || defaultOpen}
               inline={inline}
               toolbarExtra={timelineToggle}
+              headerActions={midiMenu}
               onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+              midi={midiController}
+              midiOwner={midiOwner}
             />
           ))
         )}

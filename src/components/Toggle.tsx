@@ -1,6 +1,7 @@
 import { SegmentedControl } from './SegmentedControl';
 import type { ShortcutConfig } from '../store/DialStore';
 import { formatToggleShortcut } from '../shortcut-utils';
+import type { ReactNode } from 'react';
 
 interface ToggleProps {
   label: string;
@@ -8,9 +9,10 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
+  midiSlot?: ReactNode;
 }
 
-export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps) {
+export function Toggle({ label, checked, onChange, shortcut, shortcutActive, midiSlot }: ToggleProps) {
   return (
     <div className="dialkit-labeled-control">
       <span className="dialkit-labeled-control-label">
@@ -20,6 +22,7 @@ export function Toggle({ label, checked, onChange, shortcut, shortcutActive }: T
             {formatToggleShortcut(shortcut)}
           </span>
         )}
+        {midiSlot}
       </span>
       <SegmentedControl
         options={[

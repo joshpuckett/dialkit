@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { getDialKitPortalRoot, getDropdownPosition } from '../dropdown-position';
@@ -11,6 +11,7 @@ interface SelectControlProps {
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  midiSlot?: ReactNode;
 }
 
 function toTitleCase(s: string): string {
@@ -23,7 +24,7 @@ function normalizeOptions(options: SelectOption[]): { value: string; label: stri
   );
 }
 
-export function SelectControl({ label, value, options, onChange }: SelectControlProps) {
+export function SelectControl({ label, value, options, onChange, midiSlot }: SelectControlProps) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,8 +77,9 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
         className="dialkit-select-trigger"
         onClick={() => setIsOpen(!isOpen)}
         data-open={String(isOpen)}
+        aria-label={`${label}: ${selectedOption?.label ?? value}`}
       >
-        <span className="dialkit-select-label">{label}</span>
+        <span className={`dialkit-select-label${midiSlot ? ' dialkit-select-label-placeholder' : ''}`}>{label}</span>
         <div className="dialkit-select-right">
           <span className="dialkit-select-value">{selectedOption?.label ?? value}</span>
           <motion.svg
@@ -95,6 +97,7 @@ export function SelectControl({ label, value, options, onChange }: SelectControl
           </motion.svg>
         </div>
       </button>
+      {midiSlot && <span className="dialkit-select-midi-label"><span className="dialkit-select-label">{label}</span>{midiSlot}</span>}
 
       {portalTarget && createPortal(
         <AnimatePresence>

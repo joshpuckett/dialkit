@@ -3,7 +3,7 @@ import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
-import { useCallback, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useSyncExternalStore, type ReactNode } from 'react';
 
 interface SpringControlProps {
   panelId: string;
@@ -11,9 +11,10 @@ interface SpringControlProps {
   label: string;
   spring: SpringConfig;
   onChange: (spring: SpringConfig) => void;
+  midiSlot?: (path: string) => ReactNode;
 }
 
-export function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps) {
+export function SpringControl({ panelId, path, label, spring, onChange, midiSlot }: SpringControlProps) {
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),
     [panelId]
@@ -90,6 +91,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
               max={1}
               step={0.05}
               unit="s"
+              midiSlot={midiSlot?.(`${path}.duration`)}
             />
             <Slider
               label="Bounce"
@@ -98,6 +100,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
               min={0}
               max={1}
               step={0.05}
+              midiSlot={midiSlot?.(`${path}.bounce`)}
             />
           </>
         ) : (
@@ -109,6 +112,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
               min={1}
               max={1000}
               step={10}
+              midiSlot={midiSlot?.(`${path}.stiffness`)}
             />
             <Slider
               label="Damping"
@@ -117,6 +121,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
               min={1}
               max={100}
               step={1}
+              midiSlot={midiSlot?.(`${path}.damping`)}
             />
             <Slider
               label="Mass"
@@ -125,6 +130,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
               min={0.1}
               max={10}
               step={0.1}
+              midiSlot={midiSlot?.(`${path}.mass`)}
             />
           </>
         )}

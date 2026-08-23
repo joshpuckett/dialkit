@@ -49,6 +49,7 @@ export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
 export { PresetManager } from './components/PresetManager';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
+export { MidiMenu } from './components/MidiMenu';
 
 // Store (for advanced usage)
 export { DialStore } from './store/DialStore';
@@ -72,3 +73,33 @@ export type {
   ControlMeta,
   PanelConfig,
 } from './store/DialStore';
+
+// Framework-neutral Web MIDI mapping
+export {
+  createMidiController,
+  getSharedMidiController,
+  midiConnectionView,
+  midiInputDisplayName,
+  midiTargetBadge,
+  MidiLearnCancelledError,
+  scaleMidiValue,
+} from './midi';
+export type {
+  MidiAccessLike,
+  MidiBadgeState,
+  MidiBinding,
+  MidiBindingOptions,
+  MidiConnectionAction,
+  MidiController,
+  MidiControllerOptions,
+  MidiControllerSnapshot,
+  MidiInputInfo,
+  MidiInputLike,
+  MidiLearnSource,
+  MidiLearnOptions,
+  MidiLearnWarning,
+  MidiMappingOwner,
+  MidiMappingState,
+  MidiMessageEventLike,
+  MidiStatus,
+} from './midi';

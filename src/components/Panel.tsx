@@ -2,8 +2,8 @@ import { useCallback, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
+import type { MidiController, MidiMappingOwner } from '../midi';
 import { buildCopyInstruction } from '../copy-instruction';
-import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
 import { ControlRenderer } from './ControlRenderer';
 import { Folder } from './Folder';
@@ -16,9 +16,12 @@ interface PanelProps {
   onOpenChange?: (open: boolean) => void;
   variant?: 'root' | 'section';
   toolbarExtra?: ReactNode;
+  headerActions?: ReactNode;
+  midi?: MidiController;
+  midiOwner?: MidiMappingOwner;
 }
 
-export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra }: PanelProps) {
+export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra, headerActions, midi, midiOwner }: PanelProps) {
   const [copied, setCopied] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
   const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
@@ -54,7 +57,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
   }, [onOpenChange]);
 
   const renderControls = () => (
-    <ControlRenderer panelId={panel.id} controls={panel.controls} values={values} />
+    <ControlRenderer panelId={panel.id} controls={panel.controls} values={values} midi={midi} midiOwner={midiOwner} />
   );
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
@@ -145,7 +148,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
 
   return (
     <div className="dialkit-panel-wrapper">
-      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={handleOpenChange} toolbar={toolbar}>
+      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={handleOpenChange} headerActions={headerActions} toolbar={toolbar}>
         {renderControls()}
       </Folder>
     </div>

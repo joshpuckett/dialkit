@@ -4,7 +4,7 @@ import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
 import { EasingVisualization } from './EasingVisualization';
-import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 interface TransitionControlProps {
   panelId: string;
@@ -22,6 +22,7 @@ interface TransitionControlProps {
     max?: number;
     step?: number;
   };
+  midiSlot?: (path: string) => ReactNode;
 }
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
@@ -34,6 +35,7 @@ export function TransitionControl({
   onChange,
   hideDuration = false,
   durationControl,
+  midiSlot,
 }: TransitionControlProps) {
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),
@@ -111,6 +113,7 @@ export function TransitionControl({
       max={durationControl?.max ?? (isEasing ? 2 : 1)}
       step={durationControl?.step ?? 0.05}
       unit="s"
+      midiSlot={midiSlot?.(`${path}.duration`)}
     />
   ) : null;
 
@@ -138,19 +141,19 @@ export function TransitionControl({
 
         {isEasing ? (
           <>
-            <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
-            <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
-            <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
-            <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
+            <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} midiSlot={midiSlot?.(`${path}.x1`)} />
+            <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} midiSlot={midiSlot?.(`${path}.y1`)} />
+            <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} midiSlot={midiSlot?.(`${path}.x2`)} />
+            <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} midiSlot={midiSlot?.(`${path}.y2`)} />
             <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
           </>
         ) : isSimpleSpring ? (
-          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
+          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} midiSlot={midiSlot?.(`${path}.bounce`)} />
         ) : (
           <>
-            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
-            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
-            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
+            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} midiSlot={midiSlot?.(`${path}.stiffness`)} />
+            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} midiSlot={midiSlot?.(`${path}.damping`)} />
+            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} midiSlot={midiSlot?.(`${path}.mass`)} />
           </>
         )}
         {durationSlider}

@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/DialStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
@@ -13,6 +14,8 @@ interface SliderProps {
   unit?: string;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
+  /** Optional MIDI mapping badge rendered beside the shortcut pill. */
+  midiSlot?: ReactNode;
 }
 
 const CLICK_THRESHOLD = 3;
@@ -30,6 +33,7 @@ export function Slider({
   unit,
   shortcut,
   shortcutActive,
+  midiSlot,
 }: SliderProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -397,6 +401,7 @@ export function Slider({
               {formatSliderShortcut(shortcut)}
             </span>
           )}
+          {midiSlot}
         </span>
 
         {showInput ? (

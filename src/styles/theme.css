@@ -25,6 +25,20 @@
   --dial-border: rgba(255, 255, 255, 0.1);
   --dial-border-hover: rgba(255, 255, 255, 0.15);
 
+  /* MIDI interaction states */
+  --dial-midi-map-accent: #8b5cf6;
+  --dial-midi-map-label: #a78bfa;
+  --dial-midi-map-text: #ffffff;
+  --dial-midi-map-surface: rgba(139, 92, 246, 0.15);
+  --dial-midi-map-surface-subtle: rgba(139, 92, 246, 0.1);
+  --dial-midi-map-border: rgba(167, 139, 250, 0.46);
+  --dial-midi-map-ring: rgba(139, 92, 246, 0.28);
+  --dial-midi-connected: #34c759;
+  --dial-midi-connected-ring: rgba(52, 199, 89, 0.14);
+  --dial-warning-text: #f5a623;
+  --dial-warning-surface: rgba(245, 158, 11, 0.14);
+  --dial-warning-border: rgba(245, 166, 35, 0.35);
+
   /* Timeline clips are light by default; light themes add a dark tint so
      their shape stays distinct from the lane without replacing custom hues. */
   --dial-timeline-clip-overlay: transparent;
@@ -186,7 +200,25 @@
 }
 
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--dial-glass-bg);
   cursor: grab;
+}
+
+.dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-header {
+  position: sticky;
+  top: 33px;
+  z-index: 4;
+  background: var(--dial-glass-bg);
+}
+
+.dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-content .dialkit-folder > .dialkit-folder-header {
+  position: sticky;
+  top: 69px;
+  z-index: 3;
+  background: var(--dial-glass-bg);
 }
 
 .dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header:active {
@@ -273,6 +305,115 @@
   z-index: 1;
 }
 
+/* Sticky headers establish a nearer positioning context; remove the panel's
+   12px content inset so the expanded toggle stays at its origin/main anchor. */
+.dialkit-panel:not([data-mode="inline"]) .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-panel-header .dialkit-panel-icon {
+  right: 0;
+}
+
+.dialkit-root-header-actions {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  z-index: 1;
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger {
+  position: relative;
+  width: auto;
+  min-width: 28px;
+  height: 16px;
+  padding: 0 4px;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* Preserve the approved 16px optical header geometry while exposing a 24px
+   pointer target for the MIDI status button. */
+.dialkit-root-header-actions .dialkit-midi-trigger::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger:hover,
+.dialkit-root-header-actions .dialkit-midi-trigger[data-active="true"] {
+  background: transparent;
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger-status {
+  display: inline-flex;
+  align-items: center;
+  /* The status dot has a 2px outer ring, leaving a 4px visible gap. */
+  gap: 6px;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 17px;
+  letter-spacing: normal;
+  color: var(--dial-text-label);
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger-status-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger-status-dot {
+  width: 5px;
+  height: 5px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger-status[data-state="disconnected"] .dialkit-midi-trigger-status-dot {
+  background: var(--dial-text-tertiary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dial-text-tertiary) 25%, transparent);
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger-status[data-state="connected"] .dialkit-midi-trigger-status-dot {
+  background: var(--dial-midi-connected);
+  box-shadow: 0 0 0 2px var(--dial-midi-connected-ring);
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger[data-active="true"] .dialkit-midi-trigger-status {
+  color: var(--dial-text-focus);
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger:hover .dialkit-midi-trigger-status {
+  color: var(--dial-text-primary);
+}
+
+.dialkit-root-header-actions .dialkit-midi-trigger[data-connected="true"] {
+  max-width: 160px;
+  min-width: 0;
+}
+
+.dialkit-root-header-actions .dialkit-midi-done {
+  width: auto;
+  min-width: 38px;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dial-midi-map-text);
+  background: var(--dial-midi-map-accent);
+  border-radius: 5px;
+}
+
+.dialkit-root-header-actions .dialkit-midi-done:hover,
+.dialkit-root-header-actions .dialkit-midi-done[data-active="true"] {
+  background: var(--dial-midi-map-accent);
+}
+
 .dialkit-folder-content {
   will-change: transform;
 }
@@ -331,6 +472,18 @@
 .dialkit-panel[data-multiple="true"] .dialkit-folder-root > .dialkit-panel-header {
   padding-bottom: 0;
   margin-bottom: 0;
+}
+
+.dialkit-panel[data-multiple="true"] .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-header {
+  top: 44px;
+}
+
+.dialkit-panel[data-multiple="true"] .dialkit-panel-inner:not([data-collapsed="true"]) > .dialkit-folder-root > .dialkit-folder-content > .dialkit-folder-inner > .dialkit-folder > .dialkit-folder-content .dialkit-folder > .dialkit-folder-header {
+  top: 88px;
+}
+
+.dialkit-panel[data-multiple="true"] .dialkit-root-header-actions {
+  top: 14px;
 }
 
 .dialkit-panel[data-multiple="true"] .dialkit-folder-root > .dialkit-panel-header > .dialkit-folder-header-top,
@@ -854,6 +1007,7 @@
 
 /* Select Control - Full-width row */
 .dialkit-select-row {
+  position: relative;
 }
 
 .dialkit-select-trigger {
@@ -883,11 +1037,32 @@
 }
 
 .dialkit-select-label {
+  display: inline-flex;
+  align-items: center;
   font-size: 13px;
   font-weight: 500;
   color: var(--dial-text-label);
   flex-shrink: 0;
   transform: translateY(-0.5px);
+}
+
+.dialkit-select-label-placeholder {
+  visibility: hidden;
+}
+
+.dialkit-select-midi-label {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.dialkit-select-midi-label .dialkit-midi-pill {
+  pointer-events: auto;
 }
 
 .dialkit-select-right {
@@ -1354,6 +1529,420 @@
   margin-top: 4px;
 }
 
+/* ── MIDI Mapping ── */
+/* Toolbar trigger — same 36px square + active surface as the other toolbar buttons. */
+.dialkit-midi-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dial-row-height);
+  height: var(--dial-row-height);
+  padding: 0;
+  flex-shrink: 0;
+  background: var(--dial-surface);
+  border: none;
+  border-radius: var(--dial-radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dialkit-midi-trigger:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-midi-trigger[data-active="true"] {
+  background: var(--dial-surface-active);
+}
+
+.dialkit-midi-trigger svg {
+  width: 16px;
+  height: 16px;
+  color: var(--dial-text-label);
+}
+
+.dialkit-midi-trigger[data-active="true"] svg {
+  color: var(--dial-text-root);
+}
+
+/* Portaled dropdown — compact and quiet like the preset menu, not a settings panel. */
+.dialkit-midi-dropdown {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--dial-dropdown-bg);
+  border: 1px solid var(--dial-border);
+  border-radius: 12px;
+  padding: 4px;
+  z-index: 10000;
+  box-shadow: var(--dial-shadow-dropdown);
+  width: 236px;
+}
+
+.dialkit-midi-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dial-text-label);
+  letter-spacing: -0.01em;
+  padding: 8px 8px 4px;
+}
+
+/* Title and connection state share one calm header row. */
+.dialkit-midi-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 8px 8px;
+}
+
+.dialkit-midi-status-label {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--dial-text-tertiary);
+}
+
+.dialkit-midi-devices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--dial-border);
+  border-bottom: 1px solid var(--dial-border);
+}
+
+.dialkit-midi-device {
+  position: relative;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 7px;
+  font-family: inherit;
+  color: var(--dial-text-label);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dialkit-midi-device-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dialkit-midi-device:has(.dialkit-midi-device-radio:focus-visible) {
+  outline: 1px solid var(--dial-border-hover);
+  outline-offset: 1px;
+}
+
+.dialkit-midi-device:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-midi-device[data-active="true"] {
+  color: var(--dial-text-label);
+  background: transparent;
+}
+
+.dialkit-midi-device-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dial-midi-connected);
+  box-shadow: 0 0 0 2px var(--dial-midi-connected-ring);
+}
+
+.dialkit-midi-device-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 17px;
+  letter-spacing: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialkit-midi-device-check {
+  width: 12px;
+  height: 12px;
+  color: var(--dial-text-label);
+}
+
+.dialkit-midi-cta {
+  flex: none;
+  width: calc(100% - 8px);
+  margin: 8px 4px 4px;
+}
+
+.dialkit-midi-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* MIDI Map mode toggle. */
+.dialkit-midi-action {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dialkit-midi-action:hover {
+  background: var(--dial-surface-hover);
+  color: var(--dial-text-primary);
+}
+
+.dialkit-midi-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.dialkit-midi-action[data-active="true"] {
+  background: var(--dial-midi-map-surface);
+  color: var(--dial-text-root);
+}
+
+.dialkit-midi-guidance {
+  grid-column: 1 / -1;
+  padding: 2px 8px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dial-text-secondary);
+}
+
+/* Current-panel mappings list with hover-trash unmap (mirrors PresetManager). */
+.dialkit-midi-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--dial-border);
+}
+
+.dialkit-midi-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.dialkit-midi-item:hover {
+  background: var(--dial-surface-hover);
+}
+
+.dialkit-midi-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dial-text-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialkit-midi-cc {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+  color: var(--dial-text-secondary);
+  background: var(--dial-surface-subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.dialkit-midi-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.dialkit-midi-item:hover .dialkit-midi-delete {
+  opacity: 1;
+}
+
+.dialkit-midi-delete:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--dial-border-hover);
+  outline-offset: 1px;
+}
+
+.dialkit-midi-delete:hover {
+  opacity: 1 !important;
+}
+
+.dialkit-midi-delete svg {
+  width: 14px;
+  height: 14px;
+  color: var(--dial-text-focus);
+  pointer-events: none;
+}
+
+.dialkit-midi-hint {
+  display: none;
+}
+
+/* Per-control mapping badge — reads like the shortcut pill but is interactive.
+   Sits beside the control label and never drives the underlying control. */
+.dialkit-midi-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--dial-text-tertiary);
+  background: var(--dial-surface-subtle);
+  padding: 1px 5px;
+  border: none;
+  border-radius: 4px;
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.15s, background 0.15s;
+}
+
+.dialkit-midi-pill[data-state="listening"] {
+  min-width: max-content;
+}
+
+.dialkit-midi-action-target {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.dialkit-midi-action-control {
+  width: 100%;
+}
+
+.dialkit-midi-action-target:has(> .dialkit-midi-pill) .dialkit-midi-action-control {
+  padding-inline: 48px;
+}
+
+.dialkit-midi-action-target > .dialkit-midi-pill {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  margin-left: 0;
+  transform: translateY(-50%);
+}
+
+.dialkit-midi-pill:hover {
+  color: var(--dial-text-primary);
+  background: var(--dial-border-hover);
+}
+
+.dialkit-midi-pill[data-state="select"] {
+  color: var(--dial-midi-map-label);
+  background: var(--dial-midi-map-surface);
+  box-shadow: inset 0 0 0 1px var(--dial-midi-map-border);
+}
+
+.dialkit-midi-pill[data-state="listening"] {
+  color: var(--dial-midi-map-text);
+  background: var(--dial-midi-map-accent);
+  box-shadow: 0 0 0 2px var(--dial-midi-map-ring);
+}
+
+.dialkit-midi-pill[data-state="warning"] {
+  color: var(--dial-warning-text);
+  background: var(--dial-warning-surface);
+  box-shadow: inset 0 0 0 1px var(--dial-warning-border);
+}
+
+.dialkit-midi-pill[data-state="bound"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: 6px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dialkit-midi-live-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--dial-text-tertiary);
+  box-shadow: 0 0 0 2px var(--dial-surface-subtle);
+}
+
+.dialkit-midi-pill[data-state="bound"][data-active="true"] .dialkit-midi-live-dot {
+  background: var(--dial-midi-connected);
+  box-shadow: 0 0 0 2px var(--dial-midi-connected-ring);
+}
+
+.dialkit-slider:has(.dialkit-midi-pill[data-state="warning"]) {
+  background: var(--dial-warning-surface);
+  box-shadow: inset 0 0 0 1px var(--dial-warning-border);
+}
+
+/* Ableton-style map mode: every assignable control is visibly available, while
+   the selected target gets a stronger learn state. */
+.dialkit-slider:has(.dialkit-midi-pill[data-state="select"]),
+.dialkit-labeled-control:has(.dialkit-midi-pill[data-state="select"]),
+.dialkit-select-row:has(.dialkit-midi-pill[data-state="select"]) .dialkit-select-trigger,
+.dialkit-midi-action-target:has(.dialkit-midi-pill[data-state="select"]) .dialkit-midi-action-control {
+  background: var(--dial-midi-map-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--dial-midi-map-border);
+}
+
+.dialkit-slider:has(.dialkit-midi-pill[data-state="listening"]),
+.dialkit-labeled-control:has(.dialkit-midi-pill[data-state="listening"]),
+.dialkit-select-row:has(.dialkit-midi-pill[data-state="listening"]) .dialkit-select-trigger,
+.dialkit-midi-action-target:has(.dialkit-midi-pill[data-state="listening"]) .dialkit-midi-action-control {
+  background: var(--dial-midi-map-surface);
+  box-shadow: inset 0 0 0 2px var(--dial-midi-map-accent);
+}
+
+.dialkit-labeled-control:has(.dialkit-midi-pill[data-state="warning"]),
+.dialkit-select-row:has(.dialkit-midi-pill[data-state="warning"]) .dialkit-select-trigger,
+.dialkit-midi-action-target:has(.dialkit-midi-pill[data-state="warning"]) .dialkit-midi-action-control {
+  background: var(--dial-warning-surface);
+  box-shadow: inset 0 0 0 1px var(--dial-warning-border);
+}
+
 /* ── Light Theme ── */
 .dialkit-root[data-theme="light"] {
   --dial-surface: rgba(0, 0, 0, 0.04);
@@ -1372,6 +1961,7 @@
 
   --dial-border: rgba(0, 0, 0, 0.1);
   --dial-border-hover: rgba(0, 0, 0, 0.15);
+  --dial-warning-text: #8a4b08;
 
   --dial-timeline-clip-overlay: rgba(0, 0, 0, 0.28);
 
@@ -1419,6 +2009,7 @@
 
     --dial-border: rgba(0, 0, 0, 0.1);
     --dial-border-hover: rgba(0, 0, 0, 0.15);
+    --dial-warning-text: #8a4b08;
 
     --dial-timeline-clip-overlay: rgba(0, 0, 0, 0.28);
 
