@@ -3,19 +3,23 @@
   import type { Snippet } from 'svelte';
   import { DialStore } from 'dialkit/store';
   import type { DialValue, PanelConfig, Preset } from 'dialkit/store';
+  import type { MidiController, MidiMappingOwner } from 'dialkit/midi';
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
   import ShortcutsMenu from './ShortcutsMenu.svelte';
   import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 
-  let { panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra } = $props<{
+  let { panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra, headerActions, midi, midiOwner } = $props<{
     panel: PanelConfig;
     defaultOpen?: boolean;
     inline?: boolean;
     onOpenChange?: (open: boolean) => void;
     variant?: 'root' | 'section';
     toolbarExtra?: Snippet;
+    headerActions?: Snippet;
+    midi?: MidiController;
+    midiOwner?: MidiMappingOwner;
   }>();
 
   const hasShortcuts = $derived(Object.keys(panel.shortcuts).length > 0);
@@ -158,7 +162,7 @@
 
 {#snippet panelControls()}
   {#each panel.controls as control (control.path)}
-    <ControlRenderer panelId={panel.id} {control} {values} />
+    <ControlRenderer panelId={panel.id} {control} {values} {midi} {midiOwner} />
   {/each}
 {/snippet}
 
@@ -171,7 +175,7 @@
   </Folder>
 {:else}
   <div class="dialkit-panel-wrapper">
-    <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange}>
+    <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={handleOpenChange} {headerActions}>
       {#snippet toolbar()}
         {@render panelToolbar()}
       {/snippet}

@@ -11,6 +11,7 @@
     isRoot = false,
     inline = false,
     onOpenChange,
+    headerActions,
     toolbar,
     panelHeightOffset = 0,
     children,
@@ -20,6 +21,7 @@
     isRoot?: boolean;
     inline?: boolean;
     onOpenChange?: (isOpen: boolean) => void;
+    headerActions?: Snippet;
     toolbar?: Snippet;
     panelHeightOffset?: number;
     children?: Snippet;
@@ -125,6 +127,11 @@
           <div class="dialkit-folder-title-row">
             <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
           </div>
+          {#if headerActions}
+            <div class="dialkit-root-header-actions">
+              {@render headerActions()}
+            </div>
+          {/if}
         </div>
 
         {#if toolbar}
@@ -159,6 +166,12 @@
           {#if isOpen}
             <div class="dialkit-folder-title-row">
               <span class="dialkit-folder-title dialkit-folder-title-root">{title}</span>
+            </div>
+          {/if}
+
+          {#if isOpen && headerActions}
+            <div class="dialkit-root-header-actions">
+              {@render headerActions()}
             </div>
           {/if}
 

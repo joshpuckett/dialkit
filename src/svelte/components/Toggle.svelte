@@ -1,14 +1,16 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import type { ShortcutConfig } from 'dialkit/store';
   import { formatToggleShortcut } from '../../shortcut-utils';
 
-  let { label, checked, onChange, shortcut, shortcutActive = false } = $props<{
+  let { label, checked, onChange, shortcut, shortcutActive = false, midiSlot } = $props<{
     label: string;
     checked: boolean;
     onChange: (checked: boolean) => void;
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
+    midiSlot?: Snippet;
   }>();
 </script>
 
@@ -20,6 +22,7 @@
         {formatToggleShortcut(shortcut)}
       </span>
     {/if}
+    {#if midiSlot}{@render midiSlot()}{/if}
   </span>
   <SegmentedControl
     options={[

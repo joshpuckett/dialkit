@@ -3,11 +3,14 @@
   import type { PanelConfig } from 'dialkit/store';
   import { TimelineStore } from 'dialkit/timeline';
   import type { TimelineMeta } from 'dialkit/timeline';
+  import { getSharedMidiController } from 'dialkit/midi';
+  import type { MidiController, MidiMappingOwner } from 'dialkit/midi';
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
   import Folder from './Folder.svelte';
   import Panel from './Panel.svelte';
   import TimelineToggleButton from './Timeline/TimelineToggleButton.svelte';
+  import MidiMenu from './MidiMenu.svelte';
   import ShortcutListener from './ShortcutListener.svelte';
   import {
     blockPanelDragClick,
@@ -32,16 +35,21 @@
       ? viteMode !== 'production'
       : true;
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault, onOpenChange } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault, onOpenChange, midi } = $props<{
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
     theme?: DialTheme;
     productionEnabled?: boolean;
     onOpenChange?: (open: boolean) => void;
+    midi?: boolean | MidiController;
   }>();
 
   const inline = $derived(mode === 'inline');
+  const controller = $derived<MidiController | undefined>(
+    midi === true ? getSharedMidiController() : (midi || undefined)
+  );
+  const midiOwner: MidiMappingOwner = {};
 
   let panels = $state<PanelConfig[]>([]);
   let timelines = $state<TimelineMeta[]>([]);
@@ -93,6 +101,12 @@
       unsubscribePanels();
       unsubscribeTimelines();
     };
+  });
+
+  $effect(() => {
+    const activeController = controller;
+    if (!activeController) return;
+    return () => activeController.stopMapping(midiOwner);
   });
 
   $effect(() => {
@@ -200,6 +214,12 @@
   {/if}
 {/snippet}
 
+{#snippet midiHeaderAction()}
+  {#if controller}
+    <MidiMenu {controller} ownerToken={midiOwner} />
+  {/if}
+{/snippet}
+
 {#if productionEnabled && mounted && (panels.length > 0 || timelines.length > 0)}
   {#snippet content()}
     <ShortcutListener>
@@ -227,6 +247,9 @@
                 onOpenChange={handleRootOpenChange}
                 panelHeightOffset={2}
               >
+                {#snippet headerActions()}
+                  {@render midiHeaderAction()}
+                {/snippet}
                 {#snippet toolbar()}
                   {@render timelineToolbar()}
                 {/snippet}
@@ -243,6 +266,9 @@
                 onOpenChange={handleRootOpenChange}
                 panelHeightOffset={2}
               >
+                {#snippet headerActions()}
+                  {@render midiHeaderAction()}
+                {/snippet}
                 {#snippet toolbar()}
                   {@render timelineToolbar()}
                 {/snippet}
@@ -251,6 +277,8 @@
                     {panel}
                     defaultOpen={true}
                     variant="section"
+                    midi={controller}
+                    midiOwner={midiOwner}
                   />
                 {/each}
               </Folder>
@@ -262,7 +290,10 @@
                 defaultOpen={inline || defaultOpen}
                 {inline}
                 toolbarExtra={timelineToolbar}
+                headerActions={midiHeaderAction}
                 onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                midi={controller}
+                midiOwner={midiOwner}
               />
             {/each}
           {/if}

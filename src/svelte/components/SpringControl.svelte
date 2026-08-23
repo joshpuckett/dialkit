@@ -5,13 +5,17 @@
   import Slider from './Slider.svelte';
   import SegmentedControl from './SegmentedControl.svelte';
   import SpringVisualization from './SpringVisualization.svelte';
+  import MidiBadge from './MidiBadge.svelte';
+  import type { MidiController, MidiMappingOwner } from 'dialkit/midi';
 
-  let { panelId, path, label, spring, onChange } = $props<{
+  let { panelId, path, label, spring, onChange, midi, midiOwner } = $props<{
     panelId: string;
     path: string;
     label: string;
     spring: SpringConfig;
     onChange: (spring: SpringConfig) => void;
+    midi?: MidiController;
+    midiOwner?: MidiMappingOwner;
   }>();
 
   let mode = $state<'simple' | 'advanced'>(DialStore.getSpringMode(panelId, path));
@@ -87,7 +91,9 @@
         max={1}
         step={0.05}
         unit="s"
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.duration`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
       <Slider
         label="Bounce"
         value={spring.bounce ?? 0.2}
@@ -95,7 +101,9 @@
         min={0}
         max={1}
         step={0.05}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.bounce`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
     {:else}
       <Slider
         label="Stiffness"
@@ -104,7 +112,9 @@
         min={1}
         max={1000}
         step={10}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.stiffness`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
       <Slider
         label="Damping"
         value={spring.damping ?? 17}
@@ -112,7 +122,9 @@
         min={1}
         max={100}
         step={1}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.damping`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
       <Slider
         label="Mass"
         value={spring.mass ?? 1}
@@ -120,7 +132,9 @@
         min={0.1}
         max={10}
         step={0.1}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.mass`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
     {/if}
   </div>
 </Folder>

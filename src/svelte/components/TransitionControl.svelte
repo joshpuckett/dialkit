@@ -6,6 +6,8 @@
   import SegmentedControl from './SegmentedControl.svelte';
   import SpringVisualization from './SpringVisualization.svelte';
   import EasingVisualization from './EasingVisualization.svelte';
+  import MidiBadge from './MidiBadge.svelte';
+  import type { MidiController, MidiMappingOwner } from 'dialkit/midi';
 
   type CurveMode = 'easing' | 'simple' | 'advanced';
 
@@ -17,7 +19,7 @@
     step?: number;
   };
 
-  let { panelId, path, label, value, onChange, hideDuration = false, durationControl } = $props<{
+  let { panelId, path, label, value, onChange, hideDuration = false, durationControl, midi, midiOwner } = $props<{
     panelId: string;
     path: string;
     label: string;
@@ -25,6 +27,8 @@
     onChange: (value: TransitionConfig) => void;
     hideDuration?: boolean;
     durationControl?: TransitionDurationControl;
+    midi?: MidiController;
+    midiOwner?: MidiMappingOwner;
   }>();
 
   let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
@@ -142,10 +146,18 @@
     </div>
 
     {#if isEasing}
-      <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01} />
-      <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01} />
-      <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01} />
-      <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01} />
+      <Slider label="x1" value={easing.ease[0]} onChange={(v) => updateEase(0, v)} min={0} max={1} step={0.01}>
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.x1`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
+      <Slider label="y1" value={easing.ease[1]} onChange={(v) => updateEase(1, v)} min={-1} max={2} step={0.01}>
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.y1`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
+      <Slider label="x2" value={easing.ease[2]} onChange={(v) => updateEase(2, v)} min={0} max={1} step={0.01}>
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.x2`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
+      <Slider label="y2" value={easing.ease[3]} onChange={(v) => updateEase(3, v)} min={-1} max={2} step={0.01}>
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.y2`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
 
       <div class="dialkit-labeled-control">
         <span class="dialkit-labeled-control-label">Ease</span>
@@ -172,7 +184,9 @@
         min={0}
         max={1}
         step={0.05}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.bounce`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
     {:else}
       <Slider
         label="Stiffness"
@@ -181,7 +195,9 @@
         min={1}
         max={1000}
         step={10}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.stiffness`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
       <Slider
         label="Damping"
         value={spring.damping ?? 17}
@@ -189,7 +205,9 @@
         min={1}
         max={100}
         step={1}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.damping`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
       <Slider
         label="Mass"
         value={spring.mass ?? 1}
@@ -197,7 +215,9 @@
         min={0.1}
         max={10}
         step={0.1}
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.mass`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
     {/if}
 
     {#if !hideDuration && (isEasing || isSimpleSpring)}
@@ -212,7 +232,9 @@
         max={durationControl?.max ?? (isEasing ? 2 : 1)}
         step={durationControl?.step ?? 0.05}
         unit="s"
-      />
+      >
+        {#snippet midiSlot()}{#if midi}<MidiBadge controller={midi} {panelId} path={`${path}.duration`} ownerToken={midiOwner} />{/if}{/snippet}
+      </Slider>
     {/if}
   </div>
 </Folder>

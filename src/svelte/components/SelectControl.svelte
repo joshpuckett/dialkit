@@ -4,14 +4,16 @@
   import { dropdownTransition } from './transitions';
   import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
   import { ICON_CHEVRON } from '../../icons';
+  import type { Snippet } from 'svelte';
 
   type SelectOption = string | { value: string; label: string };
 
-  let { label, value, options, onChange } = $props<{
+  let { label, value, options, onChange, midiSlot } = $props<{
     label: string;
     value: string;
     options: SelectOption[];
     onChange: (value: string) => void;
+    midiSlot?: Snippet;
   }>();
 
   let isOpen = $state(false);
@@ -97,8 +99,9 @@
     class="dialkit-select-trigger"
     onclick={() => (isOpen ? closeDropdown() : openDropdown())}
     data-open={String(isOpen)}
+    aria-label={`${label}: ${selectedOption?.label ?? value}`}
   >
-    <span class="dialkit-select-label">{label}</span>
+    <span class="dialkit-select-label" class:dialkit-select-label-placeholder={Boolean(midiSlot)}>{label}</span>
     <div class="dialkit-select-right">
       <span class="dialkit-select-value">{selectedOption?.label ?? value}</span>
       <svg
@@ -115,6 +118,9 @@
       </svg>
     </div>
   </button>
+  {#if midiSlot}
+    <span class="dialkit-select-midi-label"><span class="dialkit-select-label">{label}</span>{@render midiSlot()}</span>
+  {/if}
 
   {#if portalTarget}
     <Portal target={portalTarget}>

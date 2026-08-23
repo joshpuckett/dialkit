@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { Spring } from 'svelte/motion';
   import type { ShortcutConfig } from 'dialkit/store';
   import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
@@ -13,6 +14,7 @@
     step = 0.01,
     shortcut,
     shortcutActive = false,
+    midiSlot,
   } = $props<{
     label: string;
     value: number;
@@ -23,6 +25,7 @@
     unit?: string;
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
+    midiSlot?: Snippet;
   }>();
 
   const CLICK_THRESHOLD = 3;
@@ -295,6 +298,7 @@
           {formatSliderShortcut(shortcut)}
         </span>
       {/if}
+      {#if midiSlot}{@render midiSlot()}{/if}
     </span>
 
     {#if showInput}
