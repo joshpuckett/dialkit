@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, type JSX } from 'solid-js';
 import { SegmentedControl } from './SegmentedControl';
 import type { ShortcutConfig } from '../../store/DialStore';
 import { formatToggleShortcut } from '../../shortcut-utils';
@@ -9,6 +9,7 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
+  midiSlot?: JSX.Element;
 }
 
 export function Toggle(props: ToggleProps) {
@@ -21,6 +22,7 @@ export function Toggle(props: ToggleProps) {
             {formatToggleShortcut(props.shortcut!)}
           </span>
         </Show>
+        {props.midiSlot}
       </span>
       <SegmentedControl
         options={[

@@ -12,6 +12,7 @@ interface SelectControlProps {
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  midiSlot?: import('solid-js').JSX.Element;
 }
 
 function toTitleCase(s: string): string {
@@ -96,8 +97,9 @@ export function SelectControl(props: SelectControlProps) {
         class="dialkit-select-trigger"
         onClick={() => dropdown.isOpen() ? dropdown.close() : openDropdown()}
         data-open={String(dropdown.isOpen())}
+        aria-label={`${props.label}: ${selectedOption()?.label ?? props.value}`}
       >
-        <span class="dialkit-select-label">{props.label}</span>
+        <span class={`dialkit-select-label${props.midiSlot ? ' dialkit-select-label-placeholder' : ''}`}>{props.label}</span>
         <div class="dialkit-select-right">
           <span class="dialkit-select-value">{selectedOption()?.label ?? props.value}</span>
           <svg
@@ -114,6 +116,9 @@ export function SelectControl(props: SelectControlProps) {
           </svg>
         </div>
       </button>
+      <Show when={props.midiSlot}>
+        <span class="dialkit-select-midi-label"><span class="dialkit-select-label">{props.label}</span>{props.midiSlot}</span>
+      </Show>
 
       <Show when={!!portalTarget()}>
         <Portal mount={portalTarget()!}>

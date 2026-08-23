@@ -5,6 +5,7 @@ import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
 import { SpringVisualization } from './SpringVisualization';
+import type { JSX } from 'solid-js';
 
 interface SpringControlProps {
   panelId: string;
@@ -12,6 +13,7 @@ interface SpringControlProps {
   label: string;
   spring: SpringConfig;
   onChange: (spring: SpringConfig) => void;
+  midiSlot?: (path: string) => JSX.Element;
 }
 
 export function SpringControl(props: SpringControlProps) {
@@ -84,6 +86,7 @@ export function SpringControl(props: SpringControlProps) {
               max={1}
               step={0.05}
               unit="s"
+              midiSlot={props.midiSlot?.(`${props.path}.duration`)}
             />
             <Slider
               label="Bounce"
@@ -92,6 +95,7 @@ export function SpringControl(props: SpringControlProps) {
               min={0}
               max={1}
               step={0.05}
+              midiSlot={props.midiSlot?.(`${props.path}.bounce`)}
             />
           </>
         ) : (
@@ -103,6 +107,7 @@ export function SpringControl(props: SpringControlProps) {
               min={1}
               max={1000}
               step={10}
+              midiSlot={props.midiSlot?.(`${props.path}.stiffness`)}
             />
             <Slider
               label="Damping"
@@ -111,6 +116,7 @@ export function SpringControl(props: SpringControlProps) {
               min={1}
               max={100}
               step={1}
+              midiSlot={props.midiSlot?.(`${props.path}.damping`)}
             />
             <Slider
               label="Mass"
@@ -119,6 +125,7 @@ export function SpringControl(props: SpringControlProps) {
               min={0.1}
               max={10}
               step={0.1}
+              midiSlot={props.midiSlot?.(`${props.path}.mass`)}
             />
           </>
         )}

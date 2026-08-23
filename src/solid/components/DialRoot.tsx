@@ -1,12 +1,15 @@
-import { createSignal, onMount, Show, For } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
 import { TimelineStore } from '../../store/TimelineStore';
+import { getSharedMidiController } from '../../midi';
+import type { MidiController, MidiMappingOwner } from '../../midi';
 import { fromStore } from '../primitives';
 import { ShortcutListener } from './ShortcutListener';
 import { RootPanel } from './RootPanel';
 import { Panel } from './Panel';
 import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
+import { MidiMenu } from './MidiMenu';
 import {
   blockPanelDragClick,
   getPanelDragHandle,
@@ -37,6 +40,12 @@ interface DialRootProps {
   theme?: DialTheme;
   productionEnabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Opt in to the Web MIDI mapping UI. Pass `true` to use the shared controller,
+   * or your own controller from `createMidiController()`. Permission is only
+   * requested when the user enters "MIDI Map mode".
+   */
+  midi?: boolean | MidiController;
 }
 
 export function DialRoot(props: DialRootProps) {
@@ -49,6 +58,9 @@ export function DialRoot(props: DialRootProps) {
 }
 
 function DialRootInner(props: DialRootProps) {
+  const midiOwner: MidiMappingOwner = {};
+  const midiController = (): MidiController | undefined =>
+    props.midi === true ? getSharedMidiController() : props.midi || undefined;
   const panels = fromStore(
     () => DialStore.getPanels('panel'),
     (notify) => DialStore.subscribeGlobal(notify)
@@ -70,6 +82,12 @@ function DialRootInner(props: DialRootProps) {
   let dragTarget: HTMLElement | null = null;
 
   onMount(() => setMounted(true));
+
+  createEffect(() => {
+    const controller = midiController();
+    if (!controller) return;
+    onCleanup(() => controller.stopMapping(midiOwner));
+  });
 
   // Open state is lifted from the panels/root folder via onOpenChange
   // callbacks (this replaces the old data-collapsed MutationObserver).
@@ -184,6 +202,11 @@ function DialRootInner(props: DialRootProps) {
       <TimelineToggleButton />
     </Show>
   );
+  const midiMenu = () => (
+    <Show when={midiController()}>
+      {(controller) => <MidiMenu controller={controller()} ownerToken={midiOwner} />}
+    </Show>
+  );
 
   const content = () => (
     <ShortcutListener>
@@ -208,6 +231,7 @@ function DialRootInner(props: DialRootProps) {
                 defaultOpen={fallbackOpen()}
                 inline={inline()}
                 onOpenChange={handleRootOpenChange}
+                headerActions={midiMenu()}
                 toolbar={timelineToggle()}
                 panelHeightOffset={2}
               >
@@ -225,7 +249,10 @@ function DialRootInner(props: DialRootProps) {
                     defaultOpen={fallbackOpen()}
                     inline={inline()}
                     toolbarExtra={timelineToggle()}
+                    headerActions={midiMenu()}
                     onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
+                    midi={midiController()}
+                    midiOwner={midiOwner}
                   />
                 )}
               </For>
@@ -237,6 +264,7 @@ function DialRootInner(props: DialRootProps) {
                   defaultOpen={fallbackOpen()}
                   inline={inline()}
                   onOpenChange={handleRootOpenChange}
+                  headerActions={midiMenu()}
                   toolbar={timelineToggle()}
                   panelHeightOffset={2}
                 >
@@ -246,6 +274,8 @@ function DialRootInner(props: DialRootProps) {
                         panel={panel}
                         defaultOpen={true}
                         variant="section"
+                        midi={midiController()}
+                        midiOwner={midiOwner}
                       />
                     )}
                   </For>

@@ -1,19 +1,13 @@
-import { batch, createSignal, createEffect, on, onMount, onCleanup, For, type JSX } from 'solid-js';
+import { batch, createSignal, createEffect, on, onMount, onCleanup, type JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, PanelConfig, SpringConfig, TransitionConfig, DialValue } from '../../store/DialStore';
-import type { AnimationHandle } from '../primitives';
-import { useShortcutContext } from './ShortcutListener';
+import type { PanelConfig, DialValue } from '../../store/DialStore';
+import type { MidiController, MidiMappingOwner } from '../../midi';
+import { type AnimationHandle } from '../primitives';
 import { Folder } from './Folder';
 import { RootPanel } from './RootPanel';
-import { Slider } from './Slider';
-import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
-import { TransitionControl } from './TransitionControl';
-import { TextControl } from './TextControl';
-import { SelectControl } from './SelectControl';
-import { ColorControl } from './ColorControl';
+import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
 
 interface PanelProps {
@@ -23,11 +17,13 @@ interface PanelProps {
   onOpenChange?: (open: boolean) => void;
   variant?: 'root' | 'section';
   toolbarExtra?: JSX.Element;
+  headerActions?: JSX.Element;
+  midi?: MidiController;
+  midiOwner?: MidiMappingOwner;
 }
 
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
-  const shortcutCtx = useShortcutContext();
   const [values, setValues] = createSignal<Record<string, DialValue>>(
     DialStore.getValues(props.panel.id)
   );
@@ -123,120 +119,15 @@ export function Panel(props: PanelProps) {
     props.onOpenChange?.(open);
   };
 
-  const renderControl = (control: ControlMeta) => {
-    const value = () => values()[control.path];
-
-    switch (control.type) {
-      case 'slider':
-        return (
-          <Slider
-            label={control.label}
-            value={value() as number}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            min={control.min}
-            max={control.max}
-            step={control.step}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
-          />
-        );
-
-      case 'toggle':
-        return (
-          <Toggle
-            label={control.label}
-            checked={value() as boolean}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            shortcut={control.shortcut}
-            shortcutActive={shortcutCtx().activePanelId === props.panel.id && shortcutCtx().activePath === control.path}
-          />
-        );
-
-      case 'spring':
-        return (
-          <SpringControl
-            panelId={props.panel.id}
-            path={control.path}
-            label={control.label}
-            spring={value() as SpringConfig}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'transition':
-        return (
-          <TransitionControl
-            panelId={props.panel.id}
-            path={control.path}
-            label={control.label}
-            value={value() as TransitionConfig}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'folder':
-        return (
-          <Folder title={control.label} defaultOpen={control.defaultOpen ?? true}>
-            <For each={control.children ?? []}>
-              {(child) => <>{renderControl(child)}</>}
-            </For>
-          </Folder>
-        );
-
-      case 'text':
-        return (
-          <TextControl
-            label={control.label}
-            value={value() as string}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-            placeholder={control.placeholder}
-          />
-        );
-
-      case 'select':
-        return (
-          <SelectControl
-            label={control.label}
-            value={value() as string}
-            options={control.options ?? []}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      case 'color':
-        return (
-          <ColorControl
-            label={control.label}
-            value={value() as string}
-            onChange={(v) => DialStore.updateValue(props.panel.id, control.path, v)}
-          />
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const renderControls = () => {
-    return (
-      <For each={props.panel.controls}>
-        {(control) => (
-          <>
-            {control.type === 'action' ? (
-              <button
-                class="dialkit-button"
-                onClick={() => DialStore.triggerAction(props.panel.id, control.path)}
-              >
-                {control.label}
-              </button>
-            ) : (
-              renderControl(control)
-            )}
-          </>
-        )}
-      </For>
-    );
-  };
+  const renderControls = () => (
+    <ControlRenderer
+      panelId={props.panel.id}
+      controls={props.panel.controls}
+      values={values()}
+      midi={props.midi}
+      midiOwner={props.midiOwner}
+    />
+  );
 
   const toolbar = (
     <>
@@ -319,7 +210,7 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="dialkit-panel-wrapper">
-      <RootPanel title={props.panel.name} defaultOpen={props.defaultOpen ?? true} inline={props.inline ?? false} onOpenChange={handleOpenChange} toolbar={toolbar}>
+      <RootPanel title={props.panel.name} defaultOpen={props.defaultOpen ?? true} inline={props.inline ?? false} onOpenChange={handleOpenChange} headerActions={props.headerActions} toolbar={toolbar}>
         {renderControls()}
       </RootPanel>
     </div>

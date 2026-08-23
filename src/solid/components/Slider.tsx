@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show, type JSX } from 'solid-js';
 import { animate, motionValue } from 'motion';
 import type { ShortcutConfig } from '../../store/DialStore';
 import type { AnimationHandle } from '../primitives';
@@ -19,6 +19,8 @@ interface SliderProps {
   unit?: string;
   shortcut?: ShortcutConfig;
   shortcutActive?: boolean;
+  /** Optional MIDI mapping badge rendered beside the shortcut pill. */
+  midiSlot?: JSX.Element;
 }
 
 const CLICK_THRESHOLD = 3;
@@ -397,6 +399,7 @@ export function Slider(props: SliderProps) {
               {formatSliderShortcut(props.shortcut!)}
             </span>
           </Show>
+          {props.midiSlot}
         </span>
 
         {showInput() ? (

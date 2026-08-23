@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { DialStore } from '../../store/DialStore';
 import type {
   ControlMeta,
@@ -6,10 +6,11 @@ import type {
   SpringConfig,
   TransitionConfig,
 } from '../../store/DialStore';
+import type { MidiController, MidiControllerSnapshot, MidiMappingOwner } from '../../midi';
 import { useShortcutContext } from './ShortcutListener';
-import { ButtonGroup } from './ButtonGroup';
 import { ColorControl } from './ColorControl';
 import { Folder } from './Folder';
+import { MidiBadge } from './MidiBadge';
 import { SelectControl } from './SelectControl';
 import { Slider } from './Slider';
 import { SpringControl } from './SpringControl';
@@ -21,11 +22,37 @@ interface ControlRendererProps {
   panelId: string;
   controls: ControlMeta[];
   values: Record<string, DialValue>;
+  /** Optional MIDI controller — when present, numeric controls gain mapping badges. */
+  midi?: MidiController;
+  midiOwner?: MidiMappingOwner;
   transitionDuration?: TransitionDurationControl;
 }
 
 export function ControlRenderer(props: ControlRendererProps) {
   const shortcut = useShortcutContext();
+  const [midiSnapshot, setMidiSnapshot] = createSignal<MidiControllerSnapshot | null>(
+    props.midi?.getSnapshot() ?? null
+  );
+  createEffect(() => {
+    const controller = props.midi;
+    if (!controller) {
+      setMidiSnapshot(null);
+      return;
+    }
+    setMidiSnapshot(controller.getSnapshot());
+    const unsubscribe = controller.subscribe(() => setMidiSnapshot(controller.getSnapshot()));
+    onCleanup(unsubscribe);
+  });
+
+  const renderMidiBadge = (path: string) => props.midi?.canMapTarget(props.panelId, path) ? (
+    <MidiBadge
+      controller={props.midi}
+      panelId={props.panelId}
+      path={path}
+      snapshot={midiSnapshot()}
+      ownerToken={props.midiOwner}
+    />
+  ) : undefined;
 
   const renderControl = (control: ControlMeta) => {
     const value = () => props.values[control.path];
@@ -41,6 +68,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             step={control.step}
             shortcut={control.shortcut}
             shortcutActive={shortcut().activePanelId === props.panelId && shortcut().activePath === control.path}
+            midiSlot={renderMidiBadge(control.path)}
           />
         );
       case 'toggle':
@@ -51,6 +79,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
             shortcut={control.shortcut}
             shortcutActive={shortcut().activePanelId === props.panelId && shortcut().activePath === control.path}
+            midiSlot={renderMidiBadge(control.path)}
           />
         );
       case 'spring':
@@ -61,6 +90,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             label={control.label}
             spring={value() as SpringConfig}
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            midiSlot={renderMidiBadge}
           />
         );
       case 'transition':
@@ -72,6 +102,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             value={value() as TransitionConfig}
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
             durationControl={props.transitionDuration}
+            midiSlot={renderMidiBadge}
           />
         );
       case 'folder':
@@ -96,6 +127,7 @@ export function ControlRenderer(props: ControlRendererProps) {
             value={value() as string}
             options={control.options ?? []}
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
+            midiSlot={(control.options?.length ?? 0) > 1 ? renderMidiBadge(control.path) : undefined}
           />
         );
       case 'color':
@@ -106,12 +138,21 @@ export function ControlRenderer(props: ControlRendererProps) {
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
           />
         );
-      case 'action':
+      case 'action': {
+        const midiSlot = renderMidiBadge(control.path);
         return (
-          <button class="dialkit-button" onClick={() => DialStore.triggerAction(props.panelId, control.path)}>
-            {control.label}
-          </button>
+          <div class="dialkit-midi-action-target">
+            <button
+              type="button"
+              class="dialkit-button dialkit-midi-action-control"
+              onClick={() => DialStore.triggerAction(props.panelId, control.path)}
+            >
+              {control.label}
+            </button>
+            {midiSlot}
+          </div>
         );
+      }
       default:
         return null;
     }

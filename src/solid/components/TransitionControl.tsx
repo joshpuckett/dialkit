@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, type JSX } from 'solid-js';
 import { DialStore } from '../../store/DialStore';
 import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { fromStore } from '../primitives';
@@ -24,6 +24,7 @@ interface TransitionControlProps {
   onChange: (value: TransitionConfig) => void;
   hideDuration?: boolean;
   durationControl?: TransitionDurationControl;
+  midiSlot?: (path: string) => JSX.Element;
 }
 
 type CurveMode = 'easing' | 'simple' | 'advanced';
@@ -113,6 +114,7 @@ export function TransitionControl(props: TransitionControlProps) {
         max={external?.max ?? (isEasing() ? 2 : 1)}
         step={external?.step ?? 0.05}
         unit="s"
+        midiSlot={props.midiSlot?.(`${props.path}.duration`)}
       />
     );
   };
@@ -138,10 +140,10 @@ export function TransitionControl(props: TransitionControlProps) {
         </div>
 
         <Show when={isEasing()}>
-          <Slider label="x1" value={easing().ease[0]} onChange={(value) => updateEase(0, value)} min={0} max={1} step={0.01} />
-          <Slider label="y1" value={easing().ease[1]} onChange={(value) => updateEase(1, value)} min={-1} max={2} step={0.01} />
-          <Slider label="x2" value={easing().ease[2]} onChange={(value) => updateEase(2, value)} min={0} max={1} step={0.01} />
-          <Slider label="y2" value={easing().ease[3]} onChange={(value) => updateEase(3, value)} min={-1} max={2} step={0.01} />
+          <Slider label="x1" value={easing().ease[0]} onChange={(value) => updateEase(0, value)} min={0} max={1} step={0.01} midiSlot={props.midiSlot?.(`${props.path}.x1`)} />
+          <Slider label="y1" value={easing().ease[1]} onChange={(value) => updateEase(1, value)} min={-1} max={2} step={0.01} midiSlot={props.midiSlot?.(`${props.path}.y1`)} />
+          <Slider label="x2" value={easing().ease[2]} onChange={(value) => updateEase(2, value)} min={0} max={1} step={0.01} midiSlot={props.midiSlot?.(`${props.path}.x2`)} />
+          <Slider label="y2" value={easing().ease[3]} onChange={(value) => updateEase(3, value)} min={-1} max={2} step={0.01} midiSlot={props.midiSlot?.(`${props.path}.y2`)} />
           <div class="dialkit-labeled-control">
             <span class="dialkit-labeled-control-label">Ease</span>
             <input
@@ -163,12 +165,12 @@ export function TransitionControl(props: TransitionControlProps) {
         </Show>
 
         <Show when={isSimple()}>
-          <Slider label="Bounce" value={spring().bounce ?? 0.2} onChange={(value) => handleSpringUpdate('bounce', value)} min={0} max={1} step={0.05} />
+          <Slider label="Bounce" value={spring().bounce ?? 0.2} onChange={(value) => handleSpringUpdate('bounce', value)} min={0} max={1} step={0.05} midiSlot={props.midiSlot?.(`${props.path}.bounce`)} />
         </Show>
         <Show when={!isEasing() && !isSimple()}>
-          <Slider label="Stiffness" value={spring().stiffness ?? 400} onChange={(value) => handleSpringUpdate('stiffness', value)} min={1} max={1000} step={10} />
-          <Slider label="Damping" value={spring().damping ?? 17} onChange={(value) => handleSpringUpdate('damping', value)} min={1} max={100} step={1} />
-          <Slider label="Mass" value={spring().mass ?? 1} onChange={(value) => handleSpringUpdate('mass', value)} min={0.1} max={10} step={0.1} />
+          <Slider label="Stiffness" value={spring().stiffness ?? 400} onChange={(value) => handleSpringUpdate('stiffness', value)} min={1} max={1000} step={10} midiSlot={props.midiSlot?.(`${props.path}.stiffness`)} />
+          <Slider label="Damping" value={spring().damping ?? 17} onChange={(value) => handleSpringUpdate('damping', value)} min={1} max={100} step={1} midiSlot={props.midiSlot?.(`${props.path}.damping`)} />
+          <Slider label="Mass" value={spring().mass ?? 1} onChange={(value) => handleSpringUpdate('mass', value)} min={0.1} max={10} step={0.1} midiSlot={props.midiSlot?.(`${props.path}.mass`)} />
         </Show>
         {durationSlider()}
       </div>

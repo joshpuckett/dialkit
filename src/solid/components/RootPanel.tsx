@@ -10,6 +10,7 @@ export interface RootPanelProps {
   defaultOpen?: boolean;
   inline?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  headerActions?: JSX.Element;
   toolbar?: JSX.Element;
   panelHeightOffset?: number;
 }
@@ -47,6 +48,12 @@ export function RootPanel(props: RootPanelProps) {
               <span class="dialkit-folder-title dialkit-folder-title-root">
                 {props.title}
               </span>
+            </div>
+          </Show>
+
+          <Show when={isOpen() && props.headerActions}>
+            <div class="dialkit-root-header-actions" onClick={(e) => e.stopPropagation()}>
+              {props.headerActions}
             </div>
           </Show>
 
