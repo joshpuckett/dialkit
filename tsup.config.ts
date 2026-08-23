@@ -1,11 +1,25 @@
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
 
-const externalPackageStorePlugin = {
-  name: 'external-package-store',
-  setup(build: { onResolve: (options: { filter: RegExp }, callback: () => { path: string; external: boolean }) => void }) {
-    build.onResolve({ filter: /^\.\/store\/DialStore$/ }, () => ({
+// Rewrite the relative imports of DialKit's shared singleton modules to their
+// canonical package subpaths and mark them external. This keeps store and MIDI
+// runtime identity real across the React/Solid/Vue bundles (each resolves to the
+// same dist/store and dist/midi), matching how the unbundled Svelte package
+// already imports `dialkit/store` and `dialkit/midi`.
+const externalPackageSingletonsPlugin = {
+  name: 'external-package-singletons',
+  setup(build: {
+    onResolve: (
+      options: { filter: RegExp },
+      callback: () => { path: string; external: boolean }
+    ) => void;
+  }) {
+    build.onResolve({ filter: /(?:^|\/)store\/DialStore$/ }, () => ({
       path: 'dialkit/store',
+      external: true,
+    }));
+    build.onResolve({ filter: /(?:^|\/)midi(?:\/index)?$/ }, () => ({
+      path: 'dialkit/midi',
       external: true,
     }));
   },
@@ -30,7 +44,17 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    esbuildPlugins: [externalPackageStorePlugin],
+    esbuildPlugins: [externalPackageSingletonsPlugin],
+  },
+  // Shared Web MIDI runtime used by the unbundled Svelte package entry.
+  {
+    entry: { index: 'src/midi/index.ts' },
+    outDir: 'dist/midi',
+    format: ['esm', 'cjs'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    esbuildPlugins: [externalPackageSingletonsPlugin],
   },
   // Shared modules referenced by the packaged Svelte components.
   {
@@ -44,7 +68,7 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    esbuildPlugins: [externalPackageStorePlugin],
+    esbuildPlugins: [externalPackageSingletonsPlugin],
   },
   // React build
   {
@@ -54,6 +78,7 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
     external: ['react', 'react-dom', 'motion'],
+    esbuildPlugins: [externalPackageSingletonsPlugin],
     esbuildOptions(options) {
       options.banner = {
         js: '"use client";',
@@ -76,7 +101,7 @@ export default defineConfig([
     sourcemap: true,
     external: ['solid-js', 'solid-js/web', 'solid-js/store', 'motion'],
     tsconfig: 'tsconfig.solid.json',
-    esbuildPlugins: [solidPlugin()],
+    esbuildPlugins: [externalPackageSingletonsPlugin, solidPlugin()],
   },
   // Vue build
   {
@@ -88,5 +113,6 @@ export default defineConfig([
     sourcemap: true,
     external: ['vue', 'motion-v'],
     tsconfig: 'tsconfig.vue.json',
+    esbuildPlugins: [externalPackageSingletonsPlugin],
   },
 ]);

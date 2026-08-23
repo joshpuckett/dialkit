@@ -17,13 +17,15 @@
     "baseUrl": ".",
     "paths": {
       "dialkit/store": ["src/store/DialStore.ts"],
-      "dialkit/timeline": ["src/timeline/index.ts"]
+      "dialkit/timeline": ["src/timeline/index.ts"],
+      "dialkit/midi": ["src/midi/index.ts"]
     }
   },
   "include": [
     "src/index.ts",
     "src/components/**/*",
     "src/hooks/**/*",
+    "src/midi/**/*",
     "src/store/**/*"
   ],
   "exclude": ["node_modules", "dist", "example"]
