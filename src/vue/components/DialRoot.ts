@@ -1,12 +1,15 @@
-import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport } from 'vue';
+import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport, watch, type PropType } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
+import { getSharedMidiController } from '../../midi';
+import type { MidiController, MidiMappingOwner } from '../../midi';
 import { TimelineStore } from '../../store/TimelineStore';
 import type { TimelineMeta } from '../../store/TimelineStore';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
+import { MidiMenu } from './MidiMenu';
 import {
   blockPanelDragClick,
   getPanelDragHandle,
@@ -53,9 +56,22 @@ export const DialRoot = defineComponent({
       type: Boolean,
       default: isDevDefault,
     },
+    /**
+     * Opt in to the Web MIDI mapping UI. Pass `true` to use the shared controller,
+     * or your own controller from `createMidiController()`. Permission is only
+     * requested when the user enters "MIDI Map mode".
+     */
+    midi: {
+      type: [Boolean, Object] as PropType<boolean | MidiController>,
+      default: undefined,
+    },
   },
   emits: ['openChange'],
   setup(props, { emit }) {
+    const midiOwner: MidiMappingOwner = {};
+    const controller = computed<MidiController | undefined>(
+      () => (props.midi === true ? getSharedMidiController() : (props.midi || undefined)),
+    );
     const panels = ref<PanelConfig[]>([]);
     const timelines = ref<TimelineMeta[]>([]);
     const mounted = ref(false);
@@ -201,7 +217,12 @@ export const DialRoot = defineComponent({
       observer?.disconnect();
     });
 
+    watch(controller, (current, _previous, onCleanup) => {
+      if (current) onCleanup(() => current.stopMapping(midiOwner));
+    }, { immediate: true });
+
     const timelineToggle = () => timelines.value.length > 0 ? h(TimelineToggleButton) : null;
+    const midiMenu = () => controller.value ? h(MidiMenu, { controller: controller.value, ownerToken: midiOwner }) : null;
 
     const renderPanels = () => {
       if (panels.value.length === 0) {
@@ -212,6 +233,7 @@ export const DialRoot = defineComponent({
             isRoot: true,
             inline: props.mode === 'inline',
             toolbar: timelineToggle,
+            headerActions: midiMenu,
             onOpenChange: handleRootOpenChange,
             panelHeightOffset: 2,
           }, { default: () => [h('div', { class: 'dialkit-timeline-toolkit-only' }, 'Timeline')] }),
@@ -225,6 +247,7 @@ export const DialRoot = defineComponent({
             isRoot: true,
             inline: props.mode === 'inline',
             toolbar: timelineToggle,
+            headerActions: midiMenu,
             onOpenChange: handleRootOpenChange,
             panelHeightOffset: 2,
           }, {
@@ -233,6 +256,8 @@ export const DialRoot = defineComponent({
               panel,
               defaultOpen: true,
               variant: 'section',
+              midi: controller.value,
+              midiOwner,
             })),
           }),
         ])];
@@ -243,6 +268,9 @@ export const DialRoot = defineComponent({
         defaultOpen: props.mode === 'inline' || props.defaultOpen,
         inline: props.mode === 'inline',
         toolbarExtra: timelineToggle,
+        headerActions: midiMenu,
+        midi: controller.value,
+        midiOwner,
         onOpenChange: (open: boolean) => handlePanelOpenChange(panel.id, open),
       }));
     };

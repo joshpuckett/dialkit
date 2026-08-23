@@ -1,4 +1,4 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
@@ -92,6 +92,7 @@ export const TransitionControl = defineComponent({
     },
     hideDuration: { type: Boolean, default: false },
     durationControl: Object as PropType<TransitionDurationControl>,
+    midiSlot: Function as PropType<(path: string) => VNodeChild>,
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -173,6 +174,7 @@ export const TransitionControl = defineComponent({
           max: props.durationControl?.max ?? (isEasing ? 2 : 1),
           step: props.durationControl?.step ?? 0.05,
           unit: 's',
+          midiSlot: props.midiSlot?.(`${props.path}.duration`),
           onChange: props.durationControl?.onChange ?? ((next: number) => {
             if (isEasing) emit('change', { ...currentEasing, duration: next });
             else handleSpringUpdate('visualDuration', next);
@@ -200,10 +202,10 @@ export const TransitionControl = defineComponent({
             ]),
             ...(isEasing
               ? [
-                h(Slider, { label: 'x1', value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(0, next) }),
-                h(Slider, { label: 'y1', value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(1, next) }),
-                h(Slider, { label: 'x2', value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(2, next) }),
-                h(Slider, { label: 'y2', value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(3, next) }),
+                h(Slider, { label: 'x1', value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(0, next), midiSlot: props.midiSlot?.(`${props.path}.x1`) }),
+                h(Slider, { label: 'y1', value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(1, next), midiSlot: props.midiSlot?.(`${props.path}.y1`) }),
+                h(Slider, { label: 'x2', value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next: number) => updateEase(2, next), midiSlot: props.midiSlot?.(`${props.path}.x2`) }),
+                h(Slider, { label: 'y2', value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next: number) => updateEase(3, next), midiSlot: props.midiSlot?.(`${props.path}.y2`) }),
                 h(EaseTextInput, {
                   ease: currentEasing.ease,
                   onChange: (next: [number, number, number, number]) => emit('change', { ...currentEasing, ease: next }),
@@ -217,6 +219,7 @@ export const TransitionControl = defineComponent({
                     min: 0,
                     max: 1,
                     step: 0.05,
+                    midiSlot: props.midiSlot?.(`${props.path}.bounce`),
                     onChange: (next: number) => handleSpringUpdate('bounce', next),
                   }),
                 ]
@@ -227,6 +230,7 @@ export const TransitionControl = defineComponent({
                     min: 1,
                     max: 1000,
                     step: 10,
+                    midiSlot: props.midiSlot?.(`${props.path}.stiffness`),
                     onChange: (next: number) => handleSpringUpdate('stiffness', next),
                   }),
                   h(Slider, {
@@ -235,6 +239,7 @@ export const TransitionControl = defineComponent({
                     min: 1,
                     max: 100,
                     step: 1,
+                    midiSlot: props.midiSlot?.(`${props.path}.damping`),
                     onChange: (next: number) => handleSpringUpdate('damping', next),
                   }),
                   h(Slider, {
@@ -243,6 +248,7 @@ export const TransitionControl = defineComponent({
                     min: 0.1,
                     max: 10,
                     step: 0.1,
+                    midiSlot: props.midiSlot?.(`${props.path}.mass`),
                     onChange: (next: number) => handleSpringUpdate('mass', next),
                   }),
                 ]),

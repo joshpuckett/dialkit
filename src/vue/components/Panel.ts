@@ -2,17 +2,11 @@ import { Fragment, defineComponent, h, onMounted, onUnmounted, ref, type PropTyp
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_ADD_PRESET, ICON_CHECK, ICON_CLIPBOARD } from '../../icons';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, PanelConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import type { DialValue, PanelConfig } from '../../store/DialStore';
+import type { MidiController, MidiMappingOwner } from '../../midi';
 import { Folder } from './Folder';
-import { Slider } from './Slider';
-import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
-import { TransitionControl } from './TransitionControl';
-import { TextControl } from './TextControl';
-import { SelectControl } from './SelectControl';
-import { ColorControl } from './ColorControl';
+import { ControlRenderer } from './ControlRenderer';
 import { PresetManager } from './PresetManager';
-import { useShortcutContext } from './ShortcutListener';
 import { ShortcutsMenu } from './ShortcutsMenu';
 
 export const Panel = defineComponent({
@@ -35,10 +29,20 @@ export const Panel = defineComponent({
       default: 'root',
     },
     toolbarExtra: Function as PropType<() => VNodeChild>,
+    headerActions: Function as PropType<() => VNodeChild>,
+    midi: {
+      type: Object as PropType<MidiController>,
+      required: false,
+      default: undefined,
+    },
+    midiOwner: {
+      type: Object as PropType<MidiMappingOwner>,
+      required: false,
+      default: undefined,
+    },
   },
   emits: ['openChange'],
   setup(props, { emit }) {
-    const shortcutCtx = useShortcutContext();
     const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
@@ -93,90 +97,13 @@ export const Panel = defineComponent({
       emit('openChange', open);
     };
 
-    const renderControl = (control: ControlMeta) => {
-      const value = values.value[control.path];
-
-      switch (control.type) {
-        case 'slider':
-          return h(Slider, {
-            key: control.path,
-            label: control.label,
-            value: value as number,
-            min: control.min,
-            max: control.max,
-            step: control.step,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next: number) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'toggle':
-          return h(Toggle, {
-            key: control.path,
-            label: control.label,
-            checked: value as boolean,
-            shortcut: control.shortcut,
-            shortcutActive: shortcutCtx.activePanelId.value === props.panel.id && shortcutCtx.activePath.value === control.path,
-            onChange: (next: boolean) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'spring':
-          return h(SpringControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            spring: value as SpringConfig,
-            onChange: (next: SpringConfig) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'transition':
-          return h(TransitionControl, {
-            key: control.path,
-            panelId: props.panel.id,
-            path: control.path,
-            label: control.label,
-            value: value as TransitionConfig,
-            onChange: (next: TransitionConfig) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'folder':
-          return h(Folder, {
-            key: control.path,
-            title: control.label,
-            defaultOpen: control.defaultOpen ?? true,
-          }, {
-            default: () => (control.children ?? []).map(renderControl),
-          });
-        case 'text':
-          return h(TextControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            placeholder: control.placeholder,
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'select':
-          return h(SelectControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            options: control.options ?? [],
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'color':
-          return h(ColorControl, {
-            key: control.path,
-            label: control.label,
-            value: value as string,
-            onChange: (next: string) => DialStore.updateValue(props.panel.id, control.path, next),
-          });
-        case 'action':
-          return h('button', {
-            key: control.path,
-            class: 'dialkit-button',
-            onClick: () => DialStore.triggerAction(props.panel.id, control.path),
-          }, control.label);
-        default:
-          return null;
-      }
-    };
+    const renderControls = () => h(ControlRenderer, {
+      panelId: props.panel.id,
+      controls: props.panel.controls,
+      values: values.value,
+      midi: props.midi,
+      midiOwner: props.midiOwner,
+    });
 
     return () => {
       const toolbarNode = h(Fragment, null, [
@@ -278,7 +205,7 @@ export const Panel = defineComponent({
               class: 'dialkit-panel-section-toolbar',
               onClick: (event: Event) => event.stopPropagation(),
             }, [toolbarNode]),
-            ...props.panel.controls.map(renderControl),
+            renderControls(),
           ],
         });
       }
@@ -290,9 +217,10 @@ export const Panel = defineComponent({
           isRoot: true,
           inline: props.inline,
           toolbar: () => toolbarNode,
+          headerActions: props.headerActions,
           onOpenChange: handleOpenChange,
         }, {
-          default: () => props.panel.controls.map(renderControl),
+          default: renderControls,
         }),
       ]);
     };

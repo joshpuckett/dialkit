@@ -1,4 +1,4 @@
-import { Teleport, defineComponent, h, onMounted, ref, watch, type PropType } from 'vue';
+import { Teleport, defineComponent, h, onMounted, ref, watch, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
 
@@ -23,6 +23,7 @@ export const SelectControl = defineComponent({
       type: Array as PropType<SelectOption[]>,
       required: true,
     },
+    midiSlot: { type: null as unknown as PropType<VNodeChild>, default: undefined },
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -102,9 +103,10 @@ export const SelectControl = defineComponent({
         ref: triggerRef,
         class: 'dialkit-select-trigger',
         'data-open': String(isOpen.value),
+        'aria-label': `${props.label}: ${selectedLabel()}`,
         onClick: toggleDropdown,
       }, [
-        h('span', { class: 'dialkit-select-label' }, props.label),
+        h('span', { class: `dialkit-select-label${props.midiSlot ? ' dialkit-select-label-placeholder' : ''}` }, props.label),
         h('div', { class: 'dialkit-select-right' }, [
           h('span', { class: 'dialkit-select-value' }, selectedLabel()),
           h(motion.svg, {
@@ -120,6 +122,12 @@ export const SelectControl = defineComponent({
           }, [h('path', { d: 'M6 9.5L12 15.5L18 9.5' })]),
         ]),
       ]),
+      props.midiSlot
+        ? h('span', { class: 'dialkit-select-midi-label' }, [
+          h('span', { class: 'dialkit-select-label' }, props.label),
+          props.midiSlot,
+        ])
+        : null,
       portalTarget.value
         ? h(Teleport, { to: portalTarget.value }, [
           h(AnimatePresence, null, {

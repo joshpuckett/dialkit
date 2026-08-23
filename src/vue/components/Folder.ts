@@ -14,6 +14,11 @@ export const Folder = defineComponent({
       required: false,
       default: null,
     },
+    headerActions: {
+      type: null as unknown as PropType<(() => VNodeChild) | null>,
+      required: false,
+      default: null,
+    },
     panelHeightOffset: {
       type: Number,
       default: 0,
@@ -86,6 +91,9 @@ export const Folder = defineComponent({
           : h('div', { class: 'dialkit-folder-title-row' }, [
             h('span', { class: 'dialkit-folder-title' }, props.title),
           ]),
+        props.isRoot && isOpen.value && props.headerActions
+          ? h('div', { class: 'dialkit-root-header-actions', onClick: (event: Event) => event.stopPropagation() }, [props.headerActions()])
+          : null,
         props.isRoot && !props.inline
           ? h('svg', { class: 'dialkit-panel-icon', viewBox: '0 0 16 16', fill: 'none' }, [
             h('path', {

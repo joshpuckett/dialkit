@@ -1,4 +1,4 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { SpringConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
@@ -16,6 +16,7 @@ export const SpringControl = defineComponent({
       type: Object as PropType<SpringConfig>,
       required: true,
     },
+    midiSlot: Function as PropType<(path: string) => VNodeChild>,
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -89,6 +90,7 @@ export const SpringControl = defineComponent({
                 max: 1,
                 step: 0.05,
                 unit: 's',
+                midiSlot: props.midiSlot?.(`${props.path}.duration`),
                 onChange: (next: number) => handleUpdate('visualDuration', next),
               }),
               h(Slider, {
@@ -97,6 +99,7 @@ export const SpringControl = defineComponent({
                 min: 0,
                 max: 1,
                 step: 0.05,
+                midiSlot: props.midiSlot?.(`${props.path}.bounce`),
                 onChange: (next: number) => handleUpdate('bounce', next),
               }),
             ]
@@ -107,6 +110,7 @@ export const SpringControl = defineComponent({
                 min: 1,
                 max: 1000,
                 step: 10,
+                midiSlot: props.midiSlot?.(`${props.path}.stiffness`),
                 onChange: (next: number) => handleUpdate('stiffness', next),
               }),
               h(Slider, {
@@ -115,6 +119,7 @@ export const SpringControl = defineComponent({
                 min: 1,
                 max: 100,
                 step: 1,
+                midiSlot: props.midiSlot?.(`${props.path}.damping`),
                 onChange: (next: number) => handleUpdate('damping', next),
               }),
               h(Slider, {
@@ -123,6 +128,7 @@ export const SpringControl = defineComponent({
                 min: 0.1,
                 max: 10,
                 step: 0.1,
+                midiSlot: props.midiSlot?.(`${props.path}.mass`),
                 onChange: (next: number) => handleUpdate('mass', next),
               }),
             ]),

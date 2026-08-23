@@ -1,4 +1,4 @@
-import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
+import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType, type VNodeChild } from 'vue';
 import { animate, motionValue } from 'motion-v';
 import type { ShortcutConfig } from '../../store/DialStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
@@ -19,6 +19,8 @@ export const Slider = defineComponent({
     unit: { type: String, required: false },
     shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
     shortcutActive: { type: Boolean, default: false },
+    /** Optional MIDI mapping badge rendered beside the shortcut pill. */
+    midiSlot: { type: [Object, Function] as PropType<VNodeChild>, default: undefined },
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -401,6 +403,7 @@ export const Slider = defineComponent({
                 class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
               }, formatSliderShortcut(props.shortcut))
             : null,
+          props.midiSlot ?? null,
         ]),
         showInput.value
           ? h('input', {

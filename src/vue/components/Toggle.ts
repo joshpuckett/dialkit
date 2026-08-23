@@ -1,4 +1,4 @@
-import { defineComponent, h, type PropType } from 'vue';
+import { defineComponent, h, type PropType, type VNodeChild } from 'vue';
 import { SegmentedControl } from './SegmentedControl';
 import type { ShortcutConfig } from '../../store/DialStore';
 import { formatToggleShortcut } from '../../shortcut-utils';
@@ -10,6 +10,7 @@ export const Toggle = defineComponent({
     checked: { type: Boolean, required: true },
     shortcut: { type: Object as PropType<ShortcutConfig>, default: undefined },
     shortcutActive: { type: Boolean, default: false },
+    midiSlot: { type: [Object, Function] as PropType<VNodeChild>, default: undefined },
   },
   emits: ['change'],
   setup(props, { emit }) {
@@ -21,6 +22,7 @@ export const Toggle = defineComponent({
               class: `dialkit-shortcut-pill${props.shortcutActive ? ' dialkit-shortcut-pill-active' : ''}`,
             }, formatToggleShortcut(props.shortcut))
           : null,
+        props.midiSlot ?? null,
       ]),
       h(SegmentedControl, {
         options: [

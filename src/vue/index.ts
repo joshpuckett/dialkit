@@ -26,6 +26,7 @@ export { DialTimeline } from './components/Timeline/DialTimeline';
 export { ShortcutListener, useShortcutContext, ShortcutKey } from './components/ShortcutListener';
 export type { ShortcutState } from './components/ShortcutListener';
 export { ShortcutsMenu } from './components/ShortcutsMenu';
+export { MidiMenu } from './components/MidiMenu';
 
 export { Slider } from './components/Slider';
 export { Toggle } from './components/Toggle';
@@ -60,3 +61,33 @@ export type {
   PanelConfig,
   ShortcutConfig,
 } from '../store/DialStore';
+
+// Framework-neutral Web MIDI mapping
+export {
+  createMidiController,
+  getSharedMidiController,
+  midiConnectionView,
+  midiInputDisplayName,
+  midiTargetBadge,
+  MidiLearnCancelledError,
+  scaleMidiValue,
+} from '../midi';
+export type {
+  MidiAccessLike,
+  MidiBadgeState,
+  MidiBinding,
+  MidiBindingOptions,
+  MidiConnectionAction,
+  MidiController,
+  MidiControllerOptions,
+  MidiControllerSnapshot,
+  MidiInputInfo,
+  MidiInputLike,
+  MidiLearnSource,
+  MidiLearnOptions,
+  MidiLearnWarning,
+  MidiMappingOwner,
+  MidiMappingState,
+  MidiMessageEventLike,
+  MidiStatus,
+} from '../midi';
