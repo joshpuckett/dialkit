@@ -10,7 +10,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<><PhotoStack /><DialRoot position="top-right" /></>} />
+        <Route path="/" element={<><PhotoStack /><DialRoot position="top-right" midi /></>} />
         <Route path="/release-1.2" element={<Release />} />
       </Routes>
     </BrowserRouter>

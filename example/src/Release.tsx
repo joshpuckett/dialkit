@@ -145,7 +145,7 @@ export function Release() {
   return (
     <>
       <ReleaseContent />
-      <DialRoot position="top-right" theme="light" />
+      <DialRoot position="top-right" theme="light" midi />
     </>
   );
 }

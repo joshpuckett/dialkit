@@ -559,6 +559,105 @@ Shortcuts are automatically disabled when a text input is focused.
 
 ---
 
+## MIDI Controller Mapping
+
+DialKit can learn standard Web MIDI continuous-controller (CC) messages and apply them to compatible controls in any registered panel. The runtime and root-level mapping UI are available from the React, Solid, Svelte, and Vue adapters.
+
+### In-product mapping (opt in with `midi`)
+
+Pass `midi` to `<DialRoot>` to add one root-level mapping workflow to the DialKit header. The same prop and workflow exist in every adapter.
+
+```tsx
+import { DialRoot, useDialKit } from 'dialkit';
+
+function App() {
+  useDialKit('Card', {
+    blur: [24, 0, 100, 1],
+    shadow: { opacity: [0.25, 0, 1, 0.01] },
+  }, { id: 'card' });
+
+  return <DialRoot midi />;      // or midi={myController}
+}
+```
+
+The header initially shows **No controller** immediately left of the DialKit show/hide control. Open it, choose **Allow MIDI access**, and select a detected controller. The header then shows that controller's name and connection status.
+
+Choose **Map parameters** to close the menu and reveal a **Map** badge on every compatible control across the current DialKit root. Select a badge, then move or press the desired hardware control while it says **Move control**. The selected controller limits which input is listened to during learning; the saved UI mapping records the CC, not the device id or channel, so another controller sending the same CC can drive it later. Mapped controls keep a subtle live status dot. Select **Done** to leave mapping mode. Reopen the controller menu to review or remove mappings. Press **Escape** once to cancel a pending learn and again to leave mapping mode.
+
+`midi` accepts `true`, which uses the shared process-wide controller, or your own controller from `createMidiController()`. Nothing requests browser permission on mount or during SSR.
+
+### Supported controls and MIDI semantics
+
+| DialKit control | MIDI behavior |
+|-----------------|---------------|
+| Slider / numeric value | CC values 0–127 scale to the control range, snap to its step, and clamp to its limits. |
+| Select with 2+ options | CC values are quantized across the available options. |
+| Toggle | A CC crossing from below 64 to 64 or above toggles once. |
+| Action | A CC crossing from below 64 to 64 or above triggers once. |
+| Easing transition | The visible `x1`, `y1`, `x2`, `y2`, and `duration` parameters map as continuous values. |
+| Time spring | The visible `bounce` and `duration` parameters map as continuous values. |
+| Physics spring | The visible `stiffness`, `damping`, and `mass` parameters map as continuous values. |
+| Text, color, folders, or a single-option select | Not mappable. |
+
+MIDI does not report whether a physical CC came from a knob, fader, or button. DialKit therefore enforces the target behavior shown above rather than guessing the hardware shape. Non-CC messages do not create mappings and leave the pending control in an inline warning state.
+
+### Low-level API
+
+Use the runtime directly for headless mapping or custom UI. `getSharedMidiController()` returns the same instance the `midi` prop uses.
+
+```ts
+import { createMidiController } from 'dialkit';
+
+const midi = createMidiController();
+
+async function enable() {
+  if (await midi.connect()) {
+    midi.bind({ panelId: 'card', path: 'blur', cc: 74 });
+  }
+}
+```
+
+`connect()` requests Web MIDI permission and resolves to `true` when access is ready. It resolves to `false` instead of throwing when Web MIDI is unsupported, permission is denied, or access fails; inspect `midi.getSnapshot().status` (`idle | connecting | connected | unsupported | denied | error`) and `.error` to distinguish those cases. `createMidiController()` is SSR-safe — it never touches `navigator` until `connect()`.
+
+#### Bind, learn, and unbind
+
+```ts
+// Explicit mapping. Omitted min/max use the DialKit slider range.
+const binding = midi.bind({
+  panelId: 'card',
+  path: 'shadow.opacity',
+  cc: 21,
+  channel: 1,              // optional, 1–16 — omit to accept every channel
+  inputId: 'controller-1', // optional — omit to accept every input
+  min: 0.2,                // optional output range
+  max: 0.8,
+  midiMin: 0,              // optional input range; reverse for inversion
+  midiMax: 127,
+});
+
+// Learn the next CC from any connected input.
+const learned = await midi.learn({ panelId: 'card', path: 'blur' });
+
+// Listen only to one input during learning without persisting that input id.
+const selectedInput = await midi.learn(
+  { panelId: 'card', path: 'blur' },
+  { inputId: 'controller-1' },
+);
+
+midi.unbind(binding);                 // or midi.unbind(binding.id)
+midi.unbindTarget('card', 'blur');
+midi.unbindAll();
+midi.cancelLearn();
+```
+
+The optional second argument to `learn()` filters the capture source without adding that filter to the saved binding. Put `inputId` or `channel` in the first argument, or use `bind()`, only when playback should remain restricted to that device or channel. A new binding for the same `panelId` + `path` replaces the previous one.
+
+`getSnapshot()` returns `{ status, inputs, activeInputId, bindings, learning, learningWarning, mapping, error }`, and `subscribe(listener)` reports permission, hot-plug, active-controller, binding, learn, warning, and mapping-mode changes without coupling to a framework. A detected input is not active until `selectInput(inputId)` is called. Root-level `startMapping()` (or scoped `startMapping(panelId)`) and `stopMapping()` control mapping state; `canMapTarget(panelId, path)` resolves compatibility from the live panel schema. `disconnect()` cancels learning, detaches device listeners, closes inputs when supported, and returns to `idle` while keeping bindings for a later reconnect.
+
+Web MIDI needs a secure context, and the permission prompt should be initiated by a user gesture; browser support varies. Automated coverage includes runtime unit tests with a fake MIDI backend, source-contract checks for the four adapters, an installed-package singleton smoke, and 96 fixed-seed generated panel schemas exercising the declared target matrix. The generated suite is deterministic schema coverage, not arbitrary application rendering or physical-hardware coverage. **Behavior with physical MIDI hardware should still be confirmed in a supported browser.**
+
+---
+
 ## Full Example
 
 ```tsx

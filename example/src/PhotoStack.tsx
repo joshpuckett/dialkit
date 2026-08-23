@@ -99,12 +99,15 @@ export function PhotoStack() {
 
   return (
     <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'flex-start',
+      display: 'grid',
+      gridTemplateColumns: 'max-content',
+      alignContent: 'center',
+      justifyContent: 'center',
+      justifyItems: 'start',
       gap: stage.stackGap,
       height: '100vh',
       width: '100%',
+      boxSizing: 'border-box',
       padding: stage.pagePadding,
       background: bgColor,
       transition: 'background 0.3s ease',
