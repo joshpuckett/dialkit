@@ -7,6 +7,7 @@ import {
   handleMidiEscape,
   midiConnectionView,
   midiTargetBadge,
+  resumeMidiConnection,
   MidiLearnCancelledError,
   scaleMidiValue,
   type MidiAccessLike,
@@ -24,6 +25,7 @@ class FakeMidiInput implements MidiInputLike {
   openCalls = 0;
   closeCalls = 0;
   openError: Error | null = null;
+  openErrors: Error[] = [];
   openGate: Promise<void> | null = null;
   openGates: Promise<void>[] = [];
 
@@ -41,6 +43,8 @@ class FakeMidiInput implements MidiInputLike {
 
   async open(): Promise<void> {
     this.openCalls += 1;
+    const queuedError = this.openErrors.shift();
+    if (queuedError) throw queuedError;
     if (this.openError) throw this.openError;
     await (this.openGates.shift() ?? this.openGate);
     this.connection = 'open';
@@ -120,24 +124,93 @@ test('is SSR/unsupported safe and reports permission denial without throwing', a
   assert.equal(await directConnect, true);
 });
 
-test('rejects unavailable inputs without publishing them and can retry', async () => {
+test('resumes MIDI only when browser permission is already granted', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const access = new FakeMidiAccess();
+  const input = new FakeMidiInput('resume');
+  access.inputs.set(input.id, input);
+  let requested = 0;
+  const midi = createMidiController({
+    requestMIDIAccess: async () => {
+      requested += 1;
+      return access;
+    },
+  });
+
+  try {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { permissions: { query: async () => ({ state: 'prompt' }) } },
+    });
+    assert.equal(await resumeMidiConnection(midi), false);
+    assert.equal(requested, 0, 'a mount must not prompt for first-use permission');
+
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { permissions: { query: async () => ({ state: 'granted' }) } },
+    });
+    assert.equal(await resumeMidiConnection(midi), true);
+    assert.equal(requested, 1);
+    assert.equal(midi.getSnapshot().status, 'connected');
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
+    else delete (globalThis as { navigator?: unknown }).navigator;
+  }
+});
+
+test('keeps access after an unavailable initial input and recovers on device statechange', async () => {
   const access = new FakeMidiAccess();
   const input = new FakeMidiInput('broken');
   const openError = new Error('Port unavailable');
   input.openError = openError;
   access.inputs.set(input.id, input);
-  const midi = createMidiController({ requestMIDIAccess: async () => access });
+  let accessRequests = 0;
+  const midi = createMidiController({ requestMIDIAccess: async () => {
+    accessRequests += 1;
+    return access;
+  } });
 
   assert.equal(await midi.connect(), false);
-  assert.equal(midi.getSnapshot().status, 'error');
+  assert.equal(midi.getSnapshot().status, 'connected', 'granted MIDI access remains live while the port is degraded');
   assert.equal(midi.getSnapshot().error, openError);
   assert.deepEqual(midi.getSnapshot().inputs, []);
   assert.equal(input.listeners.size, 0);
+  assert.equal(input.openCalls, 2, 'a stale port is reset and retried once');
+  assert.equal(access.listeners.size, 1, 'statechange remains attached for automatic recovery');
+  assert.deepEqual(
+    [midiConnectionView(midi.getSnapshot()).action, midiConnectionView(midi.getSnapshot()).actionLabel],
+    ['retry', 'Retry unavailable controllers'],
+  );
 
   input.openError = null;
+  input.state = 'disconnected';
+  access.listeners.forEach((listener) => listener());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  input.state = 'connected';
+  access.listeners.forEach((listener) => listener());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(midi.getSnapshot().status, 'connected');
+  assert.equal(midi.getSnapshot().error, null);
+  assert.equal(midi.getSnapshot().inputs[0]?.id, input.id);
+  assert.equal(accessRequests, 1, 'hot-plug recovery reuses the granted MIDI session');
+  midi.disconnect();
+});
+
+test('resets and reopens a transiently stale initial MIDI port without a physical reconnect', async () => {
+  const access = new FakeMidiAccess();
+  const input = new FakeMidiInput('stale-once');
+  input.openErrors.push(new Error('Stale USB MIDI port'));
+  access.inputs.set(input.id, input);
+  const midi = createMidiController({ requestMIDIAccess: async () => access });
+
   assert.equal(await midi.connect(), true);
   assert.equal(midi.getSnapshot().status, 'connected');
+  assert.equal(midi.getSnapshot().error, null);
   assert.equal(midi.getSnapshot().inputs[0]?.id, input.id);
+  assert.equal(input.openCalls, 2);
+  assert.equal(input.closeCalls, 1);
+  assert.equal(input.listeners.size, 1);
   midi.disconnect();
 });
 
@@ -317,12 +390,14 @@ test('failed newer reconnect closes a reused input opened by stale completion', 
   assert.equal(input.connection, 'open');
   assert.equal(input.closeCalls, 1);
 
+  input.openError = new Error('newer retry also failed');
   rejectSecond(new Error('newer open failed'));
   assert.equal(await firstConnect, false);
   assert.equal(await secondConnect, false);
-  assert.equal(midi.getSnapshot().status, 'error');
+  assert.equal(midi.getSnapshot().status, 'connected', 'granted access survives a failed port retry');
+  assert.equal(midi.getSnapshot().error, input.openError);
   assert.equal(input.connection, 'closed');
-  assert.equal(input.closeCalls, 2);
+  assert.equal(input.closeCalls, 3);
   assert.equal(input.listeners.size, 0);
   midi.disconnect();
 });
@@ -476,7 +551,7 @@ test('publishes hot-plug open failures as a retryable degraded connection and re
     assert.equal(recovered.status, 'connected');
     assert.equal(recovered.error, null, 'a later successful port open clears degraded state');
     assert.deepEqual(recovered.inputs.map((input) => input.id), ['working', 'unavailable']);
-    assert.equal(unavailable.openCalls, 2);
+    assert.equal(unavailable.openCalls, 3, 'hot-plug failure gets one reset attempt before the explicit retry');
   } finally {
     midi.disconnect();
   }

@@ -349,18 +349,48 @@ export function createMidiController(options: MidiControllerOptions = {}): MidiC
       try {
         await input.open?.();
       } catch (reason) {
-        if (pendingInputs.get(input.id) === ownership) {
-          pendingInputs.delete(input.id);
-          firstError ??= toError(reason);
-          await input.close?.().catch(() => undefined);
-        } else {
+        if (pendingInputs.get(input.id) !== ownership) {
           const newer = pendingInputs.get(input.id);
           const newerRegistration = inputRegistrations.get(input.id)?.input === input;
           if ((!newer || newer.input !== input) && !newerRegistration) {
             await input.close?.().catch(() => undefined);
           }
+          return;
         }
-        return;
+
+        // Some browser/USB stacks retain a stale open port across a page or dev
+        // server restart. Reset it and retry once before requiring a physical
+        // unplug/replug. Ownership checks keep a stale retry from racing a newer
+        // input instance or an explicit disconnect.
+        await input.close?.().catch(() => undefined);
+        const currentInput = Array.from(activeAccess.inputs.values())
+          .find((candidate) => candidate.id === input.id);
+        if (
+          pendingInputs.get(input.id) !== ownership
+          || access !== activeAccess
+          || currentInput !== input
+          || input.state === 'disconnected'
+        ) {
+          if (pendingInputs.get(input.id) === ownership) pendingInputs.delete(input.id);
+          return;
+        }
+
+        try {
+          await input.open?.();
+        } catch (retryReason) {
+          if (pendingInputs.get(input.id) === ownership) {
+            pendingInputs.delete(input.id);
+            firstError ??= toError(retryReason ?? reason);
+            await input.close?.().catch(() => undefined);
+          } else {
+            const newer = pendingInputs.get(input.id);
+            const newerRegistration = inputRegistrations.get(input.id)?.input === input;
+            if ((!newer || newer.input !== input) && !newerRegistration) {
+              await input.close?.().catch(() => undefined);
+            }
+          }
+          return;
+        }
       }
       if (pendingInputs.get(input.id) !== ownership) {
         const newer = pendingInputs.get(input.id);
@@ -491,13 +521,13 @@ export function createMidiController(options: MidiControllerOptions = {}): MidiC
           access.addEventListener('statechange', stateChangeListener);
           return syncInputs().then((inputs) => {
             if (epoch !== connectionEpoch) return false;
-            if (inputs.candidateCount > 0 && inputs.openedCount === 0 && inputs.firstError) {
-              throw inputs.firstError;
-            }
             status = 'connected';
             error = inputs.firstError;
             notify();
-            return epoch === connectionEpoch && status === 'connected' && access === nextAccess;
+            return epoch === connectionEpoch
+              && status === 'connected'
+              && access === nextAccess
+              && (inputs.openedCount > 0 || inputs.candidateCount === 0);
           });
         })
         .catch((reason: unknown) => {
@@ -692,6 +722,34 @@ let sharedController: MidiController | null = null;
  */
 export function getSharedMidiController(): MidiController {
   return (sharedController ??= createMidiController());
+}
+
+/**
+ * Reconnects an opted-in controller only when the browser has already granted
+ * MIDI permission. This keeps the explicit permission CTA first-use only and
+ * never causes a permission prompt during mount.
+ */
+export async function resumeMidiConnection(controller: MidiController): Promise<boolean> {
+  if (controller.getSnapshot().status !== 'idle') return false;
+
+  const permissions = (globalThis as {
+    navigator?: {
+      permissions?: {
+        query(descriptor: { name: string; sysex?: boolean }): Promise<{ state?: string }>;
+      };
+    };
+  }).navigator?.permissions;
+  if (!permissions) return false;
+
+  try {
+    const permission = await permissions.query({ name: 'midi', sysex: false });
+    if (permission.state !== 'granted' || controller.getSnapshot().status !== 'idle') return false;
+    return controller.connect();
+  } catch {
+    // Browsers that implement Web MIDI but not the MIDI Permissions descriptor
+    // keep the explicit CTA path. A mount must never trigger a prompt or error.
+    return false;
+  }
 }
 
 /** Settles one Escape keypress for the panel or root that owns the active MIDI UI state. */
