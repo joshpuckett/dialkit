@@ -3,7 +3,7 @@
   import type { PanelConfig } from 'dialkit/store';
   import { TimelineStore } from 'dialkit/timeline';
   import type { TimelineMeta } from 'dialkit/timeline';
-  import { getSharedMidiController } from 'dialkit/midi';
+  import { getSharedMidiController, resumeMidiConnection } from 'dialkit/midi';
   import type { MidiController, MidiMappingOwner } from 'dialkit/midi';
   import { themeCSS } from '../theme-css';
   import Portal from '../Portal.svelte';
@@ -106,6 +106,7 @@
   $effect(() => {
     const activeController = controller;
     if (!activeController) return;
+    void resumeMidiConnection(activeController);
     return () => activeController.stopMapping(midiOwner);
   });
 

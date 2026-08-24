@@ -93,7 +93,13 @@ export function MidiMenu(props: MidiMenuProps) {
     if (isMapping()) {
       props.controller.stopMapping();
     } else if (dropdown.isOpen()) dropdown.close();
-    else open();
+    else {
+      open();
+      const current = props.controller.getSnapshot();
+      if (current.status === 'idle' || current.status === 'denied' || current.status === 'error' || current.error) {
+        void requestAccess();
+      }
+    }
   };
 
   // Outside-click closes the menu. Mapping mode persists so the sliders behind it

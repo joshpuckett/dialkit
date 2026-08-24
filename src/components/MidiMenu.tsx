@@ -69,8 +69,14 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
     if (isMapping) {
       controller.stopMapping();
     } else if (isOpen) close();
-    else open();
-  }, [close, controller, isMapping, isOpen, open]);
+    else {
+      open();
+      const current = controller.getSnapshot();
+      if (current.status === 'idle' || current.status === 'denied' || current.status === 'error' || current.error) {
+        void requestAccess();
+      }
+    }
+  }, [close, controller, isMapping, isOpen, open, requestAccess]);
 
   // Outside-click closes the menu. Mapping mode persists so the sliders behind it
   // stay interactive while the user maps them.

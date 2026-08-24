@@ -2,7 +2,7 @@ import { createEffect, createSignal, onCleanup, onMount, Show, For } from 'solid
 import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
 import { TimelineStore } from '../../store/TimelineStore';
-import { getSharedMidiController } from '../../midi';
+import { getSharedMidiController, resumeMidiConnection } from '../../midi';
 import type { MidiController, MidiMappingOwner } from '../../midi';
 import { fromStore } from '../primitives';
 import { ShortcutListener } from './ShortcutListener';
@@ -86,6 +86,7 @@ function DialRootInner(props: DialRootProps) {
   createEffect(() => {
     const controller = midiController();
     if (!controller) return;
+    void resumeMidiConnection(controller);
     onCleanup(() => controller.stopMapping(midiOwner));
   });
 

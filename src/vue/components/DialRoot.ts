@@ -1,7 +1,7 @@
 import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport, watch, type PropType } from 'vue';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
-import { getSharedMidiController } from '../../midi';
+import { getSharedMidiController, resumeMidiConnection } from '../../midi';
 import type { MidiController, MidiMappingOwner } from '../../midi';
 import { TimelineStore } from '../../store/TimelineStore';
 import type { TimelineMeta } from '../../store/TimelineStore';
@@ -218,7 +218,10 @@ export const DialRoot = defineComponent({
     });
 
     watch(controller, (current, _previous, onCleanup) => {
-      if (current) onCleanup(() => current.stopMapping(midiOwner));
+      if (current) {
+        void resumeMidiConnection(current);
+        onCleanup(() => current.stopMapping(midiOwner));
+      }
     }, { immediate: true });
 
     const timelineToggle = () => timelines.value.length > 0 ? h(TimelineToggleButton) : null;

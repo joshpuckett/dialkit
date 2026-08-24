@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
-import { getSharedMidiController } from '../midi';
+import { getSharedMidiController, resumeMidiConnection } from '../midi';
 import type { MidiController, MidiMappingOwner } from '../midi';
 import { isDevDefault } from '../env';
 import { Folder } from './Folder';
@@ -78,6 +78,10 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   useEffect(() => () => {
     midiController?.stopMapping(midiOwner);
   }, [midiController, midiOwner]);
+
+  useEffect(() => {
+    if (midiController) void resumeMidiConnection(midiController);
+  }, [midiController]);
 
   useEffect(() => {
     const fallbackOpen = inline || defaultOpen;
