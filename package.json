@@ -74,7 +74,7 @@
     "build": "rm -rf dist && tsup && npm run build:svelte",
     "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/store/DialStore.d.ts src/store/DialStore.d.ts.map src/store/TimelineStore.d.ts src/store/TimelineStore.d.ts.map src/store/TimelineUiStore.d.ts src/store/TimelineUiStore.d.ts.map src/midi/index.d.ts src/midi/index.d.ts.map src/timeline/adapter.d.ts src/timeline/adapter.d.ts.map src/timeline/index.d.ts src/timeline/index.d.ts.map src/timeline-core.d.ts src/timeline-core.d.ts.map src/transition-math.d.ts src/transition-math.d.ts.map src/copy-instruction.d.ts src/copy-instruction.d.ts.map src/env.d.ts src/env.d.ts.map src/dropdown-position.d.ts src/dropdown-position.d.ts.map src/panel-drag.d.ts src/panel-drag.d.ts.map",
     "dev": "tsup --watch",
-    "prepack": "npm run build",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run release:check",
     "release:check": "npm test && npm run typecheck && npm run build && npm run smoke:package",
     "smoke:package": "node scripts/smoke-package.mjs",
