@@ -25,8 +25,8 @@ interface DialRootProps {
   onOpenChange?: (open: boolean) => void;
   /**
    * Opt in to the Web MIDI mapping UI. Pass `true` to use the shared controller,
-   * or your own controller from `createMidiController()`. Permission is only
-   * requested when the user enters "MIDI Map mode".
+   * or your own controller from `createMidiController()`. Previously granted
+   * access resumes on mount; first-use permission starts from the header control.
    */
   midi?: boolean | MidiController;
 }

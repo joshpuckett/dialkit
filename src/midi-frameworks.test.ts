@@ -44,8 +44,10 @@ describe('MIDI mapping UI parity across framework adapters', () => {
       assert.ok(menu.includes('data-theme'), `${adapter.name} portaled menu should preserve the DialKit theme`);
       assert.ok(menu.includes('midiConnectionView'), `${adapter.name} menu should derive status via midiConnectionView`);
       assert.ok(menu.includes('MIDI_CONTROLLER_DESCRIPTION'), `${adapter.name} should use the shared one-sentence controller description`);
+      assert.ok(menu.includes('dialkit-midi-connection-status') && menu.includes('showStatus'), `${adapter.name} should render permission, support, and no-device status`);
       assert.ok(/startMapping/.test(menu) && /stopMapping/.test(menu), `${adapter.name} menu should toggle mapping mode`);
       assert.ok(menu.includes('.connect()') && menu.includes('await'), `${adapter.name} menu should request MIDI access from its CTA`);
+      assert.ok(menu.includes('.disconnect()') && menu.includes('actionLabel'), `${adapter.name} should expose the shared recovery action for a silently stale port`);
       assert.ok(menu.includes('Map parameters'), `${adapter.name} should expose an explicit mapping-mode CTA`);
       assert.ok(menu.includes('dialkit-button dialkit-midi-cta'), `${adapter.name} MIDI CTAs should reuse the canonical DialKit button style`);
       assert.ok(!menu.includes('dialkit-midi-enable') && !menu.includes('dialkit-midi-map-parameters'), `${adapter.name} should not retain bespoke MIDI CTA classes`);

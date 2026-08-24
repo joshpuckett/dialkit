@@ -58,6 +58,8 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
     queueMicrotask(() => triggerRef.current?.focus());
   }, []);
   const requestAccess = useCallback(async () => {
+    const current = controller.getSnapshot();
+    if (current.status === 'connected' && !current.error) controller.disconnect();
     await controller.connect();
   }, [controller]);
   const enterMapMode = useCallback(() => {
@@ -169,6 +171,12 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
             <span className="dialkit-midi-status-label">{MIDI_CONTROLLER_DESCRIPTION}</span>
           </div>
 
+          {view.showStatus && (
+            <div className="dialkit-midi-connection-status" data-status={view.status} role="status">
+              {view.label}
+            </div>
+          )}
+
           {snapshot.inputs.length > 0 && (
             <div className="dialkit-midi-devices" role="radiogroup" aria-label="MIDI controllers">
               {snapshot.inputs.map((input) => {
@@ -202,7 +210,7 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
             </div>
           )}
 
-          {view.action && (
+          {view.action && snapshot.status !== 'connected' && (
             <button className="dialkit-button dialkit-midi-cta" onClick={() => { void requestAccess(); }}>
               <span>{view.actionLabel}</span>
             </button>
@@ -215,6 +223,12 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
               onClick={enterMapMode}
             >
               Map parameters
+            </button>
+          )}
+
+          {view.action && snapshot.status === 'connected' && (
+            <button className="dialkit-button dialkit-midi-cta" onClick={() => { void requestAccess(); }}>
+              <span>{view.actionLabel}</span>
             </button>
           )}
 
@@ -245,13 +259,6 @@ export function MidiMenu({ controller, ownerToken: providedOwnerToken }: MidiMen
             </div>
           )}
 
-          <div className="dialkit-midi-hint">
-            {view.connected
-              ? snapshot.activeInputId
-                ? 'Active controller selected.'
-                : 'Select a controller to continue.'
-              : 'Allow access to detect MIDI controllers.'}
-          </div>
         </motion.div>,
         document.body
       )}

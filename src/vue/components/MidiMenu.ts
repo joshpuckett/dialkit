@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick, onUnmounted, ref, shallowRef, Teleport, useId, watch, type PropType } from 'vue';
+import { defineComponent, h, nextTick, onMounted, onUnmounted, ref, shallowRef, Teleport, useId, watch, type PropType } from 'vue';
 import { motion } from 'motion-v';
 import { DialStore } from '../../store/DialStore';
 import type { ControlMeta } from '../../store/DialStore';
@@ -52,16 +52,19 @@ export const MidiMenu = defineComponent({
 
     const snapshot = shallowRef(props.controller.getSnapshot());
 
-    watch(() => props.controller, (controller, _previous, onCleanup) => {
-      snapshot.value = controller.getSnapshot();
-      const unsubscribe = controller.subscribe(() => {
+    let stopControllerWatch: (() => void) | undefined;
+    onMounted(() => {
+      stopControllerWatch = watch(() => props.controller, (controller, _previous, onCleanup) => {
         snapshot.value = controller.getSnapshot();
-      });
-      onCleanup(() => {
-        unsubscribe();
-        if (!props.ownerToken) controller.stopMapping(ownerToken);
-      });
-    }, { immediate: true });
+        const unsubscribe = controller.subscribe(() => {
+          snapshot.value = controller.getSnapshot();
+        });
+        onCleanup(() => {
+          unsubscribe();
+          if (!props.ownerToken) controller.stopMapping(ownerToken);
+        });
+      }, { immediate: true });
+    });
 
     const setTriggerRef = (node: unknown) => {
       triggerRef.value = resolveElement(node);
@@ -92,6 +95,8 @@ export const MidiMenu = defineComponent({
     };
 
     const requestAccess = async () => {
+      const current = props.controller.getSnapshot();
+      if (current.status === 'connected' && !current.error) props.controller.disconnect();
       await props.controller.connect();
     };
 
@@ -170,6 +175,7 @@ export const MidiMenu = defineComponent({
     );
 
     onUnmounted(() => {
+      stopControllerWatch?.();
       removeOutsideClickListener();
       removeEscapeListener();
     });
@@ -230,6 +236,13 @@ export const MidiMenu = defineComponent({
                 h('div', { class: 'dialkit-midi-status' }, [
                   h('span', { class: 'dialkit-midi-status-label' }, MIDI_CONTROLLER_DESCRIPTION),
                 ]),
+                view.showStatus
+                  ? h('div', {
+                      class: 'dialkit-midi-connection-status',
+                      'data-status': view.status,
+                      role: 'status',
+                    }, view.label)
+                  : null,
                 snap.inputs.length > 0
                   ? h('div', {
                       class: 'dialkit-midi-devices',
@@ -267,7 +280,7 @@ export const MidiMenu = defineComponent({
                       ]);
                     }))
                   : null,
-                view.action
+                view.action && snap.status !== 'connected'
                   ? h('button', {
                       class: 'dialkit-button dialkit-midi-cta',
                       onClick: () => { void requestAccess(); },
@@ -279,6 +292,12 @@ export const MidiMenu = defineComponent({
                       disabled: !snap.activeInputId,
                       onClick: enterMapMode,
                     }, 'Map parameters')
+                  : null,
+                view.action && snap.status === 'connected'
+                  ? h('button', {
+                      class: 'dialkit-button dialkit-midi-cta',
+                      onClick: () => { void requestAccess(); },
+                    }, [h('span', view.actionLabel ?? '')])
                   : null,
                 mappings.length > 0
                   ? h('div', { class: 'dialkit-midi-list' },
@@ -310,10 +329,6 @@ export const MidiMenu = defineComponent({
                       )
                     )
                   : null,
-                h('div', { class: 'dialkit-midi-hint' },
-                  view.connected
-                    ? snap.activeInputId ? 'Active controller selected.' : 'Select a controller to continue.'
-                    : 'Allow access to detect MIDI controllers.'),
               ]),
             ])
           : null,

@@ -584,7 +584,7 @@ The header initially shows **No controller** immediately left of the DialKit sho
 
 Choose **Map parameters** to close the menu and reveal a **Map** badge on every compatible control across the current DialKit root. Select a badge, then move or press the desired hardware control while it says **Move control**. The selected controller limits which input is listened to during learning; the saved UI mapping records the CC, not the device id or channel, so another controller sending the same CC can drive it later. Mapped controls keep a subtle live status dot. Select **Done** to leave mapping mode. Reopen the controller menu to review or remove mappings. Press **Escape** once to cancel a pending learn and again to leave mapping mode.
 
-`midi` accepts `true`, which uses the shared process-wide controller, or your own controller from `createMidiController()`. Nothing requests browser permission on mount or during SSR.
+`midi` accepts `true`, which uses the shared process-wide controller, or your own controller from `createMidiController()`. Previously granted access resumes on mount without prompting. First-use permission is requested only from the header control, and SSR never touches browser APIs.
 
 ### Supported controls and MIDI semantics
 

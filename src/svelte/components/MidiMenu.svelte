@@ -99,6 +99,8 @@
   }
 
   const requestAccess = async () => {
+    const current = controller.getSnapshot();
+    if (current.status === 'connected' && !current.error) controller.disconnect();
     await controller.connect();
   };
 
@@ -190,6 +192,12 @@
         <span class="dialkit-midi-status-label">{MIDI_CONTROLLER_DESCRIPTION}</span>
       </div>
 
+      {#if view.showStatus}
+        <div class="dialkit-midi-connection-status" data-status={view.status} role="status">
+          {view.label}
+        </div>
+      {/if}
+
       {#if snapshot.inputs.length > 0}
         <div class="dialkit-midi-devices" role="radiogroup" aria-label="MIDI controllers">
           {#each snapshot.inputs as input (input.id)}
@@ -217,7 +225,7 @@
         </div>
       {/if}
 
-      {#if view.action}
+      {#if view.action && snapshot.status !== 'connected'}
         <button class="dialkit-button dialkit-midi-cta" onclick={() => { void requestAccess(); }}>
           <span>{view.actionLabel}</span>
         </button>
@@ -230,6 +238,12 @@
           onclick={enterMapMode}
         >
           Map parameters
+        </button>
+      {/if}
+
+      {#if view.action && snapshot.status === 'connected'}
+        <button class="dialkit-button dialkit-midi-cta" onclick={() => { void requestAccess(); }}>
+          <span>{view.actionLabel}</span>
         </button>
       {/if}
 
@@ -260,11 +274,6 @@
         </div>
       {/if}
 
-      <div class="dialkit-midi-hint">
-        {view.connected
-          ? snapshot.activeInputId ? 'Active controller selected.' : 'Select a controller to continue.'
-          : 'Allow access to detect MIDI controllers.'}
-      </div>
     </div>
   {/if}
 </Portal>

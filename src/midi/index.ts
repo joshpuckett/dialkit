@@ -815,7 +815,7 @@ export function midiTargetBadge(
   return null;
 }
 
-export type MidiConnectionAction = 'map' | 'retry';
+export type MidiConnectionAction = 'map' | 'retry' | 'reconnect';
 
 /**
  * Pure view helper: the connection status line + primary action for the MIDI menu,
@@ -830,6 +830,7 @@ export function midiConnectionView(snapshot: MidiControllerSnapshot): {
   connected: boolean;
   deviceCount: number;
   activeInputLabel: string | null;
+  showStatus: boolean;
 } {
   const deviceCount = snapshot.inputs.length;
   const activeInput = snapshot.inputs.find((input) => input.id === snapshot.activeInputId);
@@ -841,7 +842,9 @@ export function midiConnectionView(snapshot: MidiControllerSnapshot): {
     case 'connected':
       return {
         status: snapshot.status,
-        label: deviceCount === 0
+        label: snapshot.error
+          ? 'Some controllers are unavailable.'
+          : deviceCount === 0
           ? 'No controllers'
           : !activeInput
             ? `${deviceCount} controller${deviceCount === 1 ? '' : 's'} detected`
@@ -850,23 +853,24 @@ export function midiConnectionView(snapshot: MidiControllerSnapshot): {
             : firstDeviceName
               ? `${firstDeviceName} +${deviceCount - 1}`
               : `${deviceCount} controllers`,
-        action: snapshot.error ? 'retry' : null,
-        actionLabel: snapshot.error ? 'Retry unavailable controllers' : null,
+        action: snapshot.error ? 'retry' : 'reconnect',
+        actionLabel: snapshot.error ? 'Retry unavailable controllers' : 'Reconnect controller',
         connected: true,
         deviceCount,
         activeInputLabel,
+        showStatus: Boolean(snapshot.error) || deviceCount === 0,
       };
     case 'connecting':
-      return { status: snapshot.status, label: 'Connecting…', action: null, actionLabel: null, connected: false, deviceCount, activeInputLabel: null };
+      return { status: snapshot.status, label: 'Connecting…', action: null, actionLabel: null, connected: false, deviceCount, activeInputLabel: null, showStatus: true };
     case 'denied':
-      return { status: snapshot.status, label: 'MIDI permission was denied.', action: 'retry', actionLabel: 'Try Again', connected: false, deviceCount, activeInputLabel: null };
+      return { status: snapshot.status, label: 'MIDI permission was denied.', action: 'retry', actionLabel: 'Try Again', connected: false, deviceCount, activeInputLabel: null, showStatus: true };
     case 'error':
-      return { status: snapshot.status, label: 'Could not access MIDI.', action: 'retry', actionLabel: 'Try Again', connected: false, deviceCount, activeInputLabel: null };
+      return { status: snapshot.status, label: 'Could not access MIDI.', action: 'retry', actionLabel: 'Try Again', connected: false, deviceCount, activeInputLabel: null, showStatus: true };
     case 'unsupported':
-      return { status: snapshot.status, label: 'Web MIDI is not supported in this browser.', action: null, actionLabel: null, connected: false, deviceCount, activeInputLabel: null };
+      return { status: snapshot.status, label: 'Web MIDI is not supported in this browser.', action: null, actionLabel: null, connected: false, deviceCount, activeInputLabel: null, showStatus: true };
     case 'idle':
     default:
-      return { status: snapshot.status, label: 'No controller access', action: 'map', actionLabel: 'Allow MIDI access', connected: false, deviceCount, activeInputLabel: null };
+      return { status: snapshot.status, label: 'No controller access', action: 'map', actionLabel: 'Allow MIDI access', connected: false, deviceCount, activeInputLabel: null, showStatus: false };
   }
 }
 
@@ -1041,6 +1045,16 @@ function findMidiTarget(panelId: string, path: string): MidiTarget | null {
 
   const getCompound = () => DialStore.getValue(panelId, parentPath) as TransitionConfig | undefined;
   const currentCompound = getCompound();
+  if (!currentCompound || typeof currentCompound !== 'object') return null;
+  const easingIndex = easingLeafIndexes[leaf];
+  if (easingIndex !== undefined && (parent.type !== 'transition' || currentCompound.type !== 'easing')) return null;
+  if (leaf === 'duration') {
+    if (currentCompound.type !== 'easing' && currentCompound.visualDuration === undefined) return null;
+  } else if (leaf === 'bounce') {
+    if (currentCompound.type !== 'spring' || currentCompound.visualDuration === undefined) return null;
+  } else if (leaf === 'stiffness' || leaf === 'damping' || leaf === 'mass') {
+    if (currentCompound.type !== 'spring' || currentCompound.stiffness === undefined) return null;
+  }
   const targetRange = leaf === 'duration' && currentCompound?.type === 'spring'
     ? { ...range, max: 1 }
     : range;
@@ -1051,7 +1065,6 @@ function findMidiTarget(panelId: string, path: string): MidiTarget | null {
     write: (value) => {
       const current = getCompound();
       if (!current || typeof current !== 'object') return;
-      const easingIndex = easingLeafIndexes[leaf];
       if (easingIndex !== undefined) {
         if (current.type !== 'easing') return;
         const ease = [...current.ease] as [number, number, number, number];

@@ -75,6 +75,8 @@ export function MidiMenu(props: MidiMenuProps) {
   };
 
   const requestAccess = async () => {
+    const current = props.controller.getSnapshot();
+    if (current.status === 'connected' && !current.error) props.controller.disconnect();
     await props.controller.connect();
   };
 
@@ -203,6 +205,12 @@ export function MidiMenu(props: MidiMenuProps) {
               <span class="dialkit-midi-status-label">{MIDI_CONTROLLER_DESCRIPTION}</span>
             </div>
 
+            <Show when={view().showStatus}>
+              <div class="dialkit-midi-connection-status" data-status={view().status} role="status">
+                {view().label}
+              </div>
+            </Show>
+
             <Show when={snapshot().inputs.length > 0}>
               <div class="dialkit-midi-devices" role="radiogroup" aria-label="MIDI controllers">
                 <For each={snapshot().inputs}>
@@ -235,7 +243,7 @@ export function MidiMenu(props: MidiMenuProps) {
               </div>
             </Show>
 
-            <Show when={view().action}>
+            <Show when={view().action && snapshot().status !== 'connected'}>
               <button class="dialkit-button dialkit-midi-cta" onClick={() => { void requestAccess(); }}>
                 <span>{view().actionLabel}</span>
               </button>
@@ -244,6 +252,12 @@ export function MidiMenu(props: MidiMenuProps) {
             <Show when={snapshot().status === 'connected' && snapshot().inputs.length > 0}>
               <button class="dialkit-button dialkit-midi-cta" disabled={!snapshot().activeInputId} onClick={enterMapMode}>
                 Map parameters
+              </button>
+            </Show>
+
+            <Show when={view().action && snapshot().status === 'connected'}>
+              <button class="dialkit-button dialkit-midi-cta" onClick={() => { void requestAccess(); }}>
+                <span>{view().actionLabel}</span>
               </button>
             </Show>
 
@@ -279,11 +293,6 @@ export function MidiMenu(props: MidiMenuProps) {
               </div>
             </Show>
 
-            <div class="dialkit-midi-hint">
-              {view().connected
-                ? snapshot().activeInputId ? 'Active controller selected.' : 'Select a controller to continue.'
-                : 'Allow access to detect MIDI controllers.'}
-            </div>
           </div>
         </Portal>
       </Show>

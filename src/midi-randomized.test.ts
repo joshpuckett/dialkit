@@ -187,6 +187,11 @@ function expectedContract(controls: readonly ControlMeta[]): {
         }
         break;
       case 'spring':
+        unsupported.push(control.path);
+        for (const leaf of TRANSITION_LEAVES.filter((candidate) => !['x1', 'y1', 'x2', 'y2'].includes(candidate))) {
+          supported.push({ path: `${control.path}.${leaf}`, kind: 'transition', control, leaf });
+        }
+        break;
       case 'transition':
         unsupported.push(control.path);
         for (const leaf of TRANSITION_LEAVES) {

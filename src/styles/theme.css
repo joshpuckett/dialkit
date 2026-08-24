@@ -1628,6 +1628,19 @@
   color: var(--dial-text-tertiary);
 }
 
+.dialkit-midi-connection-status {
+  padding: 0 8px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--dial-text-secondary);
+}
+
+.dialkit-midi-connection-status[data-status="denied"],
+.dialkit-midi-connection-status[data-status="error"] {
+  color: var(--dial-text-focus);
+}
+
 .dialkit-midi-devices {
   display: flex;
   flex-direction: column;
@@ -1835,10 +1848,6 @@
   height: 14px;
   color: var(--dial-text-focus);
   pointer-events: none;
-}
-
-.dialkit-midi-hint {
-  display: none;
 }
 
 /* Per-control mapping badge — reads like the shortcut pill but is interactive.

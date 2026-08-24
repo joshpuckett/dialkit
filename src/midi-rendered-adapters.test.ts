@@ -60,7 +60,7 @@ const mappingSnapshot: MidiControllerSnapshot = {
   error: null,
 };
 
-function createMappingController(): MidiController {
+function createMappingController(onSubscribe: () => void = () => undefined): MidiController {
   return {
     connect: async () => true,
     disconnect() {},
@@ -76,7 +76,10 @@ function createMappingController(): MidiController {
     startMapping() {},
     stopMapping() {},
     getSnapshot: () => mappingSnapshot,
-    subscribe: () => () => undefined,
+    subscribe: () => {
+      onSubscribe();
+      return () => undefined;
+    },
   };
 }
 
@@ -140,9 +143,10 @@ describe('rendered MIDI adapter reachability', () => {
   it('renders every compatible control through the real Vue Panel path without nested buttons', async () => {
     const id = 'rendered-midi-vue';
     const panel = registerPanel(id);
+    let subscriptions = 0;
     try {
       const app = createSSRApp({
-        render: () => h(VuePanel, { panel, midi: createMappingController(), variant: 'section' }),
+        render: () => h(VuePanel, { panel, midi: createMappingController(() => { subscriptions += 1; }), variant: 'section' }),
       });
       app.config.warnHandler = () => undefined;
       const html = await renderToString(app);
@@ -152,6 +156,7 @@ describe('rendered MIDI adapter reachability', () => {
         'the action and MIDI badge must render as sibling buttons');
       assert.doesNotMatch(html, /<button[^>]*dialkit-midi-action-control[^>]*>[^<]*<button/,
         'an action button must never contain the MIDI badge button');
+      assert.equal(subscriptions, 0, 'Vue MIDI badges must not retain shared-controller subscriptions during SSR');
     } finally {
       DialStore.unregisterPanel(id);
     }

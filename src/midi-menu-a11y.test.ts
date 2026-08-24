@@ -18,6 +18,7 @@ describe('MIDI menu accessibility contract', () => {
       assert.ok(source.includes(adapter.uniqueId), `${adapter.name} must derive IDs from its framework instance`);
       assert.ok(source.includes('aria-labelledby') && source.includes('titleId'), `${adapter.name} dialog needs a linked visible title`);
       assert.ok(source.includes('dialkit-midi-device-radio'), `${adapter.name} must render native radio inputs`);
+      assert.ok(source.includes('role="status"') || source.includes("role: 'status'"), `${adapter.name} must announce connection status changes`);
       assert.match(source, /type.{0,4}radio/, `${adapter.name} controller selection must use native radio semantics`);
       assert.ok(source.includes('button:not(:disabled)'), `${adapter.name} must move focus into the opened dialog`);
       assert.match(source, /trigger(?:Ref|El).*\.focus|triggerRef\.value\?\.focus/s, `${adapter.name} must return focus to its trigger`);

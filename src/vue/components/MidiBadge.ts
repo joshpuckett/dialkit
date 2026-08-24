@@ -1,4 +1,4 @@
-import { defineComponent, h, onUnmounted, shallowRef, watch, type PropType } from 'vue';
+import { defineComponent, h, onMounted, onUnmounted, shallowRef, watch, type PropType } from 'vue';
 import { midiTargetBadge } from '../../midi';
 import type { MidiBadgeState, MidiController, MidiMappingOwner } from '../../midi';
 
@@ -33,15 +33,21 @@ export const MidiBadge = defineComponent({
     const snapshot = shallowRef(props.controller.getSnapshot());
     let unsub: (() => void) | undefined;
 
-    watch(() => props.controller, (controller) => {
-      unsub?.();
-      snapshot.value = controller.getSnapshot();
-      unsub = controller.subscribe(() => {
+    let stopControllerWatch: (() => void) | undefined;
+    onMounted(() => {
+      stopControllerWatch = watch(() => props.controller, (controller) => {
+        unsub?.();
         snapshot.value = controller.getSnapshot();
-      });
-    }, { immediate: true });
+        unsub = controller.subscribe(() => {
+          snapshot.value = controller.getSnapshot();
+        });
+      }, { immediate: true });
+    });
 
-    onUnmounted(() => unsub?.());
+    onUnmounted(() => {
+      stopControllerWatch?.();
+      unsub?.();
+    });
 
     const stop = (event: Event) => event.stopPropagation();
 

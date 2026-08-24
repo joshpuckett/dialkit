@@ -1125,6 +1125,7 @@ test('midiTargetBadge and midiConnectionView derive the shared MIDI UI view', ()
   // Connection view across states.
   const idle = midiConnectionView(snap({ status: 'idle' }));
   assert.deepEqual([idle.action, idle.actionLabel, idle.connected], ['map', 'Allow MIDI access', false]);
+  assert.equal(idle.showStatus, false);
   assert.equal(idle.activeInputLabel, null);
   assert.equal(midiConnectionView(snap({ status: 'denied' })).action, 'retry');
   assert.equal(midiConnectionView(snap({ status: 'error' })).action, 'retry');
@@ -1132,6 +1133,11 @@ test('midiTargetBadge and midiConnectionView derive the shared MIDI UI view', ()
   const noDevices = midiConnectionView(snap({ status: 'connected', inputs: [] }));
   assert.equal(noDevices.connected, true);
   assert.match(noDevices.label, /No controllers/);
+  assert.deepEqual([noDevices.action, noDevices.actionLabel, noDevices.showStatus], ['reconnect', 'Reconnect controller', true]);
+  const healthy = midiConnectionView(snap({ status: 'connected', inputs: [input('a')] }));
+  assert.deepEqual([healthy.action, healthy.actionLabel, healthy.showStatus], ['reconnect', 'Reconnect controller', false]);
+  const degraded = midiConnectionView(snap({ status: 'connected', inputs: [input('a')], error: new Error('stale') }));
+  assert.deepEqual([degraded.label, degraded.action, degraded.showStatus], ['Some controllers are unavailable.', 'retry', true]);
   assert.equal(midiConnectionView(snap({ status: 'connected', inputs: [input('a'), input('b')] })).label, '2 controllers detected');
   assert.equal(midiConnectionView(snap({ status: 'connected', inputs: [input('a')] })).label, '1 controller detected');
   assert.equal(
