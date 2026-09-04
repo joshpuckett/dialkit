@@ -15,6 +15,7 @@ export interface UseDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
   defaultCollapsed?: boolean;
+  order?: number;
 }
 
 export interface DialKitController<T extends DialConfig> {
@@ -51,6 +52,7 @@ export function useDialKitController<T extends DialConfig>(
   const serializedConfig = computed(() => JSON.stringify(config));
   const serializedShortcuts = computed(() => JSON.stringify(options?.shortcuts));
   const serializedPersist = computed(() => JSON.stringify(options?.persist));
+  const serializedOrder = computed(() => JSON.stringify(options?.order));
 
   let unsubscribeValues: (() => void) | undefined;
   let unsubscribeActions: (() => void) | undefined;
@@ -60,6 +62,7 @@ export function useDialKitController<T extends DialConfig>(
       retainOnUnmount: hasStableId,
       persist: persistRef.value,
       defaultCollapsed: options?.defaultCollapsed,
+      order: options?.order,
     });
     flatValues.value = DialStore.getValues(panelId);
 
@@ -84,7 +87,7 @@ export function useDialKitController<T extends DialConfig>(
     persistRef.value = next;
   });
 
-  watch([serializedConfig, serializedShortcuts, serializedPersist], () => {
+  watch([serializedConfig, serializedShortcuts, serializedPersist, serializedOrder], () => {
     configRef.value = config;
     shortcutsRef.value = options?.shortcuts;
     persistRef.value = options?.persist;
@@ -92,6 +95,7 @@ export function useDialKitController<T extends DialConfig>(
       DialStore.updatePanel(panelId, name, configRef.value, shortcutsRef.value, {
         retainOnUnmount: hasStableId,
         persist: persistRef.value,
+        order: options?.order,
       });
       flatValues.value = DialStore.getValues(panelId);
     }

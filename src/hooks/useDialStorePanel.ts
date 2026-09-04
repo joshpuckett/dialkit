@@ -8,6 +8,7 @@ export interface UseDialStorePanelOptions {
   shortcuts?: Record<string, ShortcutConfig>;
   kind?: 'timeline';
   defaultCollapsed?: boolean;
+  order?: number;
 }
 
 // Serialize with a referential short-circuit: consumers can re-render at 60Hz
@@ -43,6 +44,7 @@ export function useDialStorePanel(
   const serializedConfig = useSerialized(config);
   const serializedShortcuts = useSerialized(options.shortcuts);
   const serializedPersist = useSerialized(options.persist);
+  const serializedOrder = useSerialized(options.order);
 
   // Register on mount
   useEffect(() => {
@@ -51,6 +53,7 @@ export function useDialStorePanel(
       persist: optionsRef.current.persist,
       kind: optionsRef.current.kind,
       defaultCollapsed: optionsRef.current.defaultCollapsed,
+      order: optionsRef.current.order,
     });
     return () => DialStore.unregisterPanel(panelId);
   }, [hasStableId, panelId, name]);
@@ -66,9 +69,10 @@ export function useDialStorePanel(
       retainOnUnmount: hasStableId,
       persist: optionsRef.current.persist,
       kind: optionsRef.current.kind,
+      order: optionsRef.current.order,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist]);
+  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedOrder]);
 
   const subscribe = useCallback(
     (callback: () => void) => DialStore.subscribe(panelId, callback),

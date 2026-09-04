@@ -79,6 +79,7 @@ const params = useDialKit(name, config, options?)
 | `options.onAction`         | `(path: string) => void`         | Callback when action buttons are clicked                                        |
 | `options.shortcuts`        | `Record<string, ShortcutConfig>` | Keyboard shortcuts for controls (see [Keyboard Shortcuts](#keyboard-shortcuts)) |
 | `options.defaultCollapsed` | `boolean`                        | Start this panel collapsed (see [Panel open state](#panel-open-state))          |
+| `options.order`            | `number`                         | Sort this top-level panel before unordered panels                                |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
 
@@ -422,6 +423,8 @@ These take the panel id — the `id` you passed to `useDialKit`, or the generate
 
 Open state is in-memory only. It is never persisted, so a reload returns every panel to its configured default. To start a _folder_ inside a panel collapsed, use the `_collapsed` config key described above.
 
+When several top-level panels are mounted, use `order` to make their arrangement explicit. Ordered panels are sorted from low to high; panels without an order follow in registration order.
+
 ---
 
 ## DialRoot
@@ -450,12 +453,12 @@ function PhotoStack() {
   const photo = useDialKit("Photo Stack", {
     blur: [12, 0, 40],
     scale: [1, 0.5, 2],
-  });
+  }, { order: 1 });
 
   const stage = useDialKit("Stage", {
     pagePadding: [40, 16, 96],
     background: "#ffffff",
-  });
+  }, { order: 2, defaultCollapsed: true });
 
   return (
     <div style={{ padding: stage.pagePadding, background: stage.background }}>

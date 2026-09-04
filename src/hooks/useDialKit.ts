@@ -16,6 +16,7 @@ export interface UseDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
   defaultCollapsed?: boolean;
+  order?: number;
 }
 
 export interface DialKitController<T extends DialConfig> {
@@ -44,6 +45,7 @@ export function useDialKitController<T extends DialConfig>(
     persist: options?.persist,
     shortcuts: options?.shortcuts,
     defaultCollapsed: options?.defaultCollapsed,
+    order: options?.order,
   });
 
   const configRef = useRef(config);

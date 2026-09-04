@@ -17,6 +17,7 @@ export interface CreateDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
   defaultCollapsed?: boolean;
+  order?: number;
 }
 
 export interface DialKitController<T extends DialConfig> {
@@ -65,6 +66,7 @@ export function createDialKitController<T extends DialConfig>(
       retainOnUnmount: hasStableId,
       persist: options?.persist,
       defaultCollapsed: options?.defaultCollapsed,
+      order: options?.order,
     });
 
     const unsubActions = options?.onAction

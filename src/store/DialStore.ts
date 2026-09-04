@@ -104,6 +104,7 @@ export type ControlMeta = {
 export type PanelConfig = {
   id: string;
   name: string;
+  order?: number;
   controls: ControlMeta[];
   values: Record<string, DialValue>;
   shortcuts: Record<string, ShortcutConfig>;
@@ -130,6 +131,7 @@ export type DialStorePanelOptions = {
   persist?: DialKitPersistOptions;
   kind?: 'timeline';
   defaultCollapsed?: boolean;
+  order?: number;
 };
 
 type PersistConfig = {
@@ -353,7 +355,15 @@ class DialStoreClass {
     const previousBaseValues = this.baseValues.get(id) ?? persisted?.baseValues ?? persisted?.values ?? {};
     const baseValues = this.reconcileValues(defaultValues, previousBaseValues, controlsByPath);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, kind: options.kind });
+    this.panels.set(id, {
+      id,
+      name,
+      order: options.order,
+      controls,
+      values,
+      shortcuts: shortcuts ?? {},
+      kind: options.kind,
+    });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, baseValues);
     this.defaultValues.set(id, { ...defaultValues });
@@ -385,7 +395,15 @@ class DialStoreClass {
     this.initTransitionModes(config, '', defaultValues);
     const nextValues = this.reconcileValues(defaultValues, existing.values, controlsByPath);
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = {
+      id,
+      name,
+      order: options.order ?? existing.order,
+      controls,
+      values: nextValues,
+      shortcuts: shortcuts ?? existing.shortcuts,
+      kind: options.kind ?? existing.kind,
+    };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -868,7 +886,14 @@ class DialStoreClass {
   }
 
   private notifyGlobal(): void {
-    this.panelsSnapshot = Array.from(this.panels.values());
+    this.panelsSnapshot = Array.from(this.panels.values())
+      .map((panel, registrationIndex) => ({ panel, registrationIndex }))
+      .sort(
+        (a, b) =>
+          (a.panel.order ?? Infinity) - (b.panel.order ?? Infinity) ||
+          a.registrationIndex - b.registrationIndex
+      )
+      .map(({ panel }) => panel);
     this.standardPanelsSnapshot = this.panelsSnapshot.filter((panel) => panel.kind !== 'timeline');
     this.timelinePanelsSnapshot = this.panelsSnapshot.filter((panel) => panel.kind === 'timeline');
     this.globalListeners.forEach(fn => fn());
