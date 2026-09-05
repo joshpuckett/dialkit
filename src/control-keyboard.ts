@@ -1,3 +1,5 @@
+import { decimalsForStep } from './numeric';
+
 type KeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'metaKey' | 'ctrlKey' | 'target' | 'currentTarget' | 'preventDefault' | 'stopPropagation'>;
 
 /** Keyboard steps are relative to the range minimum, including fractional ranges. */
@@ -13,6 +15,32 @@ export function sliderKeyValue(key: string, value: number, min: number, max: num
   const nextStep = direction > 0 ? Math.floor(position + 1e-9) + amount : Math.ceil(position - 1e-9) - amount;
   const next = min + nextStep * step;
   return Math.max(min, Math.min(max, Number(next.toPrecision(14))));
+}
+
+/**
+ * Arrow-key nudge for a slider's number field, using the same allowed values as the
+ * focused track: `sliderKeyValue` moves one step relative to the range minimum, so a
+ * nudge always lands on a value the slider can hold and survives the commit snap.
+ * Only the vertical arrows nudge — Left, Right, Home and End stay with the text caret.
+ * Returns the next value and its text at the field's display precision, or undefined when
+ * the key is not a nudge or the field does not hold a number.
+ */
+export function nudgeInputValue(key: string, text: string, min: number, max: number, step: number, shift = false): { value: number; text: string } | undefined {
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return undefined;
+  const current = parseFloat(text);
+  if (!Number.isFinite(current)) return undefined;
+  const value = sliderKeyValue(key, current, min, max, step, shift);
+  return value === undefined ? undefined : { value, text: value.toFixed(decimalsForStep(step, min, max)) };
+}
+
+/** Nudge a slider's number field and commit the value at once; returns whether the key was consumed. */
+export function handleInputNudge(event: KeyEvent, text: string, min: number, max: number, step: number, apply: (text: string, value: number) => void): boolean {
+  if (event.altKey || event.metaKey || event.ctrlKey) return false;
+  const nudged = nudgeInputValue(event.key, text, min, max, step, event.shiftKey);
+  if (!nudged) return false;
+  event.preventDefault();
+  apply(nudged.text, nudged.value);
+  return true;
 }
 
 export function handleSliderKey(event: KeyEvent, value: number, min: number, max: number, step: number, change: (value: number) => void, edit: () => void): void {

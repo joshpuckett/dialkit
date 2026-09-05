@@ -1,4 +1,4 @@
-import { handleSliderKey } from '../../control-keyboard';
+import { handleSliderKey, handleInputNudge } from '../../control-keyboard';
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { animate, motionValue } from 'motion';
 import type { ShortcutConfig } from '../../store/DialStore';
@@ -40,6 +40,7 @@ export function Slider(props: SliderProps) {
   let valueSpanRef!: HTMLSpanElement;
   let inputRef!: HTMLInputElement;
   let editingEnded = false;
+  let nudgeOrigin: number | undefined;
 
   const [isInteracting, setIsInteracting] = createSignal(false);
   const [isDragging, setIsDragging] = createSignal(false);
@@ -265,6 +266,7 @@ export function Slider(props: SliderProps) {
   const handleInputSubmit = () => {
     if (editingEnded) return;
     editingEnded = true;
+    nudgeOrigin = undefined;
     const parsed = parseFloat(inputValue());
     if (!isNaN(parsed)) {
       const clamped = Math.max(min(), Math.min(max(), parsed));
@@ -287,10 +289,16 @@ export function Slider(props: SliderProps) {
 
   const handleInputKeyDown = (e: KeyboardEvent) => {
     e.stopPropagation();
+    if (handleInputNudge(e, inputValue(), min(), max(), step(), (text, next) => { nudgeOrigin ??= props.value; setInputValue(text); props.onChange(next); })) return;
     if (e.key !== 'Enter' && e.key !== 'Escape') return;
     e.preventDefault();
     if (e.key === 'Enter') handleInputSubmit();
-    else { editingEnded = true; setShowInput(false); setIsValueHovered(false); }
+    else {
+      editingEnded = true;
+      if (nudgeOrigin !== undefined) props.onChange(nudgeOrigin);
+      nudgeOrigin = undefined;
+      setShowInput(false); setIsValueHovered(false);
+    }
     queueMicrotask(() => trackRef?.focus({ preventScroll: true }));
   };
 

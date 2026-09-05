@@ -230,7 +230,7 @@ DialStore.getPanelOpen("card");
 | --- | --- |
 | Panel or folder | Enter or Space toggles the focused header |
 | Slider | Arrows adjust one step; Shift + Arrow or Page Up/Down adjusts ten; Home/End goes to the bounds |
-| Numeric editor | Enter opens it from a slider; Enter commits, Escape cancels, Tab commits and advances |
+| Numeric editor | Enter opens it from a slider; Up/Down nudges one step and Shift + Up/Down ten, applying at once; Enter commits, Escape cancels, Tab commits and advances |
 | XY pad | Arrows adjust axes; Shift + Arrow adjusts ten steps; Home resets; Escape cancels a drag |
 | Select or preset menu | Enter, Space, or Up/Down opens; arrows, Home/End, and typing navigate; Enter/Space selects; Escape closes |
 | Segmented control | Arrows select a segment; Home/End selects the first/last |

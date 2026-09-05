@@ -1,4 +1,4 @@
-import { activateOnKey, handleSegmentKey, handleSliderKey, labelSegmentedControl } from '../control-keyboard';
+import { activateOnKey, handleSegmentKey, handleSliderKey, labelSegmentedControl, handleInputNudge } from '../control-keyboard';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, formatToggleShortcut } from '../shortcut-utils';
 import { observeTextSize } from '../text-autosize';
 import { ICON_CHEVRON, ICON_PANEL } from '../icons';
@@ -259,6 +259,7 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     moved: boolean;
   } | undefined;
   let editing = false, hovered = false, editable = false;
+  let nudgeOrigin: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let hashSignature = '';
   let clickAnimations: (Animation | undefined)[] = [];
@@ -338,10 +339,12 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
       return;
     editing = false;
     const value = input.value.trim() ? Number(input.value) : NaN;
-    if (!cancel && Number.isFinite(value)) {
+    if (cancel && nudgeOrigin !== undefined) commit(nudgeOrigin);
+    else if (!cancel && Number.isFinite(value)) {
       const { min, max, step } = range();
       commit(roundValue(Math.max(min, Math.min(max, value)), step, min, max));
     }
+    nudgeOrigin = undefined;
     input.style.display = 'none';
     display.style.display = '';
     track.tabIndex = 0;
@@ -428,6 +431,8 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
   input.addEventListener('pointerdown', event => event.stopPropagation());
   input.addEventListener('keydown', event => {
     event.stopPropagation();
+    const { min, max, step } = range();
+    if (handleInputNudge(event, input.value, min, max, step, (text, next) => { nudgeOrigin ??= props.value; input.value = text; commit(next); })) return;
     if (event.key === 'Enter' || event.key === 'Escape') {
       event.preventDefault();
       finishEdit(event.key === 'Escape');

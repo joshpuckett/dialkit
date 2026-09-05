@@ -1,4 +1,4 @@
-import { handleSliderKey } from '../control-keyboard';
+import { handleSliderKey, handleInputNudge } from '../control-keyboard';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/DialStore';
@@ -36,6 +36,7 @@ export function Slider({
   const trackRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editingEnded = useRef(false);
+  const nudgeOrigin = useRef<number>();
   const labelRef = useRef<HTMLSpanElement>(null);
   const valueSpanRef = useRef<HTMLSpanElement>(null);
   const [isInteracting, setIsInteracting] = useState(false);
@@ -285,6 +286,7 @@ export function Slider({
   const handleInputSubmit = () => {
     if (editingEnded.current) return;
     editingEnded.current = true;
+    nudgeOrigin.current = undefined;
     const parsed = parseFloat(inputValue);
     if (!isNaN(parsed)) {
       const clamped = Math.max(min, Math.min(max, parsed));
@@ -307,11 +309,14 @@ export function Slider({
 
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
+    if (handleInputNudge(e, inputValue, min, max, step, (text, next) => { nudgeOrigin.current ??= value; setInputValue(text); onChange(next); })) return;
     if (e.key !== 'Enter' && e.key !== 'Escape') return;
     e.preventDefault();
     if (e.key === 'Enter') handleInputSubmit();
     else {
       editingEnded.current = true;
+      if (nudgeOrigin.current !== undefined) onChange(nudgeOrigin.current);
+      nudgeOrigin.current = undefined;
       setShowInput(false);
       setIsValueHovered(false);
     }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { handleSliderKey } from '../../control-keyboard';
+  import { handleSliderKey, handleInputNudge } from '../../control-keyboard';
 
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
@@ -42,6 +42,7 @@
   let inputRef: HTMLInputElement | undefined;
   let trackRef: HTMLDivElement | undefined;
   let editingEnded = false;
+  let nudgeOrigin: number | undefined;
 
   let isInteracting = $state(false);
   let isDragging = $state(false);
@@ -248,6 +249,7 @@
   const handleInputSubmit = () => {
     if (editingEnded) return;
     editingEnded = true;
+    nudgeOrigin = undefined;
     const parsed = Number.parseFloat(inputValue);
     if (!Number.isNaN(parsed)) {
       const clamped = Math.max(min, Math.min(max, parsed));
@@ -329,10 +331,16 @@
         oninput={(e) => (inputValue = (e.currentTarget as HTMLInputElement).value)}
         onkeydown={(e) => {
           e.stopPropagation();
+          if (handleInputNudge(e, inputValue, min, max, step, (text, next) => { nudgeOrigin ??= value; inputValue = text; onChange(next); })) return;
           if (e.key !== 'Enter' && e.key !== 'Escape') return;
           e.preventDefault();
           if (e.key === 'Enter') handleInputSubmit();
-          else { editingEnded = true; showInput = false; isValueHovered = false; }
+          else {
+            editingEnded = true;
+            if (nudgeOrigin !== undefined) onChange(nudgeOrigin);
+            nudgeOrigin = undefined;
+            showInput = false; isValueHovered = false;
+          }
           tick().then(() => trackRef?.focus({ preventScroll: true }));
         }}
         onblur={handleInputSubmit}

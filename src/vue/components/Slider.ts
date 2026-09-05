@@ -1,4 +1,4 @@
-import { handleSliderKey } from '../../control-keyboard';
+import { handleSliderKey, handleInputNudge } from '../../control-keyboard';
 import { defineComponent, h, computed, nextTick, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
 import { animate, motionValue } from 'motion-v';
 import type { ShortcutConfig } from '../../store/DialStore';
@@ -43,6 +43,7 @@ export const Slider = defineComponent({
     const showInput = ref(false);
     const inputValue = ref('');
     let editingEnded = false;
+    let nudgeOrigin: number | undefined;
 
     const fillPercent = motionValue(((props.value - min.value) / (max.value - min.value)) * 100);
     const rubberStretchPx = motionValue(0);
@@ -251,6 +252,7 @@ export const Slider = defineComponent({
     const handleInputSubmit = () => {
       if (editingEnded) return;
       editingEnded = true;
+      nudgeOrigin = undefined;
       const parsed = parseFloat(inputValue.value);
       if (!Number.isNaN(parsed)) {
         const clamped = Math.max(min.value, Math.min(max.value, parsed));
@@ -272,10 +274,16 @@ export const Slider = defineComponent({
 
     const handleInputKeydown = (event: KeyboardEvent) => {
       event.stopPropagation();
+      if (handleInputNudge(event, inputValue.value, min.value, max.value, step.value, (text, next) => { nudgeOrigin ??= props.value; inputValue.value = text; emit('change', next); })) return;
       if (event.key !== 'Enter' && event.key !== 'Escape') return;
       event.preventDefault();
       if (event.key === 'Enter') handleInputSubmit();
-      else { editingEnded = true; showInput.value = false; isValueHovered.value = false; }
+      else {
+        editingEnded = true;
+        if (nudgeOrigin !== undefined) emit('change', nudgeOrigin);
+        nudgeOrigin = undefined;
+        showInput.value = false; isValueHovered.value = false;
+      }
       queueMicrotask(() => trackRef.value?.focus({ preventScroll: true }));
     };
 

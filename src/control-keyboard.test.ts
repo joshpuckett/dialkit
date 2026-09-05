@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { sliderKeyValue, optionKeyIndex, handleSliderKey, activateOnKey } from './control-keyboard';
+import { sliderKeyValue, optionKeyIndex, handleSliderKey, activateOnKey, nudgeInputValue, handleInputNudge } from './control-keyboard';
 
 function event(key: string, sameTarget = true) {
   const target = {} as EventTarget;
@@ -37,6 +37,29 @@ describe('control keyboard navigation', () => {
     const tab = event('Tab'); run(tab); assert.equal(tab.prevented, false);
     run(event('ArrowUp', false)); run({ ...event('ArrowUp'), metaKey: true });
     assert.deepEqual(changes, [3]);
+  });
+  it('nudges the number field onto values the slider can hold, keeping the displayed precision', () => {
+    assert.equal(nudgeInputValue('ArrowUp', '0.50', 0.1, 1, 0.05)?.text, '0.55');
+    assert.equal(nudgeInputValue('ArrowDown', '0.50', 0.1, 1, 0.05)?.text, '0.45');
+    assert.equal(nudgeInputValue('ArrowUp', '0.50', 0, 1, 0.01)?.text, '0.51');
+    assert.equal(nudgeInputValue('ArrowUp', '3', 0, 10, 1)?.text, '4');
+    assert.equal(nudgeInputValue('ArrowDown', '-0.5', -1, 1, 0.1)?.text, '-0.6');
+    assert.equal(nudgeInputValue('ArrowUp', '0.53', 0.1, 1, 0.05)?.text, '0.55');
+    assert.equal(nudgeInputValue('ArrowUp', '1.00', 0, 1, 0.01)?.text, '1.00');
+    assert.equal(nudgeInputValue('ArrowUp', '0.05', 0, 1, 0.01, true)?.text, '0.15');
+  });
+  it('leaves caret keys, browser keys, and non-numeric text to the number field', () => {
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', 'Escape', 'Tab', 'a'])
+      assert.equal(nudgeInputValue(key, '0.5', 0, 1, 0.1), undefined, key);
+    for (const text of ['', '   ', 'abc']) assert.equal(nudgeInputValue('ArrowUp', text, 0, 1, 0.1), undefined, text);
+  });
+  it('commits a nudge at once but leaves modified arrows to the browser', () => {
+    const applied: [string, number][] = [];
+    const apply = (text: string, value: number) => applied.push([text, value]);
+    assert.equal(handleInputNudge(event('ArrowUp'), '0.50', 0, 1, 0.05, apply), true);
+    assert.equal(handleInputNudge({ ...event('ArrowUp'), metaKey: true }, '0.50', 0, 1, 0.05, apply), false);
+    assert.equal(handleInputNudge(event('ArrowLeft'), '0.50', 0, 1, 0.05, apply), false);
+    assert.deepEqual(applied, [['0.55', 0.55]]);
   });
   it('clamps list navigation but wraps segmented choices and handles empty lists', () => {
     assert.equal(optionKeyIndex('ArrowDown', 2, 3), 2);
