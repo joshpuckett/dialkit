@@ -40,7 +40,7 @@ export const Panel = defineComponent({
     const isOpen = computed(() => storeOpen.value ?? props.defaultOpen);
 
     let unsubscribe: (() => void) | undefined;
-    let copiedTimeout: ReturnType<typeof window.setTimeout> | null = null;
+    let copiedTimeout: number | null = null;
 
     onMounted(() => {
       unsubscribe = DialStore.subscribe(props.panel.id, () => {
