@@ -7,7 +7,7 @@
   import Folder from './Folder.svelte';
   import PresetManager from './PresetManager.svelte';
   import ControlRenderer from './ControlRenderer.svelte';
-  import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../../icons';
+  import { ICON_CLIPBOARD_PLAIN, ICON_CHECK, ICON_RESET } from '../../icons';
 
   let { panel, defaultOpen = true, inline = false, onOpenChange, variant = 'root', toolbarExtra } = $props<{
     panel: PanelConfig;
@@ -85,6 +85,16 @@
 
 {#snippet panelToolbar()}
   <PresetManager panelId={panel.id} {presets} {activePresetId} />
+
+  <button
+    class="dialkit-toolbar-add"
+    onclick={() => DialStore.resetValues(panel.id)}
+    title="Reset to defaults" aria-label="Reset to defaults"
+  >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d={ICON_RESET} fill="currentColor" />
+    </svg>
+  </button>
 
   <button
     class="dialkit-toolbar-add dialkit-toolbar-primary"

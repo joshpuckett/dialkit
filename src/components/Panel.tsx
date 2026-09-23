@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { buildCopyInstruction } from '../copy-instruction';
-import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK, ICON_RESET } from '../icons';
 import { ControlRenderer } from './ControlRenderer';
 import { Folder } from './Folder';
 import { PresetManager } from './PresetManager';
@@ -75,6 +75,17 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
         presets={presets}
         activePresetId={activePresetId}
       />
+
+      <button
+        className="dialkit-toolbar-add"
+        onClick={() => DialStore.resetValues(panel.id)}
+        title="Reset to defaults"
+        aria-label="Reset to defaults"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d={ICON_RESET} fill="currentColor" />
+        </svg>
+      </button>
 
       <motion.button
         className="dialkit-toolbar-add dialkit-toolbar-primary"
