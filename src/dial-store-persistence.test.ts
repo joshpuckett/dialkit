@@ -71,3 +71,37 @@ describe('DialStore persistence', () => {
     } finally { DialStore.unregisterPanel(id); }
   }));
 });
+
+for (const legacy of [false, true]) {
+  it(`preserves reset baselines after storage reload (legacy: ${legacy})`, () => withStorage(storage => {
+    const source = `reset-persist-source-${legacy}`;
+    const target = `reset-persist-target-${legacy}`;
+    const key = `reset-persist-${legacy}`;
+    const config = { amount: [1, 0, 10] } satisfies DialConfig;
+    try {
+      DialStore.registerPanel(source, 'Source', config, undefined, { persist: { key } });
+      DialStore.updateValue(source, 'amount', 3);
+      const preset = DialStore.saveNewPreset(source);
+      DialStore.updateValue(source, 'amount', 7);
+      if (legacy) {
+        const saved = JSON.parse(storage.get(key)!);
+        delete saved.presets[0].initialValues;
+        storage.set(key, JSON.stringify(saved));
+      }
+      DialStore.registerPanel(target, 'Restored', config, undefined, { persist: { key } });
+      assert.equal(DialStore.getValue(target, 'amount'), 7);
+      DialStore.updateValue(target, 'amount', 9);
+      DialStore.resetValues(target);
+      assert.equal(DialStore.getActivePresetId(target), preset);
+      assert.equal(DialStore.getValue(target, 'amount'), legacy ? 7 : 3);
+      const saved = JSON.parse(storage.get(key)!);
+      assert.equal(saved.activePresetId, preset);
+      assert.equal(saved.presets[0].values.amount, legacy ? 7 : 3);
+      assert.equal(saved.presets[0].initialValues.amount, legacy ? 7 : 3);
+      assert.equal(saved.baseValues.amount, 3);
+    } finally {
+      DialStore.unregisterPanel(source);
+      DialStore.unregisterPanel(target);
+    }
+  }));
+}

@@ -89,7 +89,7 @@ export const Panel = defineComponent({
         h('button', {
           class: 'dialkit-toolbar-add',
           onClick: () => DialStore.resetValues(props.panel.id),
-          title: 'Reset to defaults', 'aria-label': 'Reset to defaults',
+          title: 'Reset current version', 'aria-label': 'Reset current version',
         }, [
           h('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' }, [
             h('path', { d: ICON_RESET, fill: 'currentColor' }),

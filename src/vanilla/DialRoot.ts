@@ -28,8 +28,8 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
   const presetProps = () => ({ panelId: id, presets: DialStore.getPresets(id), activePresetId: DialStore.getActivePresetId(id) });
   const presets = mountPresetManager(host, presetProps());
   const reset = element('button', 'dialkit-toolbar-add');
-  reset.title = 'Reset to defaults';
-  reset.setAttribute('aria-label', 'Reset to defaults');
+  reset.title = 'Reset current version';
+  reset.setAttribute('aria-label', 'Reset current version');
   const resetGlyph = svg('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' });
   resetGlyph.append(svg('path', { d: ICON_RESET, fill: 'currentColor' }));
   reset.append(resetGlyph);

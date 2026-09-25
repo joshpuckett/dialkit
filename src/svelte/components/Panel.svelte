@@ -89,7 +89,7 @@
   <button
     class="dialkit-toolbar-add"
     onclick={() => DialStore.resetValues(panel.id)}
-    title="Reset to defaults" aria-label="Reset to defaults"
+    title="Reset current version" aria-label="Reset current version"
   >
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d={ICON_RESET} fill="currentColor" />

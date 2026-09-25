@@ -198,7 +198,7 @@ dial.resetValues();
 dial.setOpen(false);
 ```
 
-Read `dial.values` in React, Svelte, and vanilla; `dial.values()` in Solid; or `dial.values.value` in Vue. `getValues()` reads the latest snapshot, and `getOpen()` reads panel state. `resetValues()` restores the config defaults and clears the active preset.
+Read `dial.values` in React, Svelte, and vanilla; `dial.values()` in Solid; or `dial.values.value` in Vue. `getValues()` reads the latest snapshot, and `getOpen()` reads panel state. `resetValues()` restores the selected version to its initial values without switching versions or changing other versions. Version 1 resets to the config defaults; later versions reset to the values captured when they were created. For older persisted versions without an initial snapshot, the saved values become their reset baseline.
 
 ### Presets and persistence
 
