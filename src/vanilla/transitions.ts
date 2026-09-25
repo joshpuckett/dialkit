@@ -2,6 +2,7 @@ import { DialStore, type SpringConfig, type EasingConfig, type TransitionConfig 
 import { mountEasingVisualization } from '../easing-control';
 import { formatEase, parseEase } from '../easing-geometry';
 import { springParams, springProgress } from '../transition-math';
+import { getActiveElement } from '../shortcut-utils';
 import { mountFolder, mountSegmentedControl, mountSlider, type SliderProps } from './controls';
 import { element, svg, type Mounted } from './dom';
 export interface SpringVisualizationProps {
@@ -164,7 +165,7 @@ export function mountTransitionControl(host: HTMLElement, initial: TransitionCon
         event.stopPropagation();
       });
       updates.push(() => {
-        if (document.activeElement !== input)
+        if (getActiveElement(input) !== input)
           input.value = formatEase(cache.easing.ease);
       });
     }

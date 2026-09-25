@@ -2499,6 +2499,7 @@
 /* ── Timeline clip popover ── */
 .dialkit-timeline-popover {
   position: fixed;
+  inset: auto;
   z-index: 10000;
   background: var(--dial-glass-bg);
   border: 1px solid var(--dial-border);
