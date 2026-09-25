@@ -1,7 +1,7 @@
 import { buildCopyInstruction } from '../../copy-instruction';
 import { Fragment, computed, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
-import { ICON_CHECK, ICON_CLIPBOARD_PLAIN } from '../../icons';
+import { ICON_CHECK, ICON_CLIPBOARD_PLAIN, ICON_RESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { DialValue, PanelConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
@@ -86,6 +86,15 @@ export const Panel = defineComponent({
           presets: presets.value,
           activePresetId: activePresetId.value,
         }),
+        h('button', {
+          class: 'dialkit-toolbar-add',
+          onClick: () => DialStore.resetValues(props.panel.id),
+          title: 'Reset current version', 'aria-label': 'Reset current version',
+        }, [
+          h('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' }, [
+            h('path', { d: ICON_RESET, fill: 'currentColor' }),
+          ]),
+        ]),
         h(motion.button, {
           class: 'dialkit-toolbar-add dialkit-toolbar-primary',
           onClick: handleCopy,
