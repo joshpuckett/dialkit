@@ -1,9 +1,11 @@
 {
   "name": "dialkit",
   "version": "2.0.1",
-  "description": "Live controls for tuning interfaces in React, Solid, Svelte, Vue, and plain JavaScript",
+  "description": "Live controls for tuning interfaces in React, Solid, Svelte, Vue, Lit, and plain JavaScript",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/lit/index.js"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +30,12 @@
       "import": {
         "types": "./dist/vue/index.d.ts",
         "default": "./dist/vue/index.js"
+      }
+    },
+    "./lit": {
+      "import": {
+        "types": "./dist/lit/index.d.ts",
+        "default": "./dist/lit/index.js"
       }
     },
     "./store": {
@@ -73,15 +81,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsup && npm run build:svelte",
+    "build": "rm -rf dist && node scripts/gen-theme-css.js && tsup && npm run build:svelte",
     "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/icons.d.ts src/icons.d.ts.map src/shortcut-utils.d.ts src/shortcut-utils.d.ts.map src/store/DialStore.d.ts src/store/DialStore.d.ts.map src/store/TimelineStore.d.ts src/store/TimelineStore.d.ts.map src/store/TimelineUiStore.d.ts src/store/TimelineUiStore.d.ts.map src/timeline/adapter.d.ts src/timeline/adapter.d.ts.map src/timeline/index.d.ts src/timeline/index.d.ts.map src/timeline-core.d.ts src/timeline-core.d.ts.map src/transition-math.d.ts src/transition-math.d.ts.map src/copy-instruction.d.ts src/copy-instruction.d.ts.map src/env.d.ts src/env.d.ts.map src/dropdown-position.d.ts src/dropdown-position.d.ts.map src/panel-drag.d.ts src/panel-drag.d.ts.map src/panel-size.d.ts src/panel-size.d.ts.map src/color.d.ts src/color.d.ts.map src/color-control.d.ts src/color-control.d.ts.map src/image-control.d.ts src/image-control.d.ts.map src/dial-pad.d.ts src/dial-pad.d.ts.map src/dial-pad-control.d.ts src/dial-pad-control.d.ts.map src/numeric.d.ts src/numeric.d.ts.map src/control-keyboard.d.ts src/control-keyboard.d.ts.map src/dropdown-keyboard.d.ts src/dropdown-keyboard.d.ts.map src/text-autosize.d.ts src/text-autosize.d.ts.map src/easing-control.d.ts src/easing-control.d.ts.map src/easing-geometry.d.ts src/easing-geometry.d.ts.map",
     "dev": "tsup --watch",
     "prepack": "npm run build",
     "prepublishOnly": "npm test && npm run typecheck",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json",
-    "test": "tsx --test src/*.test.ts"
+    "typecheck": "node scripts/gen-theme-css.js && tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && tsc --noEmit -p tsconfig.lit.json && svelte-check --tsconfig tsconfig.svelte.json",
+    "test": "node scripts/gen-theme-css.js && tsx --test src/*.test.ts"
   },
   "peerDependencies": {
+    "lit": ">=3.0.0",
     "motion": ">=11.0.0",
     "motion-v": ">=2.0.0",
     "react": ">=18.0.0",
@@ -91,6 +100,9 @@
     "vue": ">=3.3.0"
   },
   "peerDependenciesMeta": {
+    "lit": {
+      "optional": true
+    },
     "motion-v": {
       "optional": true
     },
@@ -119,6 +131,7 @@
     "@types/react-dom": "^18.2.0",
     "@types/react-test-renderer": "^18.3.1",
     "esbuild-plugin-solid": "^0.6.0",
+    "lit": "^3.3.3",
     "motion": "^12.0.0",
     "motion-v": "^2.0.0",
     "react": "^18.2.0",
@@ -138,6 +151,9 @@
     "solidjs",
     "svelte",
     "vue",
+    "lit",
+    "lit-element",
+    "web-components",
     "animation",
     "tweaking",
     "parameters",

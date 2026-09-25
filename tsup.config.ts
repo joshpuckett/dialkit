@@ -1,5 +1,20 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'tsup';
 import { solidPlugin } from 'esbuild-plugin-solid';
+import { THEME_CSS, writeThemeModules } from './scripts/gen-theme-css.js';
+
+// The generated theme modules must exist before any build starts, including the type declarations.
+writeThemeModules();
+
+// The Lit entry reads the theme straight from src/styles/theme.css, so watch mode rebuilds it when the CSS changes
+// and refreshes the generated modules for tsc and the tests; those writes are not build inputs, so nothing loops.
+const themeCSSPlugin = {
+  name: 'dialkit-theme-css',
+  setup(build: { onStart: (callback: () => void) => void; onResolve: (options: { filter: RegExp }, callback: () => { path: string }) => void }) {
+    build.onStart(() => { writeThemeModules(); });
+    build.onResolve({ filter: /^\.\/theme-css$/ }, () => ({ path: resolve(THEME_CSS) }));
+  },
+};
 
 const externalPackageStorePlugin = {
   name: 'external-package-store',
@@ -117,5 +132,18 @@ export default defineConfig([
     sourcemap: true,
     external: ['vue', 'motion-v'],
     tsconfig: 'tsconfig.vue.json',
+  },
+  // Lit build: ESM-only, Lit itself stays external.
+  {
+    entry: { index: 'src/lit/index.ts' },
+    outDir: 'dist/lit',
+    format: ['esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    external: [/^lit(\/|$)/, /^@lit\//, /^lit-html(\/|$)/, /^lit-element(\/|$)/],
+    tsconfig: 'tsconfig.lit.json',
+    loader: { '.css': 'text' },
+    esbuildPlugins: [themeCSSPlugin],
   },
 ]);

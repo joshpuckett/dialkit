@@ -17,6 +17,7 @@ const entries = {
   vue: `import {createApp,h} from 'vue';import {DialRoot,useDialKit} from 'dialkit/vue';createApp({setup(){useDialKit('Fixture',${config});return ()=>h(DialRoot,{defaultOpen:true,theme:'light'});}}).mount('#app');`,
   vanilla: `import {createDialKit,createDialRoot} from 'dialkit/vanilla';createDialKit('Fixture',${config});createDialRoot({defaultOpen:true,theme:'light'});`,
   svelte: `import {mount} from 'svelte';import App from './Fixture.svelte';mount(App,{target:document.getElementById('app')});`,
+  lit: `import {LitElement,html} from 'lit';import {DialKitController} from 'dialkit/lit';class App extends LitElement{kit=new DialKitController(this,'Fixture',${config});createRenderRoot(){return this}render(){return html\`<dialkit-root default-open theme=\${new URLSearchParams(location.search).get('theme')||'light'}></dialkit-root>\`}}customElements.define('fixture-app',App);document.getElementById('app').append(document.createElement('fixture-app'));`,
 };
 const timelineConfig = `{ enter: { at: 0, duration: 0.5, from: { opacity: 0 }, to: { opacity: 1 } } }`;
 for (const name of ["react", "solid", "vue", "vanilla"]) {
@@ -38,6 +39,10 @@ entries["svelte-timeline"] = entries.svelte.replace(
   "Fixture.svelte",
   "TimelineFixture.svelte",
 );
+entries["lit-timeline"] = entries.lit
+  .replaceAll(config, timelineConfig)
+  .replaceAll("DialKitController", "DialTimelineController")
+  .replaceAll("dialkit-root", "dialkit-timeline");
 fs.writeFileSync(
   path.join(out, "TimelineFixture.svelte"),
   `<script>import {DialTimeline,createDialTimeline} from 'dialkit/svelte';createDialTimeline('Fixture',${timelineConfig});</script><DialTimeline defaultOpen={true} theme={new URLSearchParams(location.search).get('theme') || 'light'} />`,
@@ -81,7 +86,7 @@ for (const [name, entry] of Object.entries(entries)) {
     conditions: ["browser", "svelte"],
     nodePaths: [path.join(root, "node_modules")],
     alias: Object.fromEntries(
-      ["store", "solid", "vue", "vanilla", "svelte", "timeline"]
+      ["store", "solid", "vue", "vanilla", "svelte", "lit", "timeline"]
         .map((n) => ["dialkit/" + n, path.join(root, "dist", n, "index.js")])
         .concat([["dialkit", path.join(root, "dist/index.js")]]),
     ),

@@ -11,6 +11,7 @@ import { compileModule } from 'svelte/compiler';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { useDialKitController } from './hooks/useDialKit';
 import { useDialKitController as useVueDialKitController } from './vue/useDialKit';
+import { DialKitController as LitDialKitController } from './lit/DialKitController';
 import { DialStore, type DialConfig } from './store/DialStore';
 
 const config = { group: {
@@ -94,6 +95,29 @@ describe('DialKit framework values', () => {
       DialStore.triggerAction(id, 'run');
       assert.deepEqual(actions, ['latest:run']);
     } finally { app.unmount(); }
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('updates and resets the Lit controller across its host lifecycle', () => {
+    const id = 'pad-lit';
+    let connected = false;
+    const host = {
+      updates: 0, controller: undefined as LitDialKitController<typeof config> | undefined,
+      addController(controller: LitDialKitController<typeof config>) { this.controller = controller; if (connected) controller.hostConnected(); },
+      removeController() {}, requestUpdate() { this.updates++; }, updateComplete: Promise.resolve(true),
+    };
+    const dial = new LitDialKitController(host, 'Pad', config, { id });
+    assert.deepEqual(dial.values.group, defaults);
+    try {
+      connected = true; host.controller!.hostConnected();
+      assert.deepEqual(dial.values.group, defaults);
+      const before = host.updates;
+      dial.setValues({ group: updates });
+      assert.deepEqual(dial.values.group, changed);
+      assert.ok(host.updates > before);
+      dial.resetValues();
+      assert.deepEqual(dial.values.group, defaults);
+    } finally { host.controller!.hostDisconnected(); }
     assert.equal(DialStore.getPanel(id), undefined);
   });
 

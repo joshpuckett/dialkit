@@ -10,11 +10,11 @@ Thanks for contributing.
 
 ## Toolbar browser checks
 
-After `npm run build`, run `node scripts/build-toolbar-fixtures.mjs` and serve `.toolbar-fixtures` on port 3011 (for example, `python3 -m http.server 3011 --directory .toolbar-fixtures`). The fixtures cover panels and timelines in all five frameworks; append `?theme=dark` to inspect dark mode.
+After `npm run build`, run `node scripts/build-toolbar-fixtures.mjs` and serve `.toolbar-fixtures` on port 3011 (for example, `python3 -m http.server 3011 --directory .toolbar-fixtures`). The fixtures cover panels and timelines in all six frameworks; append `?theme=dark` to inspect dark mode.
 
 With Playwright and Chrome installed, run `node scripts/test-toolbar-browser.mjs` to check version creation, selection, deletion, numbering, and keyboard focus. `DIALKIT_PLAYWRIGHT` can point to an existing Playwright installation, and `DIALKIT_FIXTURE_URL` overrides the server URL.
 
-For sticky headers, run `node scripts/build-control-fixtures.mjs` and open `/control-fixtures/react.html?multiple&scroll` in the example app (or use `solid`, `vue`, `svelte`, or `vanilla`). Open the panel, then scroll through both sections: the root header stays visible, each section's title and toolbar pin below it, and the next section pushes the previous one away. Ordinary property folders scroll normally. Append `&inline` to check an embedded panel in the page's scroll area.
+For sticky headers, run `node scripts/build-control-fixtures.mjs` and open `/control-fixtures/react.html?multiple&scroll` in the example app (or use `solid`, `vue`, `svelte`, `lit`, or `vanilla`). Open the panel, then scroll through both sections: the root header stays visible, each section's title and toolbar pin below it, and the next section pushes the previous one away. Ordinary property folders scroll normally. Append `&inline` to check an embedded panel in the page's scroll area, and `&shadow` to mount the app inside an open shadow root.
 
 Collapse the second section, scroll the first to its top, then collapse it. The version/copy toolbar should fold with the properties, and the visible panel should start shrinking on the same frame, even when its contents exceed the viewport. The bottom edge stays fixed by default; append `&position=top-right` to check that the top edge stays fixed instead. Controls remain opaque and the title rows remain visible, with no empty intermediate panel.
 
@@ -23,6 +23,7 @@ Also collapse both sections while scrolled down, reverse a collapse before it fi
 ## Project notes
 
 - `src/styles/theme.css` is copied to `dist/styles.css` during build via `tsup` `onSuccess`.
+- `scripts/gen-theme-css.js` also turns it into the gitignored `src/svelte/theme-css.ts` and `src/lit/theme-css.ts` modules; it runs first in `build`, `typecheck`, and `test`, and `tsup.config.ts` runs it as well, so `npm run dev` works from a fresh clone and rebuilds the Lit entry when the CSS changes.
 - `example/photostack` imports `dialkit/styles.css`, which resolves to `dist/styles.css`.
 - `ButtonGroup` actions should remain vertically stacked.
 

@@ -10,6 +10,7 @@ dist/
 src/store/DialStore.d.ts
 src/store/DialStore.d.ts.map
 src/svelte/theme-css.ts
+src/lit/theme-css.ts
 
 # Local timeline demo fixtures
 example/src/TimelineDemo.tsx

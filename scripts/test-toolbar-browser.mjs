@@ -8,7 +8,7 @@ const { chromium } = await import(
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const base = process.env.DIALKIT_FIXTURE_URL || "http://127.0.0.1:3011";
 try {
-  for (const framework of ["react", "solid", "vue", "svelte", "vanilla"]) {
+  for (const framework of ["react", "solid", "vue", "svelte", "lit", "vanilla"]) {
     for (const kind of ["", "-timeline"]) {
       const page = await browser.newPage();
       const errors = [];

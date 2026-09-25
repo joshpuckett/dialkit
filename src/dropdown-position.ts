@@ -59,6 +59,13 @@ export function getDropdownPosition(
   };
 }
 
+/** Render a fixed popup in the top layer, where viewport coordinates hold even under a transformed ancestor. */
+export function showInTopLayer(popup: HTMLElement) {
+  if (typeof popup.showPopover !== 'function' || popup.matches(':popover-open')) return;
+  popup.setAttribute('popover', 'manual');
+  popup.showPopover();
+}
+
 /** Track scroll, resize, panel dragging, and layout animations while a popup is open. */
 export function observeDropdownPosition(trigger: HTMLElement, update: () => void, popup?: () => HTMLElement | null | undefined): () => void {
   let frame = 0;
@@ -67,10 +74,7 @@ export function observeDropdownPosition(trigger: HTMLElement, update: () => void
   const tick = () => {
     if (disposed) return;
     const floating = popup?.();
-    if (floating?.isConnected && floating.style.position === 'fixed' && typeof floating.showPopover === 'function' && !floating.matches(':popover-open')) {
-      floating.setAttribute('popover', 'manual');
-      floating.showPopover();
-    }
+    if (floating?.isConnected && floating.style.position === 'fixed') showInTopLayer(floating);
     const rect = trigger.getBoundingClientRect();
     const root = getDialKitPortalRoot(trigger)?.getBoundingClientRect();
     const viewport = window.visualViewport;

@@ -53,7 +53,8 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
     }
   };
 }
-export function createDialRoot(options: DialRootOptions = {}) {
+export function createDialRoot(initial: DialRootOptions = {}) {
+  let options = initial;
   const root = element('div', 'dialkit-root');
   const shell = element('div', 'dialkit-panel');
   root.append(shell);
@@ -229,7 +230,23 @@ export function createDialRoot(options: DialRootOptions = {}) {
   if (options.productionEnabled !== false)
     render();
   return {
-    element: root, destroy() {
+    element: root,
+    /** Apply new settings in place; `defaultOpen` only affects panels registered afterwards. */
+    update(next: Pick<DialRootOptions, 'theme' | 'position' | 'defaultOpen' | 'onOpenChange'>) {
+      if (destroyed)
+        return;
+      options = { ...options, ...next };
+      root.dataset.theme = options.theme ?? 'system';
+      if (next.position && next.position !== position) {
+        position = next.position;
+        // A dragged panel keeps its offset and adopts the corner when it next collapses.
+        if (!inline && !offset) {
+          shell.dataset.position = position;
+          origin();
+        }
+      }
+    },
+    destroy() {
       if (destroyed)
         return;
       destroyed = true;

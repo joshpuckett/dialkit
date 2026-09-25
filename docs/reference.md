@@ -2,7 +2,7 @@
 
 [Quick start](https://github.com/joshpuckett/dialkit#quick-start) · [Timeline guide](https://github.com/joshpuckett/dialkit/blob/main/docs/timeline.md)
 
-Import APIs and types from the entry for your adapter: `dialkit`, `dialkit/solid`, `dialkit/svelte`, `dialkit/vue`, or `dialkit/vanilla`.
+Import APIs and types from the entry for your adapter: `dialkit`, `dialkit/solid`, `dialkit/svelte`, `dialkit/vue`, `dialkit/lit`, or `dialkit/vanilla`.
 
 ## Controls
 
@@ -158,11 +158,11 @@ Folders can nest. `_collapsed: true` starts a folder closed; it is UI metadata a
 
 ## Controllers
 
-Use `useDialKitController` in React and Vue, or `createDialKitController` in Solid, Svelte, and vanilla. Vanilla's `createDialKit` is an alias for its controller factory.
+Use `useDialKitController` in React and Vue, `createDialKitController` in Solid, Svelte, and vanilla, or `new DialKitController(host, name, config, options)` in Lit. Vanilla's `createDialKit` is an alias for its controller factory, and so is Lit's `createDialKit(host, ...)`.
 
 | Member | Behavior |
 | --- | --- |
-| `values` | Resolved values: object in React/Svelte, accessor in Solid, computed ref in Vue, snapshot getter in vanilla |
+| `values` | Resolved values: object in React/Svelte, accessor in Solid, computed ref in Vue, snapshot getter in vanilla and Lit |
 | `getValues()` | Read the latest resolved snapshot |
 | `setValue(path, value)` | Update one control using a dot path |
 | `setValues(values)` | Apply a nested partial object in one update |
@@ -184,6 +184,18 @@ Vanilla controllers additionally expose:
 | `destroy()` | Release this registration and its subscriptions; safe to call twice |
 
 Snapshots are plain objects. Read them again after updates or use a subscription. Destroying a root removes the UI; destroy its controllers separately to release their registrations.
+
+### Lit lifecycle
+
+`DialKitController` and `DialTimelineController` are [reactive controllers](https://lit.dev/docs/composition/controllers/). Pass the host element as the first argument, usually as a class field. The panel registers in `hostConnected()` and unregisters in `hostDisconnected()`, so moving or removing the element releases it, and a stable `id` retains its values across reconnects. Every store change calls `host.requestUpdate()`. While a timeline plays, that happens once per frame and re-renders the whole host, so keep animated regions in a small element and read `this.timeline.values` once per render.
+
+| Member | Behavior |
+| --- | --- |
+| `id` | The registered panel ID |
+| `values` | Snapshot getter, cached until the store changes (per frame for timelines); reading it repeatedly in `render()` is free |
+| `updateConfig(config)` | Reconcile new definitions while retaining compatible edits |
+
+Before the host connects, `values` resolves against what the store already holds for the ID: the config defaults for a new ID, or the in-memory values of a stable ID registered earlier. Values loaded from storage by `persist` arrive with the first update after connecting. `onAction` is read from the options object on each action, so it can be replaced later.
 
 ## Persistence
 
@@ -210,7 +222,7 @@ For custom preset interfaces, use `DialStore.savePreset`, `loadPreset`, `deleteP
 
 ## Panel state
 
-`defaultOpen` on the root supplies the initial state. A panel's `defaultCollapsed` overrides it when specified. Use `setOpen` for later changes.
+`defaultOpen` on the root supplies the initial state. A panel's `defaultCollapsed` overrides it when specified. Use `setOpen` for later changes. In vanilla, `root.update({ defaultOpen })` changes the default for panels registered afterwards without touching existing state.
 
 For code that only has a panel ID:
 
@@ -286,6 +298,37 @@ function onChange(value) {
 ```
 
 The matching component name (`Slider` here) aliases the mount function in vanilla. For global assigned shortcuts in a custom vanilla layout without a root, mount `mountShortcutListener()` and destroy it with the layout.
+
+`dialkit/lit` exports the same mount functions. Mount them after the first render into an element without template bindings, so Lit leaves its children alone, and destroy them in `disconnectedCallback()`. Mount from `connectedCallback()` rather than `firstUpdated()`, which runs only once, so a moved or re-inserted element gets its controls back. When the layout renders inside a shadow root, add `dialKitStyles` to `static styles`:
+
+```ts
+import { LitElement, html } from "lit";
+import { dialKitStyles, mountSlider } from "dialkit/lit";
+
+class Tuner extends LitElement {
+  static styles = [dialKitStyles];
+  slider?: ReturnType<typeof mountSlider>;
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.updateComplete.then(() => {
+      if (!this.isConnected || this.slider) return;
+      const host = this.renderRoot.querySelector<HTMLElement>(".dialkit-root")!;
+      this.slider = mountSlider(host, { label: "Radius", value: 24, min: 0, max: 64, step: 1, onChange: () => {} });
+    });
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.slider?.destroy();
+    this.slider = undefined;
+  }
+
+  render() {
+    return html`<div class="dialkit-root" data-theme="dark"></div>`;
+  }
+}
+```
 
 Vue also exports `vDialKit` for mounting a root with a directive, such as `<aside v-dial-kit="'inline'" />`.
 

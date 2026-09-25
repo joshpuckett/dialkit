@@ -12,12 +12,14 @@ See the [quick start](https://github.com/joshpuckett/dialkit#timeline) for a com
 | Solid | `createDialTimeline` | `timeline().card.current` | `<DialTimeline />` |
 | Svelte | `createDialTimeline` | `timeline.card.current` | `<DialTimeline />` |
 | Vue | `useDialTimeline` | `timeline.value.card.current` in script | `<DialTimeline />` |
+| Lit | `DialTimelineController` | `this.timeline.values.card.current` | `<dialkit-timeline>` |
 | Vanilla | `createDialTimeline` | `timeline.values.card.current` | `createDialTimelineRoot()` |
 
-Import from your adapter's entry. Mount one dock to display all registered timelines. Import `dialkit/styles.css`, or `dialkit/vanilla/styles.css` for vanilla. Svelte's `DialRoot` injects styles; import the stylesheet yourself when using the Svelte dock without it.
+Import from your adapter's entry. Mount one dock to display all registered timelines. Import `dialkit/styles.css`, or `dialkit/vanilla/styles.css` for vanilla. Svelte's `DialRoot` and both Lit elements inject styles; import the stylesheet yourself when using the Svelte dock without it.
 
 ```ts
 useDialTimeline(name, config, options);
+new DialTimelineController(host, name, config, options); // Lit
 ```
 
 | Option | Purpose | Default |
@@ -27,7 +29,7 @@ useDialTimeline(name, config, options);
 | `autoplay` | Play on mount | `true` |
 | `loop` | Wrap to 0 with `true`, or to a time with `{ from: seconds }` | `false` |
 
-The returned values include `time`, `playing`, `duration`, and the methods `play()`, `pause()`, `replay()`, and `seek(seconds)`. `replay()` starts from 0. In vanilla, these methods also live on the controller; use `subscribe(callback)` for frame updates and `destroy()` for cleanup.
+The returned values include `time`, `playing`, `duration`, and the methods `play()`, `pause()`, `replay()`, and `seek(seconds)`. `replay()` starts from 0. In vanilla and Lit, these methods also live on the controller. In vanilla, use `subscribe(callback)` for frame updates and `destroy()` for cleanup; in Lit, the host re-renders on each frame while the timeline plays.
 
 The names `time`, `playing`, `duration`, `play`, `pause`, `replay`, and `seek` are reserved at the top level.
 
@@ -182,11 +184,11 @@ The dock sits at the bottom of the viewport and works independently of the param
 | `theme` | `"system"` | `"system"`, `"light"`, or `"dark"` |
 | `defaultVisible` | `true` | Initial dock visibility |
 | `visible` | Uncontrolled | Set visibility from the host app |
-| `onVisibilityChange` | — | Receive visibility changes; `@visibility-change` in Vue |
+| `onVisibilityChange` | — | Receive visibility changes; `@visibility-change` in Vue, `dialkit-visibility-change` event in Lit |
 | `defaultOpen` | `true` | Start timeline sections expanded |
-| `productionEnabled` | Development only; always enabled in vanilla | Render the editor |
+| `productionEnabled` | Development only; always enabled in vanilla | Render the editor; `production-enabled` in Lit |
 
-The toolbar includes play/pause, replay, presets, Copy, and collapse. When `DialRoot` is also mounted, its timeline button shows or hides the dock. Visibility does not affect playback. In vanilla, use `dock.setVisible(boolean)` or controlled `dock.update({ visible, onVisibilityChange })`.
+The toolbar includes play/pause, replay, presets, Copy, and collapse. When `DialRoot` is also mounted, its timeline button shows or hides the dock. Visibility does not affect playback. In vanilla, use `dock.setVisible(boolean)` or controlled `dock.update({ visible, onVisibilityChange })`. In Lit, call `setVisible(boolean)` on the `<dialkit-timeline>` element, or bind its `visible` property and listen for `dialkit-visibility-change`; leave `visible` unset for uncontrolled visibility.
 
 | Gesture | Effect |
 | --- | --- |

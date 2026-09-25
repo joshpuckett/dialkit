@@ -9,6 +9,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { createRenderer, defineComponent, h } from 'vue';
 import { DialTimeline as VueDialTimeline } from './vue/components/Timeline/DialTimeline';
 import { useDialTimeline as useVueDialTimeline } from './vue/useDialTimeline';
+import { DialTimelineController as LitDialTimelineController } from './lit/DialTimelineController';
 import { DialStore } from './store/DialStore';
 import { TimelineStore } from './store/TimelineStore';
 import { TimelineUiStore } from './store/TimelineUiStore';
@@ -100,6 +101,33 @@ describe('framework timeline adapters', () => {
     assert.equal(timeline!.value.clip.duration, 1.5);
 
     app.unmount();
+    assert.equal(TimelineStore.getTimeline(id), undefined);
+    assert.equal(DialStore.getPanel(id), undefined);
+  });
+
+  it('registers, updates, and cleans up the Lit adapter', () => {
+    const id = 'lit-timeline-lifecycle';
+    const host = {
+      updates: 0, controller: undefined as LitDialTimelineController<{ clip: { at: number; duration: number } }> | undefined,
+      addController(controller: LitDialTimelineController<{ clip: { at: number; duration: number } }>) { this.controller = controller; },
+      removeController() {}, requestUpdate() { this.updates++; }, updateComplete: Promise.resolve(true),
+    };
+    const timeline = new LitDialTimelineController(host, 'Lit Timeline Test', {
+      clip: { at: 0, duration: 1 },
+    }, { id, autoplay: false });
+    assert.equal(timeline.values.duration, 1);
+
+    host.controller!.hostConnected();
+    assert.equal(TimelineStore.getTimeline(id)?.duration, 1);
+    assert.equal(DialStore.getPanel(id)?.kind, 'timeline');
+    assert.equal(timeline.values.clip.duration, 1);
+
+    const updates = host.updates;
+    DialStore.updateValue(id, 'clip.duration', 1.5);
+    assert.equal(timeline.values.clip.duration, 1.5);
+    assert.ok(host.updates > updates);
+
+    host.controller!.hostDisconnected();
     assert.equal(TimelineStore.getTimeline(id), undefined);
     assert.equal(DialStore.getPanel(id), undefined);
   });
