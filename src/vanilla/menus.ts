@@ -5,6 +5,14 @@ import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } fr
 import { findControl, formatToggleShortcut } from '../shortcut-utils';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../icons';
 import { element, icon, type Mounted } from './dom';
+import type { ShortcutConfig } from '../store/DialStore';
+const MODIFIER_NAMES = { alt: 'Option', shift: 'Shift', meta: 'Command' } as const;
+// Screen readers skip or misread the modifier glyphs, so the key also gets a spoken name.
+function describeShortcutKey(sc: ShortcutConfig): string {
+  if (!sc.key)
+    return 'No key';
+  return sc.modifier ? `${MODIFIER_NAMES[sc.modifier]} ${sc.key.toUpperCase()}` : sc.key.toUpperCase();
+}
 export function popupMenu(trigger: HTMLButtonElement, className: string, kind: 'select' | 'presets' | 'help', populate: (popup: HTMLElement) => void) {
   let popup: HTMLDivElement | undefined;
   let stopKeyboard: (() => void) | undefined, stopPosition: (() => void) | undefined;
@@ -127,7 +135,6 @@ export function mountPresetManager(host: HTMLElement, initial: PresetManagerProp
   const row = element('div', 'dialkit-preset-manager');
   const trigger = element('button', 'dialkit-preset-trigger');
   const label = element('span', 'dialkit-preset-label');
-  trigger.setAttribute('aria-label', 'Versions');
   trigger.append(label, icon(ICON_CHEVRON, 'dialkit-select-chevron'));
   row.append(trigger);
   host.append(row);
@@ -169,6 +176,7 @@ export function mountPresetManager(host: HTMLElement, initial: PresetManagerProp
   function render() {
     const active = props.presets.find(p => p.id === props.activePresetId);
     label.textContent = active?.name ?? 'Version 1';
+    trigger.setAttribute('aria-label', `Versions: ${label.textContent}`);
     trigger.dataset.hasPreset = String(!!active);
     menu.refresh();
   }
@@ -201,7 +209,10 @@ export function mountShortcutsMenu(host: HTMLElement, initial: {
     for (const [path, shortcut] of Object.entries(panel?.shortcuts ?? {})) {
       const row = element('div', 'dialkit-shortcuts-row');
       const interaction = shortcut.interaction ?? 'scroll';
-      row.append(element('span', 'dialkit-shortcuts-row-key', formatToggleShortcut(shortcut)), element('span', 'dialkit-shortcuts-row-label', findControl(panel!.controls, path)?.label ?? path), element('span', 'dialkit-shortcuts-row-mode', interaction === 'scroll-only' ? 'scroll' : `key+${interaction}`));
+      const key = element('span', 'dialkit-shortcuts-row-key', formatToggleShortcut(shortcut));
+      key.setAttribute('role', 'img');
+      key.setAttribute('aria-label', describeShortcutKey(shortcut));
+      row.append(key, element('span', 'dialkit-shortcuts-row-label', findControl(panel!.controls, path)?.label ?? path), element('span', 'dialkit-shortcuts-row-mode', interaction === 'scroll-only' ? 'scroll' : `key+${interaction}`));
       list.append(row);
     }
     popup.append(list, element('div', 'dialkit-shortcuts-hint', 'See pill badges on controls for keys'));

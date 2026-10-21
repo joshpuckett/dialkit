@@ -64,6 +64,20 @@ export function getPanelDragOffset(start: PanelDragStart, pointerX: number, poin
   };
 }
 
+/** Move the panel by a keyboard step, keeping all of it inside the viewport. */
+export function getPanelKeyboardOffset(
+  rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
+  dx: number,
+  dy: number,
+  viewportWidth: number,
+  viewportHeight: number
+): PanelDragOffset {
+  return {
+    x: Math.min(Math.max(rect.left + dx, 0), Math.max(viewportWidth - rect.width, 0)),
+    y: Math.min(Math.max(rect.top + dy, 0), Math.max(viewportHeight - rect.height, 0)),
+  };
+}
+
 export function hasPanelDragMoved(start: PanelDragStart, pointerX: number, pointerY: number): boolean {
   const dx = pointerX - start.pointerX;
   const dy = pointerY - start.pointerY;

@@ -8,6 +8,8 @@ interface ShortcutsMenuProps {
   panelId: string;
 }
 
+const MODIFIER_NAMES = { alt: 'Option', shift: 'Shift', meta: 'Command' } as const;
+
 function formatShortcutKey(sc: ShortcutConfig): string {
   if (!sc.key) return '—';
   const mod = sc.modifier === 'alt' ? '⌥'
@@ -15,6 +17,12 @@ function formatShortcutKey(sc: ShortcutConfig): string {
     : sc.modifier === 'meta' ? '⌘'
     : '';
   return `${mod}${sc.key.toUpperCase()}`;
+}
+
+// Screen readers skip or misread the modifier glyphs, so the key also gets a spoken name.
+function describeShortcutKey(sc: ShortcutConfig): string {
+  if (!sc.key) return 'No key';
+  return sc.modifier ? `${MODIFIER_NAMES[sc.modifier]} ${sc.key.toUpperCase()}` : sc.key.toUpperCase();
 }
 
 function formatInteraction(sc: ShortcutConfig): string {
@@ -104,12 +112,12 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
         ref={triggerRef}
         className="dialkit-shortcuts-trigger"
         onClick={toggle}
-        title="Keyboard shortcuts"
+        title="Keyboard shortcuts" aria-label="Keyboard shortcuts"
         type="button" aria-haspopup="dialog" aria-expanded={isOpen}
         whileTap={{ scale: 0.9 }}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="2" y="6" width="20" height="12" rx="2" />
           <path d="M6 10H6.01" />
           <path d="M10 10H10.01" />
@@ -135,7 +143,7 @@ export function ShortcutsMenu({ panelId }: ShortcutsMenuProps) {
               <div className="dialkit-shortcuts-list">
                 {rows.map((row) => (
                   <div key={row.path} className="dialkit-shortcuts-row">
-                    <span className="dialkit-shortcuts-row-key">
+                    <span className="dialkit-shortcuts-row-key" role="img" aria-label={describeShortcutKey(row.shortcut)}>
                       {formatShortcutKey(row.shortcut)}
                     </span>
                     <span className="dialkit-shortcuts-row-label">{row.label}</span>

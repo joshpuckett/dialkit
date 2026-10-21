@@ -172,11 +172,10 @@ function EaseTextInput({ ease, onChange }: { ease: [number, number, number, numb
   };
 
   return (
-    <div className="dialkit-labeled-control">
+    <label className="dialkit-labeled-control">
       <span className="dialkit-labeled-control-label">Ease</span>
       <input
         type="text"
-        aria-label="Bézier coordinates"
         className="dialkit-text-input"
         value={editing ? draft : formatEase(ease)}
         onChange={(e) => setDraft(e.target.value)}
@@ -185,6 +184,6 @@ function EaseTextInput({ ease, onChange }: { ease: [number, number, number, numb
         onKeyDown={handleKeyDown}
         spellCheck={false}
       />
-    </div>
+    </label>
   );
 }

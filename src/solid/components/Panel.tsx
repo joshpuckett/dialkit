@@ -1,3 +1,4 @@
+import { announce } from '../../announce';
 import { buildCopyInstruction } from '../../copy-instruction';
 import { batch, createSignal, createEffect, on, onMount, onCleanup, type JSX } from 'solid-js';
 import { animate } from 'motion';
@@ -56,6 +57,7 @@ export function Panel(props: PanelProps) {
     const instruction = buildCopyInstruction('createDialKit', props.panel.name, values());
     try { await navigator.clipboard.writeText(instruction); }
     catch { return; }
+    announce('Parameters copied');
     setCopied(true);
     clearTimeout(copyTimeout);
     copyTimeout = setTimeout(() => setCopied(false), 1500);
@@ -117,6 +119,7 @@ export function Panel(props: PanelProps) {
         ref={copyButtonRef}
         class="dialkit-toolbar-add dialkit-toolbar-primary"
         onClick={handleCopy}
+        type="button"
         onPointerDown={handleCopyTapStart}
         onPointerUp={handleCopyTapEnd}
         onPointerCancel={handleCopyTapEnd}

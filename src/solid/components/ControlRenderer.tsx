@@ -31,12 +31,14 @@ export function ControlRenderer(props: ControlRendererProps) {
 
   const renderControl = (control: ControlMeta) => {
     const value = () => props.values[control.path];
+    const defaultValue = () => DialStore.getDefaultValue(props.panelId, control.path);
     switch (control.type) {
       case 'slider':
         return (
           <Slider
             label={control.label}
             value={value() as number}
+            defaultValue={typeof defaultValue() === 'number' ? defaultValue() as number : undefined}
             onChange={(next) => DialStore.updateValue(props.panelId, control.path, next)}
             min={control.min}
             max={control.max}

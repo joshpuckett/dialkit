@@ -23,11 +23,18 @@ import {
   clampClipResizeStart,
   clampStepResize,
   clampTrackDelay,
+  clipAccessibleName,
   computeClipStaticFromValues,
+  dockResizeKeyHeight,
   formatClock,
   formatSeconds,
   formatStepLabel,
+  handlePlayheadKey,
+  handleTimelineClipKey,
+  handleTimelineSpaceKey,
   normalizeTimelineValuesForCopy,
+  observeClipPopover,
+  playheadValueText,
   timelinePopoverDisplayValues,
 } from '../../../timeline-core';
 import type { TimelineClipLoop, TimelineStepStatic } from '../../../timeline-core';
@@ -115,6 +122,14 @@ export const DialTimeline = defineComponent({
       resizeCleanup = finish;
     };
 
+    const handleResizeKeydown = (event: KeyboardEvent) => {
+      const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+      const next = dockResizeKeyHeight(event.key, dockMaxHeight.value, MIN_DOCK_MAX_HEIGHT, viewportMax, event.shiftKey);
+      if (next === undefined) return;
+      event.preventDefault();
+      dockMaxHeight.value = next;
+    };
+
     onMounted(() => {
       mounted.value = true;
       unsubscribeVisibility = TimelineUiStore.subscribe(() => {
@@ -146,6 +161,7 @@ export const DialTimeline = defineComponent({
 
     return () => {
       if (!props.productionEnabled || !mounted.value || timelines.value.length === 0) return null;
+      const resizeMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
       return h(Teleport, { to: 'body' }, [
         h('div', {
           class: 'dialkit-root dialkit-timeline',
@@ -155,10 +171,15 @@ export const DialTimeline = defineComponent({
           h('div', {
             class: 'dialkit-timeline-resize-handle',
             role: 'separator',
+            tabindex: 0,
             'aria-label': 'Resize timeline height',
             'aria-orientation': 'horizontal',
+            'aria-valuemin': MIN_DOCK_MAX_HEIGHT,
+            'aria-valuemax': resizeMax,
+            'aria-valuenow': Math.round(Math.min(dockMaxHeight.value, resizeMax)),
             title: 'Drag to resize timeline',
             onPointerdown: handleResizePointerDown,
+            onKeydown: handleResizeKeydown,
           }),
           h('div', {
             ref: dockRef,
@@ -296,6 +317,7 @@ const TimelinePlayheadFlag = defineComponent({
     laneWidth: { type: Number, required: true },
     ruler: Object as PropType<HTMLDivElement>,
     onResetView: { type: Function as PropType<() => void>, required: true },
+    onReveal: { type: Function as PropType<(time: number) => void>, required: true },
   },
   setup(props) {
     const time = ref(TimelineStore.getTransport(props.id).time);
@@ -337,11 +359,17 @@ const TimelinePlayheadFlag = defineComponent({
           '--dial-timeline-playhead-flag-offset': `${flagOffset}px`,
         },
         role: 'slider',
+        tabindex: 0,
         'aria-label': 'Timeline current time',
         'aria-valuemin': 0,
         'aria-valuemax': props.duration,
         'aria-valuenow': time.value,
+        'aria-valuetext': playheadValueText(time.value, props.duration),
         title: 'Drag to scrub the timeline',
+        // Keep a keyboard-scrubbed playhead in view so it keeps focus when zoomed.
+        onKeydown: (event: KeyboardEvent) => handlePlayheadKey(event, props.id, (next) => {
+          if (next < props.viewStart || next > props.viewEnd) props.onReveal(next);
+        }),
         onPointerdown: (event: PointerEvent) => {
           const rect = props.ruler?.getBoundingClientRect();
           if (!rect) return;
@@ -616,6 +644,8 @@ const TimelineSection = defineComponent({
                   class: 'dialkit-timeline-group-toggle',
                   'data-open': !collapsed,
                   title: collapsed ? 'Expand layer' : 'Collapse layer',
+                  'aria-label': collapsed ? 'Expand layer' : 'Collapse layer',
+                  'aria-expanded': !collapsed,
                   onClick: () => toggleGroup(group),
                 }, [chevronIcon()]),
                 h('span', formatLabel(group)),
@@ -635,6 +665,8 @@ const TimelineSection = defineComponent({
               class: 'dialkit-timeline-group-toggle',
               'data-open': tracksOpen,
               title: tracksOpen ? 'Collapse properties' : 'Expand properties',
+              'aria-label': tracksOpen ? 'Collapse properties' : 'Expand properties',
+              'aria-expanded': tracksOpen,
               onClick: (event: Event) => {
                 event.stopPropagation();
                 toggleTracks(clip.key);
@@ -651,6 +683,7 @@ const TimelineSection = defineComponent({
             steps: clip.stepKeys?.length ? stat.tracks[0]?.steps : undefined,
             fixedDuration: isProps ? true : stat.isPhysics,
             composite: isProps,
+            expanded: tracksOpen,
             pxPerSecond: pxPerSecond.value,
             viewStart: safeViewStart.value,
             timelineDuration: props.meta.duration,
@@ -700,7 +733,10 @@ const TimelineSection = defineComponent({
       return rows;
     };
 
-    return () => h('div', { class: 'dialkit-timeline-section' }, [
+    return () => h('div', {
+      class: 'dialkit-timeline-section',
+      onKeydown: (event: KeyboardEvent) => handleTimelineSpaceKey(event, props.meta.id),
+    }, [
       h('div', { class: 'dialkit-timeline-header', 'data-open': open.value || undefined }, [
         h('div', { class: 'dialkit-timeline-identity' }, [
           h('span', { class: 'dialkit-timeline-title' }, props.meta.name),
@@ -723,8 +759,8 @@ const TimelineSection = defineComponent({
             onClick: handleCopy,
           }, [h('span', { style: { position: 'relative', width: '16px', height: '16px' } }, [
             copied.value
-              ? h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: { ...iconStyle, color: 'inherit' } }, [h('path', { d: ICON_CHECK })])
-              : h('svg', { viewBox: '0 0 24 24', fill: 'none', style: { ...iconStyle, color: 'inherit' } }, [
+              ? h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', style: { ...iconStyle, color: 'inherit' } }, [h('path', { d: ICON_CHECK })])
+              : h('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true', style: { ...iconStyle, color: 'inherit' } }, [
                 h('path', { d: ICON_CLIPBOARD_PLAIN.board, stroke: 'currentColor', 'stroke-width': '2', 'stroke-linejoin': 'round' }),
                 h('path', { d: ICON_CLIPBOARD_PLAIN.body, stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
               ]),
@@ -734,6 +770,7 @@ const TimelineSection = defineComponent({
             'data-open': open.value,
             'aria-expanded': open.value,
             title: open.value ? 'Collapse timeline' : 'Expand timeline',
+            'aria-label': open.value ? 'Collapse timeline' : 'Expand timeline',
             onClick: () => { open.value = !open.value; },
           }, [chevronIcon()]),
         ]),
@@ -835,6 +872,7 @@ const TimelineSection = defineComponent({
           laneWidth: laneWidth.value,
           ruler: laneAreaRef.value ?? undefined,
           onResetView: resetView,
+          onReveal: centerViewAt,
         }) : null,
       ]), zoom.value > 1 ? h('div', { class: 'dialkit-timeline-scroll-row' }, [
         h('div', { class: 'dialkit-timeline-label' }),
@@ -857,7 +895,7 @@ const TimelineSection = defineComponent({
 });
 
 function chevronIcon() {
-  return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+  return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, [
     h('path', { d: ICON_CHEVRON }),
   ]);
 }
@@ -884,9 +922,6 @@ const ClipPopover = defineComponent({
       if (element.value?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       props.onClose();
     };
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') props.onClose();
-    };
     onMounted(() => {
       measure();
       observer = new ResizeObserver(measure);
@@ -895,15 +930,19 @@ const ClipPopover = defineComponent({
       window.visualViewport?.addEventListener('resize', updateViewport);
       window.visualViewport?.addEventListener('scroll', updateViewport);
       document.addEventListener('pointerdown', outside, true);
-      document.addEventListener('keydown', keydown);
     });
+    let stopFocus: (() => void) | undefined;
+    watch([element, () => props.popover.clip.key, () => props.popover.stepKey], () => {
+      stopFocus?.();
+      stopFocus = element.value ? observeClipPopover(element.value, props.onClose) : undefined;
+    }, { flush: 'post' });
     onUnmounted(() => {
+      stopFocus?.();
       observer?.disconnect();
       window.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('scroll', updateViewport);
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', keydown);
     });
 
     return () => {
@@ -962,7 +1001,7 @@ const ClipPopover = defineComponent({
           h('div', { class: 'dialkit-timeline-popover-header' }, [
             h('span', { class: 'dialkit-timeline-popover-title' }, title),
             h('button', { class: 'dialkit-timeline-popover-close', title: 'Close editor', 'aria-label': 'Close editor', onClick: props.onClose }, [
-              h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round' }, [h('path', { d: 'M6 6L18 18M18 6L6 18' })]),
+              h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'aria-hidden': 'true' }, [h('path', { d: 'M6 6L18 18M18 6L6 18' })]),
             ]),
           ]),
           h('div', { class: 'dialkit-timeline-popover-body' }, [h(ControlRenderer, {
@@ -1026,6 +1065,7 @@ const TimelineClip = defineComponent({
     steps: Array as PropType<TimelineStepStatic[]>,
     fixedDuration: { type: Boolean, required: true },
     composite: Boolean,
+    expanded: Boolean,
     baseAt: { type: Number, default: 0 },
     delayMode: Boolean,
     pxPerSecond: { type: Number, required: true },
@@ -1084,6 +1124,9 @@ const TimelineClip = defineComponent({
             class: 'dialkit-timeline-clip-segment',
             'data-step': step.key,
             'data-selected': props.selectedStepKey === step.key || undefined,
+            role: 'button',
+            tabindex: 0,
+            'aria-label': clipAccessibleName(`${props.clip.label} · ${formatStepLabel(step.key ?? '')}`, props.at + step.offset, step.duration),
             style: { width: `${segmentWidth}px` },
           }, segmentWidth > 52 ? [h('span', { class: 'dialkit-timeline-clip-duration' }, formatSeconds(step.duration))] : []));
         }
@@ -1101,12 +1144,28 @@ const TimelineClip = defineComponent({
         : `${props.clip.label} — ${formatSeconds(props.at)} for ${durationText}${props.fixedDuration ? ' (duration set by spring physics)' : ''}${looping ? ' · repeats through timeline' : ''}${props.delayMode ? ' · drag to phase-shift' : ''}`;
       return [...ghosts, h('div', {
         class: 'dialkit-timeline-clip',
+        'data-clip': props.clip.key,
         'data-steps': isSteps || undefined,
         'data-composite': props.composite || undefined,
         'data-selected': props.selected || undefined,
         'data-dragging': dragging.value || undefined,
+        role: isSteps ? undefined : 'button',
+        tabindex: isSteps ? undefined : 0,
+        'aria-label': isSteps ? undefined : clipAccessibleName(props.clip.label, props.at, props.duration),
+        'aria-expanded': props.composite ? props.expanded : undefined,
         style: { left: `${(props.at - props.viewStart) * props.pxPerSecond}px`, width: `${width}px`, background: props.composite ? `${props.clip.color}80` : props.clip.color },
         title,
+        onKeydown: (event: KeyboardEvent) => handleTimelineClipKey(event, props.timelineId, {
+          key: props.clip.key,
+          label: props.clip.label,
+          at: props.at,
+          duration: props.duration,
+          timelineDuration: props.timelineDuration,
+          baseAt: props.baseAt,
+          delayMode: props.delayMode,
+          fixedDuration: props.fixedDuration || props.composite,
+          steps: props.steps,
+        }, (element, stepKey) => props.onClick(props.clip, element.getBoundingClientRect(), stepKey)),
         onPointerdown: (event: PointerEvent) => {
           if (event.shiftKey) return;
           event.stopPropagation();

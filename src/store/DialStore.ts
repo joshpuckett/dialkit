@@ -592,6 +592,11 @@ class DialStoreClass {
     return panel?.values[path];
   }
 
+  /** The value a control was configured with, before edits or presets. */
+  getDefaultValue(panelId: string, path: string): DialValue | undefined {
+    return this.defaultValues.get(panelId)?.[path];
+  }
+
   getValues(panelId: string): Record<string, DialValue> {
     // Return the snapshot for useSyncExternalStore compatibility
     // Use stable EMPTY_VALUES to avoid infinite loop in React 19
@@ -754,6 +759,24 @@ class DialStoreClass {
       }
     }
     return null;
+  }
+
+  /** Every keyed shortcut assigned to `key`, whatever its modifier. */
+  resolveShortcutTargets(key: string): Array<{
+    panelId: string;
+    path: string;
+    control: ControlMeta;
+    shortcut: ShortcutConfig;
+  }> {
+    const results: Array<{ panelId: string; path: string; control: ControlMeta; shortcut: ShortcutConfig }> = [];
+    for (const panel of this.panels.values()) {
+      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
+        if (!shortcut.key || shortcut.key.toLowerCase() !== key.toLowerCase()) continue;
+        const control = this.controlsByPanel.get(panel)?.get(path);
+        if (control) results.push({ panelId: panel.id, path, control, shortcut });
+      }
+    }
+    return results;
   }
 
   resolveScrollOnlyTargets(): Array<{

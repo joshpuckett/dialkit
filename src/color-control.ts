@@ -1,8 +1,17 @@
+import { announce } from './announce';
 import { clamp, colorFormat, colorToRgb, fitGamut, formatColor, maxChroma, parseColor, type Color } from './color';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from './dropdown-position';
 import { handleSegmentKey } from './control-keyboard';
 
 export type ColorControlProps = { label: string; value: string; onChange: (value: string) => void };
+
+let colorControlId = 0;
+const FIELD_HELP = 'Arrow keys adjust saturation and lightness. Shift adjusts by ten steps.';
+
+/** The color field position as screen readers hear it, from 0–1 saturation and lightness. */
+export function colorFieldValueText(saturation: number, lightness: number): string {
+  return `Saturation ${Math.round(saturation * 100)}%, lightness ${Math.round(lightness * 100)}%`;
+}
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -23,6 +32,8 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   let stopPosition: (() => void) | undefined;
   let paintFrame = 0;
   let updatePicker = () => {};
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  const fieldHelpId = `dialkit-color-field-help-${++colorControlId}`;
   const row = element('div', 'dialkit-color-control');
   const label = element('span', 'dialkit-color-label');
   const inputs = element('div', 'dialkit-color-inputs');
@@ -83,7 +94,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   });
   valueInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') { if (acceptText(valueInput)) valueInput.blur(); }
-    if (e.key === 'Escape') { valueInput.value = props.value; valueInput.removeAttribute('aria-invalid'); valueInput.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); valueInput.value = props.value; valueInput.removeAttribute('aria-invalid'); valueInput.select(); }
     e.stopPropagation();
   });
 
@@ -91,6 +102,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     stopPosition?.();
     stopPosition = undefined;
     cancelAnimationFrame(paintFrame);
+    clearTimeout(announceTimer);
     popup?.remove();
     popup = undefined;
     updatePicker = () => {};
@@ -117,8 +129,11 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     popup.setAttribute('aria-label', `${props.label} color picker`);
     const plane = element('div', 'dialkit-color-plane');
     plane.setAttribute('role', 'group');
-    plane.setAttribute('aria-label', 'Color field; use arrow keys to adjust saturation and lightness');
+    plane.setAttribute('aria-label', 'Color field');
+    plane.setAttribute('aria-describedby', fieldHelpId);
     plane.tabIndex = 0;
+    const fieldHelp = element('span', 'dialkit-color-field-help');
+    fieldHelp.id = fieldHelpId;
     const canvas = element('canvas', 'dialkit-color-canvas');
     canvas.width = 252;
     canvas.height = 160;
@@ -203,6 +218,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
       marker.style.left = `${saturation * 100}%`;
       marker.style.top = `${(1 - color.l) * 100}%`;
       marker.style.background = formatColor({ ...color, a: 1 }, 'oklch');
+      fieldHelp.textContent = `${colorFieldValueText(saturation, color.l)}. ${FIELD_HELP}`;
       hue.value = String(color.h);
       opacity.value = String(color.a * 100);
       hue.setAttribute('aria-valuetext', `${Math.round(color.h)} degrees`);
@@ -252,6 +268,9 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
       const l = clamp(color.l + (e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0));
       saturation = clamp(saturation + (e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0));
       commit({ ...color, l, c: saturation * maxChroma(l, color.h, planeSpace()) });
+      // The field has no value of its own to announce; read where a held key stops.
+      clearTimeout(announceTimer);
+      announceTimer = setTimeout(() => announce(colorFieldValueText(saturation, color.l)), 250);
     });
     plane.addEventListener('pointermove', e => { if (plane.hasPointerCapture(e.pointerId)) move(e); });
     plane.addEventListener('pointerup', e => { if (plane.hasPointerCapture(e.pointerId)) plane.releasePointerCapture(e.pointerId); });
@@ -267,7 +286,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
       }
       e.stopPropagation();
     });
-    popup.append(formatRow, plane, tracks, output);
+    popup.append(formatRow, plane, tracks, output, fieldHelp);
     root.append(popup);
     const updatePosition = () => {
       if (!popup) return;

@@ -130,11 +130,10 @@ export function TransitionControl(props: TransitionControlProps) {
         </div>
 
         <Show when={isEasing()}>
-          <div class="dialkit-labeled-control">
+          <label class="dialkit-labeled-control">
             <span class="dialkit-labeled-control-label">Ease</span>
             <input
               type="text"
-              aria-label="Bézier coordinates"
               class="dialkit-text-input"
               value={editingEase() ? easeDraft() : formatEase(easing().ease)}
               onInput={(event) => setEaseDraft(event.currentTarget.value)}
@@ -148,7 +147,7 @@ export function TransitionControl(props: TransitionControlProps) {
               }}
               spellcheck={false}
             />
-          </div>
+          </label>
         </Show>
 
         <Show when={isSimple()}>

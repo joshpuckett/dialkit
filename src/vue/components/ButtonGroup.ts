@@ -18,7 +18,7 @@ export const ButtonGroup = defineComponent({
       'div',
       { class: 'dialkit-button-group' },
       props.buttons.map((button) =>
-        h('button', { class: 'dialkit-button', onClick: button.onClick }, button.label)
+        h('button', { type: 'button', class: 'dialkit-button', onClick: button.onClick }, button.label)
       )
     );
   },

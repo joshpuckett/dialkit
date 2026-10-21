@@ -28,6 +28,7 @@ export const PresetManager = defineComponent({
     const dropdownRef = ref<HTMLElement | null>(null);
 
     const activePreset = () => props.presets.find((preset) => preset.id === props.activePresetId);
+    const activeName = () => activePreset()?.name ?? 'Version 1';
 
     const open = () => {
       const rect = triggerRef.value?.getBoundingClientRect();
@@ -102,9 +103,9 @@ export const PresetManager = defineComponent({
         'data-open': String(isOpen.value),
         'data-has-preset': String(!!activePreset()),
         type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': isOpen.value,
-        'aria-label': 'Versions', onKeydown: (e: KeyboardEvent) => openDropdownOnKey(e, open),
+        'aria-label': `Versions: ${activeName()}`, onKeydown: (e: KeyboardEvent) => openDropdownOnKey(e, open),
       }, [
-        h('span', { class: 'dialkit-preset-label' }, activePreset()?.name ?? 'Version 1'),
+        h('span', { class: 'dialkit-preset-label' }, activeName()),
         h(motion.svg, {
           class: 'dialkit-select-chevron',
           viewBox: '0 0 24 24',
@@ -153,7 +154,7 @@ export const PresetManager = defineComponent({
                 h('button', {
                   class: 'dialkit-preset-delete',
                   onClick: (event: MouseEvent) => handleDelete(event, preset.id),
-                  type: 'button', title: `Delete ${preset.name}`,
+                  type: 'button', title: `Delete ${preset.name}`, 'aria-label': `Delete ${preset.name}`,
                 }, [
                   h('svg', {
                     viewBox: '0 0 24 24',
@@ -162,6 +163,7 @@ export const PresetManager = defineComponent({
                     'stroke-width': '2',
                     'stroke-linecap': 'round',
                     'stroke-linejoin': 'round',
+                    'aria-hidden': 'true',
                   }, ICON_TRASH.map((d) => h('path', { d }))),
                 ]),
               ])),

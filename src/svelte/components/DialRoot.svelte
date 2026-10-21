@@ -18,12 +18,14 @@
     getPanelDragHandle,
     getPanelDragOffset,
     getPanelDragStart,
+    getPanelKeyboardOffset,
     getPanelOriginX,
     getPanelOriginY,
     hasPanelDragMoved,
     type PanelDragOffset,
     type PanelDragStart,
   } from '../../panel-drag';
+  import { observePanelKeyboard } from '../../panel-keyboard';
 
   export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   export type DialMode = 'popover' | 'inline';
@@ -37,12 +39,14 @@
       ? viteMode !== 'production'
       : true;
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault, onOpenChange } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as DialTheme, productionEnabled = isDevDefault, hotkey, onOpenChange } = $props<{
     position?: DialPosition;
     defaultOpen?: boolean;
     mode?: DialMode;
     theme?: DialTheme;
     productionEnabled?: boolean;
+    /** Shortcut that opens the panel and moves focus into it, such as `"mod+period"`. Off by default. */
+    hotkey?: string;
     onOpenChange?: (open: boolean) => void;
   }>();
 
@@ -62,6 +66,7 @@
   let dragTarget: HTMLElement | null = null;
   let panelOpenStates = new Map<string, boolean>();
   let rootOpen: boolean | undefined;
+  let keyboard: ReturnType<typeof observePanelKeyboard> | undefined;
 
   const dragStyle = $derived(
     dragOffset
@@ -145,6 +150,28 @@
     return () => observer.disconnect();
   });
 
+  function movePanel(dx: number, dy: number) {
+    const rect = panelRef?.getBoundingClientRect();
+    if (rect) dragOffset = getPanelKeyboardOffset(rect, dx, dy, window.innerWidth, window.innerHeight);
+  }
+
+  $effect(() => {
+    const panel = panelRef;
+    if (!panel) return;
+    const observer = untrack(() => observePanelKeyboard(panel, { hotkey, inline, move: movePanel }));
+    keyboard = observer;
+    return () => {
+      observer.destroy();
+      keyboard = undefined;
+    };
+  });
+
+  // Also runs when the panels change, since that can rebuild the root header.
+  $effect(() => {
+    void panels;
+    keyboard?.update({ hotkey, inline, move: movePanel });
+  });
+
   function handlePointerDown(event: PointerEvent) {
     const panel = panelRef ?? null;
     const handle = getPanelDragHandle(event.target, panel);
@@ -220,6 +247,8 @@
         <div
           bind:this={panelRef}
           class="dialkit-panel"
+          role="region"
+          aria-label="DialKit"
           data-mode={mode}
           data-position={inline ? undefined : (dragOffset ? undefined : activePosition)}
           data-origin-x={originX}

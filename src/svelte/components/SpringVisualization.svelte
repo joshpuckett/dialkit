@@ -82,7 +82,7 @@
   });
 </script>
 
-<svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz">
+<svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz" aria-hidden="true">
   {#each gridLines as line}
     <line
       x1={line.x1}

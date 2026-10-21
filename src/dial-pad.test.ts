@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { normalizePadValue, padGridIntersection, padValueFromKey, padValueFromPoint, resolvePadAxis, snapPadAxis } from './dial-pad';
+import { padValueText } from './dial-pad-control';
 import { DialStore, flattenDialValueUpdates, resolveDialValues, type DialConfig, type DialPadConfig, type DialPadValue, type ResolvedValues } from './store/DialStore';
 
 describe('DialPad', () => {
@@ -137,5 +138,10 @@ describe('DialPad', () => {
       if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
       else Reflect.deleteProperty(globalThis, 'window');
     }
+  });
+
+  it('describes the position with its axis names for screen readers', () => {
+    assert.equal(padValueText({ x: 0.5, y: -1 }, { x: 'X', y: 'Y' }), 'X 0.5, Y -1');
+    assert.equal(padValueText({ x: 0.3, y: 0.2 }, { x: 'Duration', y: 'Bounce' }), 'Duration 0.3, Bounce 0.2');
   });
 });

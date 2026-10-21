@@ -49,7 +49,7 @@ export function SpringVisualization({ spring, isSimpleMode }: SpringVisualizatio
   }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="dialkit-spring-viz">
+    <svg viewBox={`0 0 ${width} ${height}`} className="dialkit-spring-viz" aria-hidden="true">
       {gridLines}
       <line
         x1={0}

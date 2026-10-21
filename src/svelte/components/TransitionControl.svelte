@@ -129,11 +129,10 @@
 
     {#if isEasing}
 
-      <div class="dialkit-labeled-control">
+      <label class="dialkit-labeled-control">
         <span class="dialkit-labeled-control-label">Ease</span>
         <input
           type="text"
-          aria-label="Bézier coordinates"
           class="dialkit-text-input"
           value={editingEase ? easeDraft : formatEase(easing.ease)}
           oninput={(e) => (easeDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -146,7 +145,7 @@
           }}
           spellcheck={false}
         />
-      </div>
+      </label>
     {:else if isSimpleSpring}
       <Slider
         label="Bounce"

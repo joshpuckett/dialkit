@@ -1,4 +1,5 @@
-import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport } from 'vue';
+import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, Teleport, watch } from 'vue';
+import { MotionConfig } from 'motion-v';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig } from '../../store/DialStore';
 import { TimelineStore } from '../../store/TimelineStore';
@@ -15,12 +16,14 @@ import {
   getPanelDragHandle,
   getPanelDragOffset,
   getPanelDragStart,
+  getPanelKeyboardOffset,
   getPanelOriginX,
   getPanelOriginY,
   hasPanelDragMoved,
   type PanelDragOffset,
   type PanelDragStart,
 } from '../../panel-drag';
+import { observePanelKeyboard } from '../../panel-keyboard';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -57,6 +60,11 @@ export const DialRoot = defineComponent({
       type: Boolean,
       default: isDevDefault,
     },
+    /** Shortcut that opens the panel and moves focus into it, such as `"mod+period"`. Off by default. */
+    hotkey: {
+      type: String,
+      default: undefined,
+    },
   },
   emits: ['openChange'],
   setup(props, { emit }) {
@@ -69,6 +77,8 @@ export const DialRoot = defineComponent({
     let unsubscribePanels: (() => void) | undefined;
     let unsubscribeTimelines: (() => void) | undefined;
     let observer: MutationObserver | undefined;
+    let keyboard: ReturnType<typeof observePanelKeyboard> | undefined;
+    let keyboardPanel: HTMLDivElement | null = null;
     let lastDragOffset: PanelDragOffset | null = null;
     let dragging = false;
     let dragStart: PanelDragStart | null = null;
@@ -115,6 +125,23 @@ export const DialRoot = defineComponent({
 
       observer.observe(panelRef.value, { subtree: true, attributes: true, attributeFilter: ['data-collapsed'] });
     };
+
+    const movePanel = (dx: number, dy: number) => {
+      const rect = panelRef.value?.getBoundingClientRect();
+      if (rect) dragOffset.value = getPanelKeyboardOffset(rect, dx, dy, window.innerWidth, window.innerHeight);
+    };
+
+    const keyboardOptions = () => ({ hotkey: props.hotkey, inline: props.mode === 'inline', move: movePanel });
+
+    const connectKeyboard = (panel: HTMLDivElement | null) => {
+      if (panel === keyboardPanel) return;
+      keyboard?.destroy();
+      keyboard = panel ? observePanelKeyboard(panel, keyboardOptions()) : undefined;
+      keyboardPanel = panel;
+    };
+
+    // Also runs when the panels change, since that can rebuild the root header.
+    watch(() => [props.hotkey, props.mode, panels.value], () => keyboard?.update(keyboardOptions()), { flush: 'post' });
 
     const handlePointerDown = (event: PointerEvent) => {
       const panel = panelRef.value;
@@ -212,6 +239,7 @@ export const DialRoot = defineComponent({
       unsubscribeTimelines?.();
       unsubscribeOpen?.();
       observer?.disconnect();
+      connectKeyboard(null);
     });
 
     const timelineToggle = () => timelines.value.length > 0 ? h(TimelineToggleButton) : null;
@@ -266,6 +294,7 @@ export const DialRoot = defineComponent({
           ref: (el) => {
             panelRef.value = el as HTMLDivElement | null;
             connectObserver();
+            connectKeyboard(panelRef.value);
           },
           class: 'dialkit-panel',
           'data-position': props.mode === 'inline' ? undefined : (dragOffset.value ? undefined : activePosition.value),
@@ -287,11 +316,13 @@ export const DialRoot = defineComponent({
         return null;
       }
 
+      const content = h(MotionConfig, { reducedMotion: 'user' }, { default: renderContent });
+
       if (props.mode === 'inline') {
-        return renderContent();
+        return content;
       }
 
-      return h(Teleport, { to: 'body' }, renderContent());
+      return h(Teleport, { to: 'body' }, content);
     };
   },
 });

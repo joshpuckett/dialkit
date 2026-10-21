@@ -228,15 +228,19 @@ DialStore.getPanelOpen("card");
 
 | Control | Keys |
 | --- | --- |
+| Panel | The root's `hotkey` focuses the first control, and closes the panel when pressed inside it; Escape closes and returns focus; Option/Alt + Arrow on the header moves a floating panel (Shift for larger moves) |
 | Panel or folder | Enter or Space toggles the focused header |
-| Slider | Arrows adjust one step; Shift + Arrow or Page Up/Down adjusts ten; Home/End goes to the bounds |
-| Numeric editor | Enter opens it from a slider; Enter commits, Escape cancels, Tab commits and advances |
+| Slider | Arrows adjust one step; Shift + Arrow or Page Up/Down adjusts ten; Option/Alt + Arrow adjusts a tenth; Home/End goes to the bounds; Delete or Backspace restores a panel slider's configured value |
+| Slider pointer | Drag to set the value; hold Option/Alt while dragging for fine control or Shift to snap to tick marks; double-click restores a panel slider's configured value |
+| Numeric editor | Enter opens it from a slider; Up/Down step the typed value (Shift ×10, Option/Alt ×0.1); Enter commits, Escape cancels, Tab commits and advances |
 | XY pad | Arrows adjust axes; Shift + Arrow adjusts ten steps; Home resets; Escape cancels a drag |
 | Select or preset menu | Enter, Space, or Up/Down opens; arrows, Home/End, and typing navigate; Enter/Space selects; Escape closes |
 | Segmented control | Arrows select a segment; Home/End selects the first/last |
 | Color picker | Tab moves between controls; arrows adjust the focused control; Escape closes |
 | Image picker | Arrows move through images; Enter/Space selects; Escape closes |
 | Bézier handles | Arrows move by 0.01; Shift + Arrow by 0.1; Escape cancels a drag |
+
+The numeric editor accepts arithmetic such as `(100-20)/2`, a leading operator applied to the current value (`+10`, `*2`, `/4`), a percentage of the range (`50%`), and the slider's unit (`24px`).
 
 Menus return focus to their trigger on selection or Escape. Tab and Shift + Tab resume the owning panel's tab order.
 
@@ -259,9 +263,11 @@ const shortcuts = {
 | `interaction` | `"scroll"`, `"drag"`, `"move"`, `"scroll-only"` | `"scroll"` |
 | `mode` | `"fine"`, `"normal"`, `"coarse"` | `"normal"` |
 
-For sliders, hold the key and scroll, drag horizontally, or move the pointer according to `interaction`. `scroll-only` needs no key. Arrow keys also adjust a slider while its assigned key is held. Toggles flip on the assigned key press.
+For sliders, hold the key and scroll, drag horizontally, or move the pointer according to `interaction`. `scroll-only` needs no key and leaves scrolling inside DialKit panels alone; Control + scroll (pinch-zoom) is never captured. Arrow keys also adjust a slider while its assigned key is held. Toggles flip on the assigned key press.
 
-`normal` uses the slider's step. `fine` uses 1% of its range; `coarse` uses 10%. Shortcut badges show the assigned key and interaction. Shortcuts are disabled while an input, button, or keyboard-operated control has focus.
+`normal` uses the slider's step. `fine` uses 1% of its range; `coarse` uses 10%. While a slider's key is held, Shift multiplies its step by 10 and Option/Alt divides it by 10. Shortcut badges show the assigned key and interaction.
+
+Keys are matched by their position as well as their character, so a `modifier: "alt"` shortcut works on macOS, where Option changes the typed character. A shortcut's modifier must be held for it to apply, and Control combinations never match. Shortcuts pause while you type in a text field (including fields inside shadow DOM) or search a menu or list by typing; buttons and other controls keep them working. Each wheel notch moves one step; on a trackpad, a step needs about 50 pixels of scrolling.
 
 ## Custom layouts
 

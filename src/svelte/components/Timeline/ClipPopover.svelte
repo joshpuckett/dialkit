@@ -5,6 +5,7 @@
     TIMELINE_MIN_CLIP_DURATION,
     clamp,
     formatStepLabel,
+    observeClipPopover,
     timelinePopoverDisplayValues,
   } from 'dialkit/timeline';
   import type { TimelineClipMeta } from 'dialkit/timeline';
@@ -113,6 +114,13 @@
   });
 
   $effect(() => {
+    if (!element) return;
+    popover.clip.key;
+    popover.stepKey;
+    return observeClipPopover(element, onClose);
+  });
+
+  $effect(() => {
     if (typeof window === 'undefined') return;
     const updateViewport = () => { viewport = readViewport(); };
     const outside = (event: PointerEvent) => {
@@ -120,20 +128,15 @@
       if (element?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       onClose();
     };
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
     window.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('scroll', updateViewport);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('keydown', keydown);
     return () => {
       window.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('scroll', updateViewport);
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', keydown);
     };
   });
 
@@ -185,7 +188,7 @@
         <div class="dialkit-timeline-popover-header">
           <span class="dialkit-timeline-popover-title">{presentation.title}</span>
           <button class="dialkit-timeline-popover-close" onclick={onClose} title="Close editor" aria-label="Close editor">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M6 6L18 18M18 6L6 18" />
             </svg>
           </button>

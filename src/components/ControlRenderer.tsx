@@ -34,6 +34,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
 
   const renderControl = (control: ControlMeta) => {
     const value = values[control.path];
+    const defaultValue = DialStore.getDefaultValue(panelId, control.path);
 
     switch (control.type) {
       case 'slider':
@@ -42,6 +43,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             key={control.path}
             label={control.label}
             value={value as number}
+            defaultValue={typeof defaultValue === 'number' ? defaultValue : undefined}
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             min={control.min}
             max={control.max}

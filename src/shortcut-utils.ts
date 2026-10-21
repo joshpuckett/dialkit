@@ -43,21 +43,149 @@ export function snapToDecile(rawValue: number, min: number, max: number): number
 
 // ── DOM helpers ──
 
-export function isInputFocused(): boolean {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
-  if (el.closest('select, button, [role="slider"], [role="radio"], [role="listbox"], [role="menu"], [role="menuitem"], [role="menuitemradio"], [role="button"]')) return true;
-  if ((el as HTMLElement).contentEditable === 'true') return true;
-  return false;
+const TEXT_INPUT_TYPES = new Set(['', 'text', 'search', 'email', 'url', 'tel', 'password', 'number', 'date', 'datetime-local', 'month', 'time', 'week']);
+const TEXT_ROLES = '[role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]';
+// Composite widgets that use letters for type-ahead.
+const TYPE_AHEAD_ROLES = '[role="menu"], [role="menubar"], [role^="menuitem"], [role="listbox"], [role="option"], [role="tree"], [role="treeitem"], [role="grid"], [role="treegrid"]';
+
+/** The focused element, following open shadow roots to the element that actually receives keys. */
+export function getDeepActiveElement(root: Document | ShadowRoot = document): Element | null {
+  let element = root.activeElement;
+  while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+  return element;
 }
 
-export function getActiveModifier(e: KeyboardEvent | WheelEvent | MouseEvent): 'alt' | 'shift' | 'meta' | undefined {
-  if (e.altKey) return 'alt';
-  if (e.shiftKey) return 'shift';
-  if (e.metaKey) return 'meta';
-  return undefined;
+/**
+ * Whether keys are currently typing text, or searching a menu or list by its
+ * first letters. Assigned shortcuts pause only here: buttons, sliders and other
+ * widgets keep them working, and widgets that use a key themselves claim it
+ * with `preventDefault()` before shortcuts see it.
+ */
+export function isTextEntryFocused(): boolean {
+  if (typeof document === 'undefined') return false;
+  const element = getDeepActiveElement();
+  if (!element || element === document.body) return false;
+  if (element instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has(element.type);
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return true;
+  if ((element as HTMLElement).isContentEditable) return true;
+  return !!element.closest(`${TEXT_ROLES}, ${TYPE_AHEAD_ROLES}`);
+}
+
+/** @deprecated Use `isTextEntryFocused`, which no longer pauses shortcuts on buttons and widgets. */
+export const isInputFocused = isTextEntryFocused;
+
+export type ShortcutModifier = NonNullable<ShortcutConfig['modifier']>;
+export type EventModifier = ShortcutModifier | 'ctrl';
+
+export function getEventModifiers(e: KeyboardEvent | WheelEvent | MouseEvent): EventModifier[] {
+  const modifiers: EventModifier[] = [];
+  if (e.altKey) modifiers.push('alt');
+  if (e.shiftKey) modifiers.push('shift');
+  if (e.metaKey) modifiers.push('meta');
+  if (e.ctrlKey) modifiers.push('ctrl');
+  return modifiers;
+}
+
+/**
+ * The single modifier a shortcut can be assigned, or `null` when the held
+ * combination cannot match any shortcut (two modifiers, or Control).
+ */
+export function getActiveModifier(e: KeyboardEvent | WheelEvent | MouseEvent): ShortcutModifier | undefined | null {
+  const modifiers = getEventModifiers(e);
+  if (modifiers.length === 0) return undefined;
+  return modifiers.length === 1 && modifiers[0] !== 'ctrl' ? modifiers[0] : null;
+}
+
+const MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift', 'CapsLock', 'Fn', 'FnLock', 'Hyper', 'OS', 'Super', 'Symbol', 'SymbolLock']);
+
+export function isModifierKey(key: string): boolean {
+  return MODIFIER_KEYS.has(key);
+}
+
+const CODE_KEYS: Record<string, string> = {
+  Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
+  Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Space: ' ',
+};
+
+function keyForCode(code: string): string | undefined {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  return CODE_KEYS[code];
+}
+
+/**
+ * The keys an event can stand for, typed character first. Option and Shift
+ * change the character (Option+R types "®" on macOS, Shift+1 types "!"), so the
+ * physical key follows as a fallback when it differs.
+ */
+export function getShortcutKeys(e: Pick<KeyboardEvent, 'key' | 'code' | 'altKey' | 'shiftKey'>): string[] {
+  const typed = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const physical = keyForCode(e.code);
+  const modified = e.altKey || e.shiftKey || typed === 'Dead' || typed === 'Unidentified';
+  return modified && physical && physical !== typed ? [typed, physical] : [typed];
+}
+
+/** The key an event refers to: the typed character, or the physical key when a modifier replaced it with a symbol. */
+export function getShortcutKey(e: Pick<KeyboardEvent, 'key' | 'code' | 'altKey' | 'shiftKey'>): string {
+  const [typed, physical] = getShortcutKeys(e);
+  return physical !== undefined && !/^[a-z0-9]$/.test(typed) ? physical : typed;
+}
+
+export type Hotkey = { key: string; modifiers: EventModifier[] };
+
+const HOTKEY_MODIFIERS: Record<string, EventModifier | 'mod'> = {
+  alt: 'alt', option: 'alt', opt: 'alt',
+  shift: 'shift',
+  meta: 'meta', cmd: 'meta', command: 'meta',
+  ctrl: 'ctrl', control: 'ctrl',
+  mod: 'mod',
+};
+
+const HOTKEY_KEYS: Record<string, string> = {
+  period: '.', comma: ',', slash: '/', backslash: '\\', backquote: '`', backtick: '`',
+  minus: '-', equal: '=', semicolon: ';', quote: "'", space: ' ', esc: 'Escape', escape: 'Escape',
+};
+
+function isApplePlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? '';
+  return /mac|iphone|ipad|ipod/i.test(platform);
+}
+
+/**
+ * Parse a hotkey such as `"ctrl+period"`, `"mod+."`, `"alt+d"` or `"backquote"`.
+ * `mod` is Command on Apple platforms and Control elsewhere.
+ */
+export function parseHotkey(hotkey: string): Hotkey | null {
+  const trimmed = hotkey.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.endsWith('++') ? [...trimmed.slice(0, -2).split('+'), '+'] : trimmed.split('+');
+  const rawKey = parts.pop()!.trim();
+  if (!rawKey) return null;
+  const modifiers: EventModifier[] = [];
+  for (const part of parts) {
+    const modifier = HOTKEY_MODIFIERS[part.trim().toLowerCase()];
+    if (!modifier) return null;
+    const resolved = modifier === 'mod' ? (isApplePlatform() ? 'meta' : 'ctrl') : modifier;
+    if (!modifiers.includes(resolved)) modifiers.push(resolved);
+  }
+  const named = HOTKEY_KEYS[rawKey.toLowerCase()];
+  const key = named ?? (rawKey.length === 1 ? rawKey.toLowerCase() : rawKey);
+  return { key, modifiers };
+}
+
+export function matchesHotkey(e: KeyboardEvent, hotkey: Hotkey): boolean {
+  const modifiers = getEventModifiers(e);
+  return getShortcutKeys(e).includes(hotkey.key)
+    && modifiers.length === hotkey.modifiers.length
+    && hotkey.modifiers.every(modifier => modifiers.includes(modifier));
+}
+
+/** Format for `aria-keyshortcuts`, for example `Control+.`. */
+export function formatAriaKeyshortcut(hotkey: Hotkey): string {
+  const names: Record<EventModifier, string> = { alt: 'Alt', shift: 'Shift', meta: 'Meta', ctrl: 'Control' };
+  const key = hotkey.key === ' ' ? 'Space' : hotkey.key.length === 1 ? hotkey.key.toUpperCase() : hotkey.key;
+  return [...hotkey.modifiers.map(modifier => names[modifier]), key].join('+');
 }
 
 export function findControl(controls: ControlMeta[], path: string): ControlMeta | null {

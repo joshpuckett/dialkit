@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { MotionConfig } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
 import { isDevDefault } from '../env';
@@ -7,7 +8,8 @@ import { Folder } from './Folder';
 import { Panel } from './Panel';
 import { ShortcutListener } from './ShortcutListener';
 import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
-import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved } from '../panel-drag';
+import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelKeyboardOffset, getPanelOriginX, getPanelOriginY, hasPanelDragMoved } from '../panel-drag';
+import { observePanelKeyboard } from '../panel-keyboard';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -19,10 +21,12 @@ interface DialRootProps {
   mode?: DialMode;
   theme?: DialTheme;
   productionEnabled?: boolean;
+  /** Shortcut that opens the panel and moves focus into it, such as `"mod+period"`. Off by default. */
+  hotkey?: string;
   onOpenChange?: (open: boolean) => void;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, onOpenChange }: DialRootProps) {
+export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, hotkey, onOpenChange }: DialRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [timelineCount, setTimelineCount] = useState(0);
@@ -41,6 +45,8 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const dragTargetRef = useRef<HTMLElement | null>(null);
   const panelOpenStatesRef = useRef<Map<string, boolean>>(new Map());
   const rootOpenRef = useRef<boolean | null>(null);
+  const keyboardRef = useRef<ReturnType<typeof observePanelKeyboard> | null>(null);
+  const hasSurfaces = panels.length > 0 || timelineCount > 0;
 
   // Subscribe to registered editing surfaces. Timeline-backed panels render
   // in DialTimeline, but their presence adds a visibility toggle here.
@@ -102,6 +108,27 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
     observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ['data-collapsed'] });
     return () => observer.disconnect();
   }, [inline, dragOffset, position]);
+
+  const movePanel = useCallback((dx: number, dy: number) => {
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (rect) setDragOffset(getPanelKeyboardOffset(rect, dx, dy, window.innerWidth, window.innerHeight));
+  }, []);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const keyboard = observePanelKeyboard(panel, { hotkey, inline, move: movePanel });
+    keyboardRef.current = keyboard;
+    return () => {
+      keyboard.destroy();
+      keyboardRef.current = null;
+    };
+  }, [mounted, hasSurfaces, inline, movePanel]);
+
+  // Also runs when the panels change, since that can rebuild the root header.
+  useEffect(() => {
+    keyboardRef.current?.update({ hotkey, inline, move: movePanel });
+  }, [hotkey, inline, movePanel, panels]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     const panel = panelRef.current;
@@ -175,7 +202,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   }
 
   // Don't render if no editing surfaces are registered.
-  if (panels.length === 0 && timelineCount === 0) {
+  if (!hasSurfaces) {
     return null;
   }
 
@@ -191,6 +218,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   const timelineToggle = timelineCount > 0 ? <TimelineToggleButton /> : null;
 
   const content = (
+  <MotionConfig reducedMotion="user">
   <ShortcutListener>
     <div className="dialkit-root" data-mode={mode} data-theme={theme}>
       <div
@@ -257,6 +285,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
       </div>
     </div>
   </ShortcutListener>
+  </MotionConfig>
   );
 
   if (inline) {

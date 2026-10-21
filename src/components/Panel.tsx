@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
+import { announce } from '../announce';
 import { buildCopyInstruction } from '../copy-instruction';
 import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { ControlRenderer } from './ControlRenderer';
@@ -52,6 +53,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
   const handleCopy = async () => {
     try { await navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values)); }
     catch { return; }
+    announce('Parameters copied');
     setCopied(true);
     clearTimeout(copyTimeout.current);
     copyTimeout.current = setTimeout(() => setCopied(false), 1500);
@@ -79,7 +81,8 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
       <motion.button
         className="dialkit-toolbar-add dialkit-toolbar-primary"
         onClick={handleCopy}
-        title="Copy parameters"
+        type="button"
+        title="Copy parameters" aria-label="Copy parameters"
         whileTap={{ scale: 0.9 }}
         transition={{ type: 'spring', visualDuration: 0.15, bounce: 0.3 }}
       >

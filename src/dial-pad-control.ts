@@ -1,3 +1,4 @@
+import { announce } from './announce';
 import { PAD_GRID_DIVISIONS, normalizePadValue, padGridIntersection, padValueFromKey, padValueFromPoint, resolvePadAxis, snapPadAxis, type DialPadConfig, type DialPadValue } from './dial-pad';
 
 export type DialPadProps = Omit<DialPadConfig, 'type'> & {
@@ -7,6 +8,12 @@ export type DialPadProps = Omit<DialPadConfig, 'type'> & {
 };
 
 let nextId = 0;
+const PAD_HELP = 'Arrow keys adjust each axis. Shift adjusts by ten steps. Home resets both axes. Hold Shift while dragging to lock an axis.';
+
+/** The pad's current position as screen readers hear it, such as "X 0.5, Y -1". */
+export function padValueText(value: DialPadValue, names: { x: string; y: string }): string {
+  return `${names.x} ${value.x}, ${names.y} ${value.y}`;
+}
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -28,6 +35,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
     lock?: 'x' | 'y';
     lockValue?: DialPadValue;
   } | undefined;
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
 
   const root = element('div', 'dialkit-pad');
   const fields = element('div', 'dialkit-pad-fields');
@@ -54,7 +62,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
   const point = element('span', 'dialkit-pad-point');
   plane.append(center, point);
   surface.append(grid, plane);
-  const instructions = element('span', 'dialkit-pad-instructions', 'Arrow keys adjust each axis. Shift adjusts by ten steps. Home resets both axes. Hold Shift while dragging to lock an axis.');
+  const instructions = element('span', 'dialkit-pad-instructions');
   instructions.id = `dialkit-pad-help-${++nextId}`;
   surface.setAttribute('aria-describedby', instructions.id);
   const inputs = (['x', 'y'] as const).map(axis => {
@@ -96,11 +104,16 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
   root.append(fields, surface, instructions);
   host.append(root);
 
+  const axisNames = () => ({ x: props.labels?.x ?? 'X', y: props.labels?.y ?? 'Y' });
+
   function render() {
     label.textContent = props.label;
     label.title = props.label;
-    const names = { x: props.labels?.x ?? 'X', y: props.labels?.y ?? 'Y' };
-    surface.setAttribute('aria-label', `${props.label}: ${names.x} ${value.x}, ${names.y} ${value.y}`);
+    const names = axisNames();
+    // The value lives in the description, so a focused screen reader is not
+    // told about a name change on every step; keyboard steps are announced.
+    surface.setAttribute('aria-label', props.label);
+    instructions.textContent = `${padValueText(value, names)}. ${PAD_HELP}`;
     inputs.forEach(({ axis, name, input }) => {
       const range = resolvePadAxis(props[axis]);
       name.textContent = names[axis];
@@ -206,6 +219,9 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
       if (next) commit(next);
       else if (event.key === 'Home') { endDrag(); commit(normalizePadValue(undefined, props)); }
       else if (drag) { const start = drag.value; endDrag(); commit(start); }
+      // Wait for a held key to settle rather than reading every step.
+      clearTimeout(announceTimer);
+      announceTimer = setTimeout(() => announce(padValueText(value, axisNames())), 250);
     }
   });
 
@@ -216,6 +232,6 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
       value = normalizePadValue(next.value, props);
       render();
     },
-    destroy() { endDrag(); root.remove(); },
+    destroy() { clearTimeout(announceTimer); endDrag(); root.remove(); },
   };
 }

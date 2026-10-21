@@ -239,6 +239,7 @@ In vanilla, use `createDialRoot({ mode: "inline", target: container })`.
 | `mode` | `"popover"` | `"popover"`, `"inline"` |
 | `defaultOpen` | `true` | Initial root state; a panel's `defaultCollapsed` takes precedence |
 | `onOpenChange` | — | Callback for root open state; `@open-change` in Vue |
+| `hotkey` | — | Key that brings focus to the panel, such as `"ctrl+period"`; `mod` means Command on Apple platforms and Control elsewhere. With several roots, give each its own key |
 
 Framework roots are hidden in production builds unless `productionEnabled` is set to `true`. Vanilla roots are enabled by default; set `productionEnabled: false` to hide them. This setting controls the editor UI, not the code consuming its values.
 
@@ -258,9 +259,9 @@ const values = useDialKit("Card", {
 });
 ```
 
-Hold **R** and scroll to adjust the radius; press **V** to toggle visibility. Sliders also support holding a key while dragging or moving the pointer, and scrolling without a key. Shortcuts pause while inputs, buttons, or keyboard controls have focus.
+Hold **R** and scroll to adjust the radius; press **V** to toggle visibility. Sliders also support holding a key while dragging or moving the pointer, and scrolling without a key. Shortcuts pause while you type in a text field.
 
-Controls support keyboard navigation without assigned shortcuts. Tab to a slider and use arrow keys to adjust it, or press Enter to edit its number. See the [keyboard reference](https://github.com/joshpuckett/dialkit/blob/main/docs/reference.md#keyboard) for the full key map and shortcut options.
+Controls support keyboard navigation without assigned shortcuts. Tab to a slider and use arrow keys to adjust it, hold Shift for larger steps or Option/Alt for finer ones, or press Enter to type a value. Set `hotkey` on the root to reach the panel from anywhere; Escape closes it. See the [keyboard reference](https://github.com/joshpuckett/dialkit/blob/main/docs/reference.md#keyboard) for the full key map and shortcut options.
 
 ## Timeline
 

@@ -15,14 +15,23 @@ import {
   clampClipResizeStart,
   clampStepResize,
   clampTrackDelay,
+  clipAccessibleName,
+  clipKeyEdit,
+  dockResizeKeyHeight,
   formatClock,
   formatStepLabel,
+  handlePlayheadKey,
+  handleTimelineClipKey,
+  handleTimelineSpaceKey,
   normalizeLoopMode,
   normalizeTimelineValuesForCopy,
+  playheadKeyTime,
+  playheadValueText,
   timelinePopoverDisplayValues,
 } from './timeline-core';
 import type { TimelineConfig } from './timeline-core';
-import { foldLoopTime, loopSpan } from './store/TimelineStore';
+import { foldLoopTime, loopSpan, TimelineStore } from './store/TimelineStore';
+import { DialStore } from './store/DialStore';
 
 const near = (actual: number, expected: number, eps = 1e-9) =>
   assert.ok(Math.abs(actual - expected) < eps, `expected ${actual} ≈ ${expected}`);
@@ -560,5 +569,148 @@ describe('formatting', () => {
     assert.equal(formatClock(63.25, true), '01:03.3');
     assert.equal(formatClock(5), '00:05');
     assert.equal(formatStepLabel('step2'), 'Step 2');
+  });
+});
+
+describe('keyboard', () => {
+  const keyEvent = (key: string, init: Partial<KeyboardEvent> & { target?: unknown } = {}) => {
+    const self = { closest: () => null, dataset: {} };
+    const event = {
+      key,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      target: self,
+      currentTarget: self,
+      ...init,
+      preventDefault() { event.defaultPrevented = true; },
+      stopPropagation() {},
+    };
+    return event as unknown as KeyboardEvent;
+  };
+
+  it('steps the playhead on a grid, Shift ten steps, Option/Alt finely, Home/End to the ends', () => {
+    assert.equal(playheadKeyTime('ArrowRight', 1.2, 3), 1.25);
+    assert.equal(playheadKeyTime('ArrowUp', 1.234, 3), 1.25);
+    assert.equal(playheadKeyTime('ArrowLeft', 1.234, 3), 1.2);
+    assert.equal(playheadKeyTime('ArrowDown', 1.2, 3), 1.15);
+    assert.equal(playheadKeyTime('ArrowRight', 1.2, 3, true), 1.5);
+    assert.equal(playheadKeyTime('ArrowRight', 1.2, 3, false, true), 1.21);
+    assert.equal(playheadKeyTime('ArrowRight', 2.98, 3), 3);
+    assert.equal(playheadKeyTime('ArrowLeft', 0.02, 3), 0);
+    assert.equal(playheadKeyTime('Home', 1.2, 3), 0);
+    assert.equal(playheadKeyTime('End', 1.2, 3), 3);
+    assert.equal(playheadKeyTime('Enter', 1.2, 3), undefined);
+  });
+
+  it('resizes the dock with Up/Down within its bounds', () => {
+    assert.equal(dockResizeKeyHeight('ArrowUp', 300, 120, 800), 320);
+    assert.equal(dockResizeKeyHeight('ArrowDown', 300, 120, 800, true), 200);
+    assert.equal(dockResizeKeyHeight('ArrowDown', 130, 120, 800), 120);
+    assert.equal(dockResizeKeyHeight('ArrowUp', 790, 120, 800), 800);
+    assert.equal(dockResizeKeyHeight('ArrowDown', 900, 120, 800), 780);
+    assert.equal(dockResizeKeyHeight('ArrowLeft', 300, 120, 800), undefined);
+  });
+
+  it('describes the playhead and clips in seconds', () => {
+    assert.equal(playheadValueText(1.2, 3), '1.20 seconds of 3.00');
+    assert.equal(clipAccessibleName('Fade', 0.2, 0.4), 'Fade, 0.20 to 0.60 seconds');
+  });
+
+  it('pauses playback and seeks when the playhead steps', () => {
+    const id = 'keyboard-playhead';
+    TimelineStore.register({ id, name: id, duration: 3, loop: false, loopStart: 0, clips: [] }, { autoplay: false });
+    TimelineStore.seek(id, 1);
+    const revealed: number[] = [];
+    const event = keyEvent('ArrowRight', { shiftKey: true });
+    handlePlayheadKey(event, id, (time) => revealed.push(time));
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(TimelineStore.getTransport(id).time, 1.5);
+    assert.deepEqual(revealed, [1.5]);
+
+    const ignored = keyEvent('ArrowRight', { metaKey: true });
+    handlePlayheadKey(ignored, id);
+    assert.equal(ignored.defaultPrevented, false);
+    TimelineStore.unregister(id);
+  });
+
+  it('toggles playback with Space unless a button or field has focus', () => {
+    const id = 'keyboard-space';
+    TimelineStore.register({ id, name: id, duration: 3, loop: false, loopStart: 0, clips: [] }, { autoplay: false });
+    const button = { closest: (selector: string) => (selector.includes('button') ? {} : null) };
+    const onButton = keyEvent(' ', { target: button });
+    handleTimelineSpaceKey(onButton, id);
+    assert.equal(onButton.defaultPrevented, false);
+    assert.equal(TimelineStore.getTransport(id).playing, false);
+
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { requestAnimationFrame: () => 1, cancelAnimationFrame() {} };
+    try {
+      const onPlayhead = keyEvent(' ');
+      handleTimelineSpaceKey(onPlayhead, id);
+      assert.equal(onPlayhead.defaultPrevented, true);
+      assert.equal(TimelineStore.getTransport(id).playing, true);
+      handleTimelineSpaceKey(keyEvent(' '), id);
+      assert.equal(TimelineStore.getTransport(id).playing, false);
+    } finally {
+      TimelineStore.unregister(id);
+      if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+      else (globalThis as { window?: unknown }).window = originalWindow;
+    }
+  });
+
+  it('moves clips by the drag rules and resizes them with Option/Alt', () => {
+    const clip = { key: 'fade', label: 'Fade', at: 1, duration: 0.5, timelineDuration: 2 };
+    assert.deepEqual(clipKeyEdit(clip, 'ArrowRight'), { values: { 'fade.at': 1.05 }, at: 1.05, end: 1.55 });
+    assert.deepEqual(clipKeyEdit(clip, 'ArrowRight', true), { values: { 'fade.at': 1.5 }, at: 1.5, end: 2 });
+    assert.deepEqual(clipKeyEdit({ ...clip, at: 1.5 }, 'ArrowRight'), { values: { 'fade.at': 1.5 }, at: 1.5, end: 2 });
+    assert.deepEqual(clipKeyEdit(clip, 'ArrowLeft', false, true), { values: { 'fade.duration': 0.45 }, at: 1, end: 1.45 });
+    assert.deepEqual(
+      clipKeyEdit({ ...clip, duration: 0.05 }, 'ArrowLeft', false, true),
+      { values: { 'fade.duration': 0.05 }, at: 1, end: 1.05 }
+    );
+    assert.equal(clipKeyEdit({ ...clip, fixedDuration: true }, 'ArrowRight', false, true), undefined);
+    assert.equal(clipKeyEdit(clip, 'ArrowUp'), undefined);
+  });
+
+  it('phase-shifts property tracks and resizes the focused sequence leg', () => {
+    const track = { key: 'card.y', label: 'Card · Y', at: 1.2, duration: 0.5, timelineDuration: 2, baseAt: 1, delayMode: true };
+    assert.deepEqual(clipKeyEdit(track, 'ArrowLeft'), { values: { 'card.y.delay': 0.15 }, at: 1.15, end: 1.65 });
+    assert.deepEqual(clipKeyEdit(track, 'ArrowLeft', true), { values: { 'card.y.delay': 0 }, at: 1, end: 1.5 });
+
+    const steps = [
+      { key: 'step1', duration: 0.3, isPhysics: false },
+      { key: 'step2', duration: 0.4, isPhysics: true },
+    ];
+    const sequence = { key: 'pop', label: 'Pop', at: 0, duration: 0.7, timelineDuration: 2, steps };
+    assert.deepEqual(clipKeyEdit(sequence, 'ArrowRight', false, true, 'step1'), {
+      values: { 'pop.step1.duration': 0.35 },
+      at: 0,
+      end: 0.75,
+    });
+    assert.equal(clipKeyEdit(sequence, 'ArrowRight', false, true, 'step2'), undefined);
+    assert.deepEqual(clipKeyEdit(sequence, 'ArrowRight', false, false, 'step2'), { values: { 'pop.at': 0.05 }, at: 0.05, end: 0.75 });
+  });
+
+  it('opens clips with Enter or Space and writes arrow edits to the store', () => {
+    const id = 'keyboard-clip';
+    DialStore.registerPanel(id, id, { fade: { at: 1, duration: 0.5 } });
+    const clip = { key: 'fade', label: 'Fade', at: 1, duration: 0.5, timelineDuration: 2 };
+    const opened: Array<string | undefined> = [];
+    const open = (_element: HTMLElement, stepKey?: string) => opened.push(stepKey ?? 'clip');
+
+    handleTimelineClipKey(keyEvent('Enter'), id, clip, open);
+    handleTimelineClipKey(keyEvent(' '), id, clip, open);
+    const segment = { dataset: { step: 'step2' } };
+    handleTimelineClipKey(keyEvent('Enter', { target: segment }), id, clip, open);
+    assert.deepEqual(opened, ['clip', 'clip', 'step2']);
+
+    const move = keyEvent('ArrowRight');
+    handleTimelineClipKey(move, id, clip, open);
+    assert.equal(move.defaultPrevented, true);
+    assert.equal(DialStore.getValue(id, 'fade.at'), 1.05);
+    DialStore.unregisterPanel(id);
   });
 });

@@ -1,7 +1,9 @@
 import { DialStore, type PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
 import { TimelineUiStore } from '../store/TimelineUiStore';
-import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved, type PanelDragStart, type PanelDragOffset } from '../panel-drag';
+import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelKeyboardOffset, getPanelOriginX, getPanelOriginY, hasPanelDragMoved, type PanelDragStart, type PanelDragOffset } from '../panel-drag';
+import { observePanelKeyboard } from '../panel-keyboard';
+import { announce } from '../announce';
 import { buildCopyInstruction } from '../copy-instruction';
 import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { mountControlRenderer } from './ControlRenderer';
@@ -20,6 +22,8 @@ export interface DialRootOptions {
   theme?: DialTheme;
   /** Plain HTML has no build-mode detection; enabled by default. */
   productionEnabled?: boolean;
+  /** Shortcut that opens the panel and moves focus into it, such as `"mod+period"`. Off by default. */
+  hotkey?: string;
   onOpenChange?: (open: boolean) => void;
 }
 export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'createDialKit') {
@@ -36,6 +40,7 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
     }
     if (destroyed)
       return;
+    announce('Parameters copied');
     copy.replaceChildren(icon(ICON_CHECK));
     clearTimeout(timer);
     timer = setTimeout(() => copy.replaceChildren(icon([ICON_CLIPBOARD_PLAIN.board, ICON_CLIPBOARD_PLAIN.body])), 1500);
@@ -167,6 +172,8 @@ export function createDialRoot(options: DialRootOptions = {}) {
       if (!panels.length)
         shellFolder.body.append(element('div', 'dialkit-timeline-toolkit-only', 'Timeline'));
     }
+    // The root header was rebuilt, so it needs its keyboard attributes again.
+    keyboard?.update(keyboardOptions);
   }
   const endDrag = () => {
     if (!drag)
@@ -177,6 +184,18 @@ export function createDialRoot(options: DialRootOptions = {}) {
     if (current.moved)
       blockPanelDragClick(current.handle);
   };
+  const place = (next: PanelDragOffset) => {
+    offset = next;
+    delete shell.dataset.position;
+    Object.assign(shell.style, { left: `${offset.x}px`, top: `${offset.y}px`, right: 'auto', bottom: 'auto' });
+    origin();
+  };
+  const keyboardOptions = {
+    hotkey: options.hotkey,
+    inline,
+    move: (dx: number, dy: number) => place(getPanelKeyboardOffset(shell.getBoundingClientRect(), dx, dy, window.innerWidth, window.innerHeight)),
+  };
+  const keyboard = options.productionEnabled !== false ? observePanelKeyboard(shell, keyboardOptions) : undefined;
   if (!inline) {
     shell.addEventListener('pointerdown', event => {
       if (event.button !== 0)
@@ -192,10 +211,7 @@ export function createDialRoot(options: DialRootOptions = {}) {
       if (!drag || drag.id !== event.pointerId || (!drag.moved && !hasPanelDragMoved(drag.start, event.clientX, event.clientY)))
         return;
       drag.moved = true;
-      offset = getPanelDragOffset(drag.start, event.clientX, event.clientY);
-      delete shell.dataset.position;
-      Object.assign(shell.style, { left: `${offset.x}px`, top: `${offset.y}px`, right: 'auto', bottom: 'auto' });
-      origin();
+      place(getPanelDragOffset(drag.start, event.clientX, event.clientY));
     });
     shell.addEventListener('pointerup', endDrag);
     shell.addEventListener('pointercancel', endDrag);
@@ -234,6 +250,7 @@ export function createDialRoot(options: DialRootOptions = {}) {
         return;
       destroyed = true;
       endDrag();
+      keyboard?.destroy();
       stopGlobal();
       stopTimelines();
       stopOpen();

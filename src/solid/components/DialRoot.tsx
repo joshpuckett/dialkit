@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, createMemo, on, onMount, onCleanup, untrack, Show, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { DialStore } from '../../store/DialStore';
 import { TimelineStore } from '../../store/TimelineStore';
@@ -15,12 +15,14 @@ import {
   getPanelDragHandle,
   getPanelDragOffset,
   getPanelDragStart,
+  getPanelKeyboardOffset,
   getPanelOriginX,
   getPanelOriginY,
   hasPanelDragMoved,
   type PanelDragOffset,
   type PanelDragStart,
 } from '../../panel-drag';
+import { observePanelKeyboard } from '../../panel-keyboard';
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -40,6 +42,8 @@ interface DialRootProps {
   mode?: DialMode;
   theme?: DialTheme;
   productionEnabled?: boolean;
+  /** Shortcut that opens the panel and moves focus into it, such as `"mod+period"`. Off by default. */
+  hotkey?: string;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -66,7 +70,7 @@ function DialRootInner(props: DialRootProps) {
   const [dragOffset, setDragOffset] = createSignal<PanelDragOffset | null>(null);
   const [activePosition, setActivePosition] = createSignal<DialPosition>(props.position ?? 'top-right');
   const inline = () => (props.mode ?? 'popover') === 'inline';
-  let panelRef: HTMLDivElement | undefined;
+  const [panelRef, setPanelRef] = createSignal<HTMLDivElement>();
   let lastDragOffset: PanelDragOffset | null = null;
   let dragging = false;
   let dragStart: PanelDragStart | null = null;
@@ -154,9 +158,26 @@ function DialRootInner(props: DialRootProps) {
     }));
   });
 
+  const movePanel = (dx: number, dy: number) => {
+    const rect = panelRef()?.getBoundingClientRect();
+    if (rect) setDragOffset(getPanelKeyboardOffset(rect, dx, dy, window.innerWidth, window.innerHeight));
+  };
+
+  const hasSurfaces = createMemo(() => panels().length > 0 || timelines().length > 0);
+  const keyboardOptions = () => ({ hotkey: props.hotkey, inline: inline(), move: movePanel });
+
+  createEffect(() => {
+    const panel = panelRef();
+    if (!panel || !hasSurfaces()) return;
+    const keyboard = observePanelKeyboard(panel, untrack(keyboardOptions));
+    // Also runs when the panels change, since that can rebuild the root header.
+    createEffect(on([keyboardOptions, panels], ([options]) => keyboard.update(options), { defer: true }));
+    onCleanup(() => keyboard.destroy());
+  });
+
   const handlePointerDown = (event: PointerEvent) => {
     if (inline()) return;
-    const panel = panelRef ?? null;
+    const panel = panelRef() ?? null;
     const handle = getPanelDragHandle(event.target, panel);
     if (!panel || !handle) return;
 
@@ -218,7 +239,7 @@ function DialRootInner(props: DialRootProps) {
     <ShortcutListener>
       <div class="dialkit-root" data-mode={props.mode ?? 'popover'} data-theme={props.theme ?? 'system'}>
         <div
-          ref={panelRef}
+          ref={setPanelRef}
           class="dialkit-panel"
           data-position={inline() ? undefined : (dragOffset() ? undefined : activePosition())}
           data-origin-x={inline() ? undefined : getPanelOriginX(activePosition(), dragOffset())}
@@ -289,7 +310,7 @@ function DialRootInner(props: DialRootProps) {
   );
 
   return (
-    <Show when={mounted() && (panels().length > 0 || timelines().length > 0)}>
+    <Show when={mounted() && hasSurfaces()}>
       <Show when={!inline()} fallback={content()}>
         <Portal mount={document.body}>
           {content()}

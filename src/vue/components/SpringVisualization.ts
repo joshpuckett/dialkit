@@ -81,7 +81,7 @@ export const SpringVisualization = defineComponent({
         .join(' ');
     });
 
-    return () => h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'dialkit-spring-viz' }, [
+    return () => h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'dialkit-spring-viz', 'aria-hidden': 'true' }, [
       ...Array.from({ length: 3 }).flatMap((_, index) => {
         const lineIndex = index + 1;
         const x = (width / 4) * lineIndex;

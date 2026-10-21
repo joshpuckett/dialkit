@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { announce } from '../../announce';
   import { buildCopyInstruction } from '../../copy-instruction';
   import { Spring } from 'svelte/motion';
   import type { Snippet } from 'svelte';
@@ -69,6 +70,7 @@
 
     try { await navigator.clipboard.writeText(instruction); }
     catch { return; }
+    announce('Parameters copied');
     copied = true;
 
     if (copyTimeout) clearTimeout(copyTimeout);
@@ -89,6 +91,7 @@
   <button
     class="dialkit-toolbar-add dialkit-toolbar-primary"
     onclick={handleCopy}
+    type="button"
     onpointerdown={() => copyScale.set(0.95)}
     onpointerup={() => copyScale.set(1)}
     onpointercancel={() => copyScale.set(1)}

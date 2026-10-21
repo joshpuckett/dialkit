@@ -9,7 +9,7 @@
 
 <div class="dialkit-button-group">
   {#each buttons as button (button.label)}
-    <button class="dialkit-button" onclick={button.onClick}>
+    <button type="button" class="dialkit-button" onclick={button.onClick}>
       {button.label}
     </button>
   {/each}

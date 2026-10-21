@@ -6,7 +6,10 @@
     clampClipResizeStart,
     clampStepResize,
     clampTrackDelay,
+    clipAccessibleName,
     formatSeconds,
+    formatStepLabel,
+    handleTimelineClipKey,
   } from 'dialkit/timeline';
   import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'dialkit/timeline';
 
@@ -32,6 +35,7 @@
     steps,
     fixedDuration,
     composite = false,
+    expanded = false,
     baseAt = 0,
     delayMode = false,
     pxPerSecond,
@@ -50,6 +54,7 @@
     steps?: TimelineStepStatic[];
     fixedDuration: boolean;
     composite?: boolean;
+    expanded?: boolean;
     baseAt?: number;
     delayMode?: boolean;
     pxPerSecond: number;
@@ -155,6 +160,15 @@
     }
   }
 
+  function handleKeyDown(event: KeyboardEvent) {
+    handleTimelineClipKey(
+      event,
+      timelineId,
+      { key: clip.key, label: clip.label, at, duration, timelineDuration, baseAt, delayMode, fixedDuration: fixedDuration || composite, steps },
+      (element, stepKey) => onClick(clip, element.getBoundingClientRect(), stepKey)
+    );
+  }
+
   function finish(event?: PointerEvent) {
     const previous = drag;
     drag = null;
@@ -181,8 +195,10 @@
   </div>
 {/each}
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (a button unless it is a sequence, whose legs take focus instead) -->
 <div
   class="dialkit-timeline-clip"
+  data-clip={clip.key}
   data-steps={isSteps || undefined}
   data-composite={composite || undefined}
   data-selected={selected || undefined}
@@ -195,10 +211,12 @@
   onpointerup={finish}
   onpointercancel={() => finish()}
   onlostpointercapture={() => finish()}
+  onkeydown={handleKeyDown}
   title={barTitle}
-  role="button"
-  tabindex="0"
-  aria-label={barTitle}
+  role={isSteps ? undefined : 'button'}
+  tabindex={isSteps ? undefined : 0}
+  aria-label={isSteps ? undefined : clipAccessibleName(clip.label, at, duration)}
+  aria-expanded={composite ? expanded : undefined}
 >
   {#if composite}
     {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}
@@ -208,6 +226,9 @@
         class="dialkit-timeline-clip-segment"
         data-step={step.key ?? undefined}
         data-selected={selectedStepKey === step.key || undefined}
+        role="button"
+        tabindex="0"
+        aria-label={clipAccessibleName(`${clip.label} · ${formatStepLabel(step.key ?? '')}`, at + step.offset, step.duration)}
         style:width={`${step.duration * pxPerSecond}px`}
       >
         {#if step.duration * pxPerSecond > 52}

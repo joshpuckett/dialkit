@@ -49,8 +49,11 @@ export const Folder = defineComponent({
       if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     });
 
+    // An inline root panel is always open, so its header is not a control.
+    const toggleable = computed(() => !(props.inline && props.isRoot));
+
     const handleToggle = () => {
-      if (props.inline && props.isRoot) return;
+      if (!toggleable.value) return;
       const next = !isOpen.value;
       localOpen.value = next;
       emit('openChange', next);
@@ -90,7 +93,7 @@ export const Folder = defineComponent({
       class: `dialkit-folder-header ${props.isRoot ? 'dialkit-panel-header' : ''}`,
       onClick: handleToggle,
     }, [
-      h('div', { class: 'dialkit-folder-header-top', role: props.inline && props.isRoot ? undefined : 'button', tabindex: props.inline && props.isRoot ? undefined : 0, 'aria-label': props.title, 'aria-expanded': isOpen.value, onKeydown: (e: KeyboardEvent) => activateOnKey(e, handleToggle) }, [
+      h('div', { class: 'dialkit-folder-header-top', role: toggleable.value ? 'button' : undefined, tabindex: toggleable.value ? 0 : undefined, 'aria-label': toggleable.value ? props.title : undefined, 'aria-expanded': toggleable.value ? isOpen.value : undefined, onKeydown: (e: KeyboardEvent) => activateOnKey(e, handleToggle) }, [
         props.isRoot
           ? (isOpen.value
               ? h('div', { class: 'dialkit-folder-title-row' }, [

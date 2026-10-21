@@ -1,12 +1,14 @@
-import { handleSliderKey } from '../control-keyboard';
+import { beginSliderDrag, evaluateNumber, formatEditableValue, handleSliderKey, numericInputKeyValue, updateSliderDrag, type SliderDragState } from '../control-keyboard';
+import { announce } from '../announce';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/DialStore';
-import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
+import { roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
 
 interface SliderProps {
   label: string;
   value: number;
+  defaultValue?: number;
   onChange: (value: number) => void;
   min?: number;
   max?: number;
@@ -24,6 +26,7 @@ const MAX_STRETCH = 8;
 export function Slider({
   label,
   value,
+  defaultValue,
   onChange,
   min = 0,
   max = 1,
@@ -41,21 +44,24 @@ export function Slider({
   const [isInteracting, setIsInteracting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isFocusVisible, setIsFocusVisible] = useState(false);
   const [isValueHovered, setIsValueHovered] = useState(false);
   const [isValueEditable, setIsValueEditable] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [inputInvalid, setInputInvalid] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Click-vs-drag detection refs
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
   const isClickRef = useRef(true);
   const animRef = useRef<ReturnType<typeof animate> | null>(null);
+  const dragRef = useRef<SliderDragState | null>(null);
   const wrapperRectRef = useRef<DOMRect | null>(null);
   const scaleRef = useRef(1);
 
   const percentage = ((value - min) / (max - min)) * 100;
-  const isActive = isInteracting || isHovered;
+  const isActive = isInteracting || isHovered || isFocusVisible;
 
   // Motion values for imperative animation
   const fillPercent = useMotionValue(percentage);
@@ -147,9 +153,10 @@ export function Slider({
       if (isClickRef.current && distance > CLICK_THRESHOLD) {
         isClickRef.current = false;
         setIsDragging(true);
+        dragRef.current = beginSliderDrag(positionToValue(pointerDownPos.current.x), pointerDownPos.current.x);
       }
 
-      if (!isClickRef.current) {
+      if (!isClickRef.current && dragRef.current) {
         // Drag mode — instant update
         const rect = wrapperRectRef.current;
         if (rect) {
@@ -162,14 +169,15 @@ export function Slider({
           }
         }
 
-        const newValue = positionToValue(e.clientX);
-        const newPct = percentFromValue(newValue);
+        const newValue = updateSliderDrag(dragRef.current, e.clientX, rect?.width ?? 0, min, max, step, e);
+        // Keep the fill continuous unless Shift is snapping to ticks
+        const newPct = percentFromValue(e.shiftKey ? newValue : Math.max(min, Math.min(max, dragRef.current.raw)));
         if (animRef.current) {
           animRef.current.stop();
           animRef.current = null;
         }
         fillPercent.jump(newPct);
-        onChange(roundValue(newValue, step, min, max));
+        onChange(newValue);
       }
     },
     [
@@ -278,18 +286,37 @@ export function Slider({
     }
   }, [showInput]);
 
+  const formatValue = (v: number) => `${formatEditableValue(v, step, min, max)}${unit ? ` ${unit}` : ''}`;
+
+  const setValueNow = (next: number) => {
+    animRef.current?.stop();
+    animRef.current = null;
+    fillPercent.jump(percentFromValue(next));
+    onChange(next);
+  };
+
+  const reset = defaultValue === undefined ? undefined : () => {
+    setValueNow(defaultValue);
+    announce(`${label} reset to ${formatValue(defaultValue)}`);
+  };
+
+  const openInput = () => {
+    editingEnded.current = false;
+    setInputInvalid(false);
+    setInputValue(formatEditableValue(value, step, min, max));
+    setShowInput(true);
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
+    setInputInvalid(false);
   };
 
   const handleInputSubmit = () => {
     if (editingEnded.current) return;
     editingEnded.current = true;
-    const parsed = parseFloat(inputValue);
-    if (!isNaN(parsed)) {
-      const clamped = Math.max(min, Math.min(max, parsed));
-      onChange(roundValue(clamped, step, min, max));
-    }
+    const next = evaluateNumber(inputValue, value, min, max, unit);
+    if (next !== undefined) onChange(roundValue(next, step, min, max));
     setShowInput(false);
     setIsValueHovered(false);
     setIsValueEditable(false);
@@ -299,16 +326,30 @@ export function Slider({
     if (isValueEditable) {
       e.stopPropagation();
       e.preventDefault();
-      editingEnded.current = false;
-      setShowInput(true);
-      setInputValue(value.toFixed(decimalsForStep(step, min, max)));
+      openInput();
     }
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation();
+    const stepped = numericInputKeyValue(e, inputValue, value, min, max, step, unit);
+    if (stepped !== undefined) {
+      e.preventDefault();
+      const text = formatEditableValue(stepped, step, min, max);
+      e.currentTarget.value = text;
+      e.currentTarget.select();
+      setInputValue(text);
+      setInputInvalid(false);
+      return;
+    }
     if (e.key !== 'Enter' && e.key !== 'Escape') return;
     e.preventDefault();
+    if (e.key === 'Enter' && evaluateNumber(inputValue, value, min, max, unit) === undefined) {
+      setInputInvalid(true);
+      e.currentTarget.select();
+      announce(`${label}: enter a number, for example 24 or 24*2`);
+      return;
+    }
     if (e.key === 'Enter') handleInputSubmit();
     else {
       editingEnded.current = true;
@@ -322,7 +363,7 @@ export function Slider({
     handleInputSubmit();
   };
 
-  const displayValue = value.toFixed(decimalsForStep(step, min, max));
+  const displayValue = formatEditableValue(value, step, min, max);
 
   // Handle opacity: not active → 0, active → 0.5, dragging → 0.9
   // Value dodge: fade when handle overlaps label (left) or value (right)
@@ -385,14 +426,11 @@ export function Slider({
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
-        aria-valuetext={`${displayValue}${unit ? ` ${unit}` : ''}`}
-        onKeyDown={(e) => handleSliderKey(e, value, min, max, step, (next) => {
-          animRef.current?.stop(); animRef.current = null;
-          fillPercent.jump(percentFromValue(next)); onChange(next);
-        }, () => {
-          editingEnded.current = false;
-          setInputValue(value.toFixed(decimalsForStep(step, min, max))); setShowInput(true);
-        })}
+        aria-valuetext={formatValue(value)}
+        onKeyDown={(e) => handleSliderKey(e, value, min, max, step, setValueNow, openInput, reset)}
+        onFocus={(e) => setIsFocusVisible(e.currentTarget.matches(':focus-visible'))}
+        onBlur={() => setIsFocusVisible(false)}
+        onDoubleClick={() => { if (!showInput) reset?.(); }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -444,6 +482,7 @@ export function Slider({
             type="text"
             className="dialkit-slider-input"
             aria-label={`${label} value`}
+            aria-invalid={inputInvalid || undefined}
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}

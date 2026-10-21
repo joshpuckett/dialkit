@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { colorToRgb, fitGamut, formatColor, inGamut, maxChroma, parseColor } from './color';
+import { colorFieldValueText } from './color-control';
 import { DialStore } from './store/DialStore';
 
 const near = (a: number, b: number, epsilon = 0.00001) => assert.ok(Math.abs(a - b) < epsilon, `${a} ≈ ${b}`);
@@ -72,5 +73,9 @@ describe('color conversion and editing', () => {
     DialStore.loadPreset(id, preset);
     assert.equal(DialStore.getValue(id, 'accent'), value);
     DialStore.unregisterPanel(id);
+  });
+  it('describes the color field position as whole percentages', () => {
+    assert.equal(colorFieldValueText(0.404, 0.6251), 'Saturation 40%, lightness 63%');
+    assert.equal(colorFieldValueText(0, 1), 'Saturation 0%, lightness 100%');
   });
 });

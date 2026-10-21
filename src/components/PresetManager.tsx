@@ -20,6 +20,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
 
   const activePreset = presets.find((p) => p.id === activePresetId);
+  const activeName = activePreset ? activePreset.name : 'Version 1';
 
   const open = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -77,10 +78,10 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
         data-open={String(isOpen)}
         data-has-preset={String(!!activePreset)}
         type="button" aria-haspopup="menu" aria-expanded={isOpen}
-        aria-label="Versions" onKeyDown={(e) => openDropdownOnKey(e, open)}
+        aria-label={`Versions: ${activeName}`} onKeyDown={(e) => openDropdownOnKey(e, open)}
       >
         <span className="dialkit-preset-label">
-          {activePreset ? activePreset.name : 'Version 1'}
+          {activeName}
         </span>
         <motion.svg
           className="dialkit-select-chevron"
@@ -130,9 +131,9 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
                   <button
                     className="dialkit-preset-delete"
                     onClick={(e) => handleDelete(e, preset.id)}
-                    type="button" title={`Delete ${preset.name}`}
+                    type="button" title={`Delete ${preset.name}`} aria-label={`Delete ${preset.name}`}
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       {ICON_TRASH.map((d, i) => (
                         <path key={i} d={d} />
                       ))}

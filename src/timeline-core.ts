@@ -13,7 +13,7 @@
 // clip holds one step-list per property track (each with its own cycle and
 // phase offset). Untouched properties hold their prior value through a step.
 
-import { formatLabel, inferStep, isHexColor, resolveDialValues } from './store/DialStore';
+import { DialStore, formatLabel, inferStep, isHexColor, resolveDialValues } from './store/DialStore';
 import type { DialConfig, DialValue, ResolvedValues, TransitionConfig } from './store/DialStore';
 import {
   clamp,
@@ -27,7 +27,8 @@ import {
   springSettleDuration,
 } from './transition-math';
 import type { SpringParams } from './transition-math';
-import { TIMELINE_CLIP_COLORS } from './store/TimelineStore';
+import { announce } from './announce';
+import { TIMELINE_CLIP_COLORS, TimelineStore } from './store/TimelineStore';
 import type { TimelineClipMeta, TimelineClipTrackMeta } from './store/TimelineStore';
 
 // ── Public config types ──
@@ -1392,4 +1393,278 @@ export function formatSeconds(value: number): string {
 export function formatStepLabel(stepKey: string): string {
   const match = /^step(\d+)$/.exec(stepKey);
   return match ? `Step ${match[1]}` : formatLabel(stepKey);
+}
+
+// ── Keyboard ──
+// Shared by every adapter so the playhead, clips and clip editor respond to
+// the same keys everywhere.
+
+/** Arrow keys move the playhead and clips by this many seconds; Shift moves ten times as far. */
+const TIMELINE_KEY_STEP = 0.05;
+
+type TimelineKeyEvent = Pick<
+  KeyboardEvent,
+  'key' | 'shiftKey' | 'altKey' | 'metaKey' | 'ctrlKey' | 'target' | 'currentTarget' | 'defaultPrevented' | 'preventDefault' | 'stopPropagation'
+>;
+
+function formatTimelineTime(time: number): string {
+  return `${time.toFixed(2)} seconds`;
+}
+
+export function playheadValueText(time: number, duration: number): string {
+  return `${formatTimelineTime(time)} of ${duration.toFixed(2)}`;
+}
+
+/** A clip's (or sequence leg's) accessible name: its label and the span it covers. */
+export function clipAccessibleName(label: string, at: number, duration: number): string {
+  return `${label}, ${at.toFixed(2)} to ${formatTimelineTime(at + duration)}`;
+}
+
+/**
+ * Playhead keys: arrows step along a 0.05 s grid, Shift a 0.5 s grid,
+ * Option/Alt 0.01 s; Home and End jump to either end.
+ */
+export function playheadKeyTime(
+  key: string,
+  time: number,
+  duration: number,
+  shift = false,
+  fine = false
+): number | undefined {
+  if (key === 'Home') return 0;
+  if (key === 'End') return duration;
+  const direction = key === 'ArrowRight' || key === 'ArrowUp' ? 1
+    : key === 'ArrowLeft' || key === 'ArrowDown' ? -1 : 0;
+  if (!direction) return undefined;
+  const step = shift ? TIMELINE_KEY_STEP * 10 : fine ? CLIP_VALUE_STEP : TIMELINE_KEY_STEP;
+  const position = time / step;
+  const next = (direction > 0 ? Math.floor(position + 1e-9) + 1 : Math.ceil(position - 1e-9) - 1) * step;
+  return clamp(Number(next.toFixed(6)), 0, Math.max(0, duration));
+}
+
+/** Keyboard scrubbing on the playhead. Like a pointer scrub, it pauses playback. */
+export function handlePlayheadKey(
+  event: TimelineKeyEvent,
+  timelineId: string,
+  reveal?: (time: number) => void
+): void {
+  if (event.target !== event.currentTarget || event.metaKey || event.ctrlKey) return;
+  const transport = TimelineStore.getTransport(timelineId);
+  const next = playheadKeyTime(event.key, transport.time, transport.duration, event.shiftKey, event.altKey);
+  if (next === undefined) return;
+  event.preventDefault();
+  event.stopPropagation();
+  TimelineStore.pause(timelineId);
+  reveal?.(next);
+  TimelineStore.seek(timelineId, next);
+}
+
+/** Up/Down on the dock's resize handle raise or lower its maximum height by 20px (Shift 100px). */
+export function dockResizeKeyHeight(
+  key: string,
+  height: number,
+  min: number,
+  max: number,
+  shift = false
+): number | undefined {
+  const direction = key === 'ArrowUp' ? 1 : key === 'ArrowDown' ? -1 : 0;
+  if (!direction) return undefined;
+  const limit = Math.max(min, max);
+  return clamp(Math.min(height, limit) + direction * (shift ? 100 : 20), min, limit);
+}
+
+const SPACE_OWNERS = 'button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"]';
+
+/** Space plays or pauses while focus is in the timeline, unless a button or field owns the key. */
+export function handleTimelineSpaceKey(event: TimelineKeyEvent, timelineId: string): void {
+  if (event.key !== ' ' || event.defaultPrevented) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if ((event.target as Element | null)?.closest?.(SPACE_OWNERS)) return;
+  event.preventDefault();
+  if (TimelineStore.getTransport(timelineId).playing) {
+    TimelineStore.pause(timelineId);
+    announce(`Paused at ${formatTimelineTime(TimelineStore.getTransport(timelineId).time)}`);
+  } else {
+    TimelineStore.play(timelineId);
+    announce('Playing');
+  }
+}
+
+export type TimelineClipKeyTarget = {
+  /** Value path of the clip or property track. */
+  key: string;
+  label: string;
+  at: number;
+  duration: number;
+  timelineDuration: number;
+  /** Property tracks sit at `baseAt + delay`; moving one edits its delay. */
+  baseAt?: number;
+  delayMode?: boolean;
+  fixedDuration?: boolean;
+  steps?: Pick<TimelineStepStatic, 'key' | 'duration' | 'isPhysics'>[];
+};
+
+export type TimelineClipKeyEdit = {
+  values: Record<string, number>;
+  at: number;
+  end: number;
+};
+
+/**
+ * Left/Right move a clip by the same rules as dragging it; with `resize`
+ * (Option/Alt) they change its length instead — for a sequence, the length
+ * of the focused leg (the last one when none is given).
+ */
+export function clipKeyEdit(
+  target: TimelineClipKeyTarget,
+  key: string,
+  shift = false,
+  resize = false,
+  stepKey?: string
+): TimelineClipKeyEdit | undefined {
+  const direction = key === 'ArrowRight' ? 1 : key === 'ArrowLeft' ? -1 : 0;
+  if (!direction) return undefined;
+  const dt = direction * TIMELINE_KEY_STEP * (shift ? 10 : 1);
+  const { key: path, at, duration, timelineDuration, baseAt = 0, steps } = target;
+  if (!resize) {
+    if (target.delayMode) {
+      const delay = clampTrackDelay(at + dt - baseAt, baseAt, duration, timelineDuration);
+      return { values: { [`${path}.delay`]: delay }, at: baseAt + delay, end: baseAt + delay + duration };
+    }
+    const nextAt = clampClipMove(at + dt, duration, timelineDuration);
+    return { values: { [`${path}.at`]: nextAt }, at: nextAt, end: nextAt + duration };
+  }
+  if (steps?.length) {
+    const index = stepKey ? steps.findIndex((step) => step.key === stepKey) : steps.length - 1;
+    const step = steps[index];
+    if (!step || step.isPhysics) return undefined;
+    const others = steps.reduce((sum, candidate, j) => (j === index ? sum : sum + candidate.duration), 0);
+    const next = clampStepResize(step.duration + dt, at, others, timelineDuration);
+    return { values: { [`${path}.${step.key ?? ''}.duration`]: next }, at, end: at + others + next };
+  }
+  if (target.fixedDuration || duration <= 0) return undefined;
+  const next = clampClipResizeEnd(duration + dt, at, timelineDuration);
+  return { values: { [`${path}.duration`]: next }, at, end: at + next };
+}
+
+/**
+ * Clip keys: Enter or Space opens the clip (as a click does), Left/Right move
+ * it, and Option/Alt + Left/Right change its length. Sequence legs take focus
+ * one by one; `open` receives the focused element and its step key.
+ */
+export function handleTimelineClipKey(
+  event: TimelineKeyEvent,
+  timelineId: string,
+  target: TimelineClipKeyTarget,
+  open: (element: HTMLElement, stepKey?: string) => void
+): void {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey) return;
+  const element = event.target as HTMLElement;
+  if (element !== event.currentTarget && element.dataset?.step === undefined) return;
+  const stepKey = element.dataset?.step || undefined;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    event.stopPropagation();
+    open(element, stepKey);
+    return;
+  }
+  const edit = clipKeyEdit(target, event.key, event.shiftKey, event.altKey, stepKey);
+  if (!edit) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const resolve = clipElementResolver(element);
+  DialStore.updateValues(timelineId, edit.values);
+  if (!element.isConnected) resolve()?.focus({ preventScroll: true });
+  announce(`${target.label} ${edit.at.toFixed(2)} to ${formatTimelineTime(edit.end)}`);
+}
+
+/**
+ * Run an update that may rebuild the timeline's rows, then put focus back on
+ * the control at the same position if the focused one was replaced.
+ */
+export function preserveTimelineFocus(root: HTMLElement, update: () => void): void {
+  const stops = () => Array.from(root.querySelectorAll<HTMLElement>('button, [tabindex="0"]'));
+  const active = document.activeElement;
+  const index = active instanceof HTMLElement && root.contains(active) ? stops().indexOf(active) : -1;
+  update();
+  if (index >= 0 && !active!.isConnected) stops()[index]?.focus({ preventScroll: true });
+}
+
+const POPOVER_FOCUSABLE ='button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Keyboard for the clip editor: its first field takes focus on open. Escape
+ * closes it from anywhere; Escape inside it, the close button, or tabbing past
+ * either end returns focus to the clip that opened it. Returns a cleanup.
+ */
+export function observeClipPopover(
+  popover: HTMLElement,
+  close: () => void,
+  opener: () => HTMLElement | null | undefined = focusedClip()
+): () => void {
+  let frame = 0;
+  const stops = () => Array.from(popover.querySelectorAll<HTMLElement>(POPOVER_FOCUSABLE))
+    .filter((element) => element.getClientRects().length > 0 && !element.closest('[inert], [aria-hidden="true"]'));
+  const focusFirstField = (attempt = 0) => {
+    const field = stops().find((element) => !element.closest('.dialkit-timeline-popover-header'));
+    // Adapters reveal the popover once it has been measured.
+    if (field && getComputedStyle(popover).visibility !== 'hidden') {
+      field.focus({ preventScroll: true });
+      return;
+    }
+    if (attempt < 10) frame = requestAnimationFrame(() => focusFirstField(attempt + 1));
+  };
+  const returnFocus = () => {
+    const target = opener();
+    if (target?.isConnected) target.focus({ preventScroll: true });
+  };
+  // On the document, after the controls' own handlers, so a field that uses
+  // Escape (cancelling an edit, closing a menu) keeps it.
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    const inside = popover.contains(event.target as Node);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+      if (inside) returnFocus();
+      return;
+    }
+    if (event.key !== 'Tab' || !inside) return;
+    const focusable = stops();
+    const edge = event.shiftKey ? focusable[0] : focusable[focusable.length - 1];
+    if (edge && document.activeElement !== edge) return;
+    event.preventDefault();
+    close();
+    returnFocus();
+  };
+  const onClick = (event: MouseEvent) => {
+    if ((event.target as Element).closest?.('.dialkit-timeline-popover-close')) returnFocus();
+  };
+  focusFirstField();
+  document.addEventListener('keydown', onKeyDown);
+  popover.addEventListener('click', onClick, true);
+  return () => {
+    cancelAnimationFrame(frame);
+    document.removeEventListener('keydown', onKeyDown);
+    popover.removeEventListener('click', onClick, true);
+  };
+}
+
+/** The focused clip or sequence leg, captured now so focus can return to it. */
+function focusedClip(): () => HTMLElement | null {
+  const active = typeof document === 'undefined' ? null : document.activeElement;
+  return active instanceof HTMLElement && active.closest('.dialkit-timeline-clip') ? clipElementResolver(active) : () => null;
+}
+
+/** Some adapters rebuild clip rows on edit; find the same clip (or leg) again by its key. */
+function clipElementResolver(element: HTMLElement): () => HTMLElement | null {
+  const section = element.closest?.('.dialkit-timeline-section');
+  const key = element.closest?.<HTMLElement>('.dialkit-timeline-clip')?.dataset.clip;
+  const stepKey = element.dataset?.step;
+  return () => {
+    if (element.isConnected) return element;
+    if (!section || key === undefined) return null;
+    const clip = section.querySelector<HTMLElement>(`.dialkit-timeline-clip[data-clip="${CSS.escape(key)}"]`);
+    return stepKey ? clip?.querySelector<HTMLElement>(`[data-step="${CSS.escape(stepKey)}"]`) ?? null : clip;
+  };
 }

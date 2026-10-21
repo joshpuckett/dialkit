@@ -4,6 +4,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   type JSX,
@@ -21,11 +22,19 @@ import {
   clampClipResizeStart,
   clampStepResize,
   clampTrackDelay,
+  clipAccessibleName,
   computeClipStaticFromValues,
+  dockResizeKeyHeight,
   formatClock,
   formatSeconds,
   formatStepLabel,
+  handlePlayheadKey,
+  handleTimelineClipKey,
+  handleTimelineSpaceKey,
   normalizeTimelineValuesForCopy,
+  observeClipPopover,
+  playheadValueText,
+  preserveTimelineFocus,
   timelinePopoverDisplayValues,
 } from '../../../timeline-core';
 import type { TimelineClipLoop, TimelineStepStatic } from '../../../timeline-core';
@@ -142,6 +151,14 @@ function DialTimelineDock(props: DialTimelineProps) {
     resizeCleanup = finish;
   };
 
+  const resizeMax = () => Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+  const handleResizeKeyDown: JSX.EventHandler<HTMLDivElement, KeyboardEvent> = (event) => {
+    const next = dockResizeKeyHeight(event.key, dockMaxHeight(), MIN_DOCK_MAX_HEIGHT, resizeMax(), event.shiftKey);
+    if (next === undefined) return;
+    event.preventDefault();
+    setDockMaxHeight(next);
+  };
+
   return (
     <Show when={mounted() && timelines().length > 0}>
       <Portal mount={document.body}>
@@ -153,9 +170,14 @@ function DialTimelineDock(props: DialTimelineProps) {
           <div
             class="dialkit-timeline-resize-handle"
             onPointerDown={handleResizePointerDown}
+            onKeyDown={handleResizeKeyDown}
             role="separator"
+            tabIndex={0}
             aria-label="Resize timeline height"
             aria-orientation="horizontal"
+            aria-valuemin={MIN_DOCK_MAX_HEIGHT}
+            aria-valuemax={resizeMax()}
+            aria-valuenow={Math.round(Math.min(dockMaxHeight(), resizeMax()))}
             title="Drag to resize timeline"
           />
           <div
@@ -306,6 +328,7 @@ function TimelinePlayheadFlag(props: {
   laneWidth: number;
   ruler: HTMLDivElement | undefined;
   onResetView: () => void;
+  onReveal: (time: number) => void;
 }) {
   const time = fromStore(
     () => TimelineStore.getTransport(props.id).time,
@@ -379,11 +402,17 @@ function TimelinePlayheadFlag(props: {
           window.addEventListener('pointercancel', finish);
           cleanup = finish;
         }}
+        // Keep a keyboard-scrubbed playhead in view so it keeps focus when zoomed.
+        onKeyDown={(event) => handlePlayheadKey(event, props.id, (next) => {
+          if (next < props.viewStart || next > props.viewEnd) props.onReveal(next);
+        })}
         role="slider"
+        tabIndex={0}
         aria-label="Timeline current time"
         aria-valuemin={0}
         aria-valuemax={props.duration}
         aria-valuenow={time()}
+        aria-valuetext={playheadValueText(time(), props.duration)}
         title="Drag to scrub the timeline"
       >
         <div class="dialkit-timeline-playhead-stem" />
@@ -446,6 +475,7 @@ function TimelineSection(props: {
     values();
     return DialStore.getActivePresetId(props.meta.id);
   };
+  let sectionRef: HTMLDivElement | undefined;
   let laneAreaRef: HTMLDivElement | undefined;
   let horizontalScrollRef: HTMLDivElement | undefined;
   const [laneWidth, setLaneWidth] = createSignal(0);
@@ -651,13 +681,14 @@ function TimelineSection(props: {
           },
         });
   };
+  // Rows re-render on toggle; keep focus on the toggle that was pressed.
   const toggleSet = (setter: typeof setExpandedTracks, key: string) => {
-    setter((current) => {
+    preserveTimelineFocus(sectionRef!, () => setter((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
-    });
+    }));
   };
   const toggleTracks = (key: string) => toggleSet(setExpandedTracks, key);
   const toggleGroup = (key: string) => toggleSet(setCollapsedGroups, key);
@@ -707,6 +738,8 @@ function TimelineSection(props: {
                   data-open={!collapsed}
                   onClick={() => toggleGroup(group)}
                   title={collapsed ? 'Expand layer' : 'Collapse layer'}
+                  aria-label={collapsed ? 'Expand layer' : 'Collapse layer'}
+                  aria-expanded={!collapsed}
                 >
                   <ChevronIcon />
                 </button>
@@ -721,7 +754,6 @@ function TimelineSection(props: {
       const isProps = Boolean(clip.tracks?.length);
       const tracksOpen = isProps && expandedTracks().has(clip.key);
       const stat = computeClipStaticFromValues(currentValues, clip, props.meta.duration);
-      const selected = popover()?.clip.key === clip.key;
       result.push(
         <div class="dialkit-timeline-row" data-grouped={clip.group ? '' : undefined}>
           <div class="dialkit-timeline-label">
@@ -734,6 +766,8 @@ function TimelineSection(props: {
                   toggleTracks(clip.key);
                 }}
                 title={tracksOpen ? 'Collapse properties' : 'Expand properties'}
+                aria-label={tracksOpen ? 'Collapse properties' : 'Expand properties'}
+                aria-expanded={tracksOpen}
               >
                 <ChevronIcon />
               </button>
@@ -750,11 +784,12 @@ function TimelineSection(props: {
               steps={clip.stepKeys?.length ? stat.tracks[0]?.steps : undefined}
               fixedDuration={isProps ? true : stat.isPhysics}
               composite={isProps}
+              expanded={tracksOpen}
               pxPerSecond={pxPerSecond()}
               viewStart={safeViewStart()}
               timelineDuration={props.meta.duration}
-              selected={selected}
-              selectedStepKey={selected ? popover()?.stepKey : undefined}
+              selected={popover()?.clip.key === clip.key}
+              selectedStepKey={popover()?.clip.key === clip.key ? popover()?.stepKey : undefined}
               onClick={handleBarClick}
               onDrag={closePopover}
             />
@@ -774,7 +809,6 @@ function TimelineSection(props: {
           group: clip.group,
           stepKeys: trackRef.stepKeys,
         };
-        const trackSelected = popover()?.clip.key === trackKey;
         result.push(
           <div class="dialkit-timeline-row dialkit-timeline-track-row" data-grouped={clip.group ? '' : undefined}>
             <div class="dialkit-timeline-label">{formatLabel(trackRef.prop)}</div>
@@ -792,8 +826,8 @@ function TimelineSection(props: {
                 pxPerSecond={pxPerSecond()}
                 viewStart={safeViewStart()}
                 timelineDuration={props.meta.duration}
-                selected={trackSelected}
-                selectedStepKey={trackSelected ? popover()?.stepKey : undefined}
+                selected={popover()?.clip.key === trackKey}
+                selectedStepKey={popover()?.clip.key === trackKey ? popover()?.stepKey : undefined}
                 onClick={openClipPopover}
                 onDrag={closePopover}
               />
@@ -806,7 +840,7 @@ function TimelineSection(props: {
   });
 
   return (
-    <div class="dialkit-timeline-section">
+    <div ref={sectionRef} class="dialkit-timeline-section" onKeyDown={(event) => handleTimelineSpaceKey(event, props.meta.id)}>
       <div class="dialkit-timeline-header" data-open={open() || undefined}>
         <div class="dialkit-timeline-identity">
           <span class="dialkit-timeline-title">{props.meta.name}</span>
@@ -857,6 +891,7 @@ function TimelineSection(props: {
             aria-expanded={open()}
             onClick={() => setOpen((current) => !current)}
             title={open() ? 'Collapse timeline' : 'Expand timeline'}
+            aria-label={open() ? 'Collapse timeline' : 'Expand timeline'}
           >
             <ChevronIcon />
           </button>
@@ -906,6 +941,7 @@ function TimelineSection(props: {
                 laneWidth={laneWidth()}
                 ruler={laneAreaRef}
                 onResetView={resetView}
+                onReveal={centerViewAt}
               />
             </Show>
           </div>
@@ -942,7 +978,7 @@ function TimelineSection(props: {
 
 function ChevronIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d={ICON_CHEVRON} />
     </svg>
   );
@@ -970,23 +1006,23 @@ function ClipPopover(props: {
       if (ref?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       props.onClose();
     };
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') props.onClose();
-    };
     window.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('scroll', updateViewport);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('keydown', keydown);
     onCleanup(() => {
       observer.disconnect();
       window.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('scroll', updateViewport);
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', keydown);
     });
   });
+
+  createEffect(on(
+    () => [props.popover.clip.key, props.popover.stepKey],
+    () => { if (ref) onCleanup(observeClipPopover(ref, props.onClose)); }
+  ));
 
   const presentation = createMemo(() => {
     const { clip, stepKey } = props.popover;
@@ -1079,7 +1115,7 @@ function ClipPopover(props: {
             <div class="dialkit-timeline-popover-header">
               <span class="dialkit-timeline-popover-title">{presentation().title}</span>
               <button class="dialkit-timeline-popover-close" onClick={props.onClose} title="Close editor" aria-label="Close editor">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <path d="M6 6L18 18M18 6L6 18" />
                 </svg>
               </button>
@@ -1147,6 +1183,7 @@ function TimelineClip(props: {
   steps?: TimelineStepStatic[];
   fixedDuration: boolean;
   composite?: boolean;
+  expanded?: boolean;
   baseAt?: number;
   delayMode?: boolean;
   pxPerSecond: number;
@@ -1247,6 +1284,25 @@ function TimelineClip(props: {
     }
   };
 
+  const handleKeyDown: JSX.EventHandler<HTMLDivElement, KeyboardEvent> = (event) => {
+    handleTimelineClipKey(
+      event,
+      props.timelineId,
+      {
+        key: props.clip.key,
+        label: props.clip.label,
+        at: props.at,
+        duration: props.duration,
+        timelineDuration: props.timelineDuration,
+        baseAt: props.baseAt,
+        delayMode: props.delayMode,
+        fixedDuration: props.fixedDuration || props.composite,
+        steps: props.steps,
+      },
+      (element, stepKey) => props.onClick(props.clip, element.getBoundingClientRect(), stepKey)
+    );
+  };
+
   const ghostCycles = createMemo(() => {
     const cycles: Array<{ start: number; duration: number; index: number }> = [];
     if (props.loop !== 'repeat' || props.duration <= 0) return cycles;
@@ -1289,6 +1345,7 @@ function TimelineClip(props: {
       )}</For>
       <div
         class="dialkit-timeline-clip"
+        data-clip={props.clip.key}
         data-steps={isSteps() || undefined}
         data-composite={props.composite || undefined}
         data-selected={props.selected || undefined}
@@ -1303,6 +1360,11 @@ function TimelineClip(props: {
         onPointerUp={(event) => finish(event)}
         onPointerCancel={() => finish()}
         onLostPointerCapture={() => finish()}
+        onKeyDown={handleKeyDown}
+        role={isSteps() ? undefined : 'button'}
+        tabIndex={isSteps() ? undefined : 0}
+        aria-label={isSteps() ? undefined : clipAccessibleName(props.clip.label, props.at, props.duration)}
+        aria-expanded={props.composite ? props.expanded : undefined}
         title={title()}
       >
         <Show
@@ -1326,6 +1388,9 @@ function TimelineClip(props: {
                   class="dialkit-timeline-clip-segment"
                   data-step={step.key ?? undefined}
                   data-selected={props.selectedStepKey === step.key || undefined}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={clipAccessibleName(`${props.clip.label} · ${formatStepLabel(step.key ?? '')}`, props.at + step.offset, step.duration)}
                   style={{ width: `${segmentWidth()}px` }}
                 >
                   <Show when={segmentWidth() > 52}><span class="dialkit-timeline-clip-duration">{formatSeconds(step.duration)}</span></Show>

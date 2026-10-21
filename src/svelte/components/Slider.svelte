@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { handleSliderKey } from '../../control-keyboard';
+  import { beginSliderDrag, evaluateNumber, formatEditableValue, handleSliderKey, numericInputKeyValue, updateSliderDrag, type SliderDragState } from '../../control-keyboard';
+  import { announce } from '../../announce';
 
   import { tick } from 'svelte';
   import { Spring } from 'svelte/motion';
   import type { ShortcutConfig } from 'dialkit/store';
-  import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
+  import { roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
 
   let {
     label,
     value,
+    defaultValue,
     onChange,
     min = 0,
     max = 1,
@@ -19,6 +21,7 @@
   } = $props<{
     label: string;
     value: number;
+    defaultValue?: number;
     onChange: (value: number) => void;
     min?: number;
     max?: number;
@@ -46,10 +49,12 @@
   let isInteracting = $state(false);
   let isDragging = $state(false);
   let isHovered = $state(false);
+  let isFocusVisible = $state(false);
   let isValueHovered = $state(false);
   let isValueEditable = $state(false);
   let showInput = $state(false);
   let inputValue = $state('');
+  let inputInvalid = $state(false);
 
   const fillPercent = new Spring(((value - min) / (max - min)) * 100, { stiffness: 0.25, damping: 0.7 });
   const rubberStretchPx = new Spring(0, { stiffness: 0.2, damping: 0.65 });
@@ -59,6 +64,7 @@
 
   let pointerDownPos: { x: number; y: number } | null = null;
   let isClickFlag = true;
+  let dragState: SliderDragState | null = null;
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -121,7 +127,7 @@
   });
 
   const percentage = $derived(((value - min) / (max - min)) * 100);
-  const isActive = $derived(isInteracting || isHovered);
+  const isActive = $derived(isInteracting || isHovered || isFocusVisible);
 
   const leftThreshold = $derived.by(() => {
     const trackWidth = wrapperRef?.offsetWidth;
@@ -195,9 +201,10 @@
     if (isClickFlag && distance > CLICK_THRESHOLD) {
       isClickFlag = false;
       isDragging = true;
+      dragState = beginSliderDrag(positionToValue(pointerDownPos.x), pointerDownPos.x);
     }
 
-    if (!isClickFlag) {
+    if (!isClickFlag && dragState) {
       if (wrapperRect) {
         if (e.clientX < wrapperRect.left) {
           rubberStretchPx.set(computeRubberStretch(e.clientX, -1), { instant: true });
@@ -208,9 +215,10 @@
         }
       }
 
-      const newValue = positionToValue(e.clientX);
-      fillPercent.set(percentFromValue(newValue), { instant: true });
-      onChange(roundValue(newValue, step, min, max));
+      const newValue = updateSliderDrag(dragState, e.clientX, wrapperRect?.width ?? 0, min, max, step, e);
+      // Keep the fill continuous unless Shift is snapping to ticks
+      fillPercent.set(percentFromValue(e.shiftKey ? newValue : Math.max(min, Math.min(max, dragState.raw))), { instant: true });
+      onChange(newValue);
     }
   };
 
@@ -245,14 +253,31 @@
     pointerDownPos = null;
   };
 
+  const formatValue = (nextValue: number) => `${formatEditableValue(nextValue, step, min, max)}${unit ? ` ${unit}` : ''}`;
+
+  const setValueNow = (next: number) => {
+    fillPercent.set(percentFromValue(next), { instant: true });
+    onChange(next);
+  };
+
+  const reset = () => {
+    if (defaultValue === undefined) return;
+    setValueNow(defaultValue);
+    announce(`${label} reset to ${formatValue(defaultValue)}`);
+  };
+
+  const openInput = () => {
+    editingEnded = false;
+    inputInvalid = false;
+    inputValue = formatEditableValue(value, step, min, max);
+    showInput = true;
+  };
+
   const handleInputSubmit = () => {
     if (editingEnded) return;
     editingEnded = true;
-    const parsed = Number.parseFloat(inputValue);
-    if (!Number.isNaN(parsed)) {
-      const clamped = Math.max(min, Math.min(max, parsed));
-      onChange(roundValue(clamped, step, min, max));
-    }
+    const next = evaluateNumber(inputValue, value, min, max, unit);
+    if (next !== undefined) onChange(roundValue(next, step, min, max));
 
     showInput = false;
     isValueHovered = false;
@@ -263,12 +288,33 @@
     if (!isValueEditable) return;
     e.stopPropagation();
     e.preventDefault();
-    editingEnded = false;
-    showInput = true;
-    inputValue = value.toFixed(decimalsForStep(step, min, max));
+    openInput();
   };
 
-  const displayValue = $derived(value.toFixed(decimalsForStep(step, min, max)));
+  const handleInputKeyDown = (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+    e.stopPropagation();
+    const stepped = numericInputKeyValue(e, inputValue, value, min, max, step, unit);
+    if (stepped !== undefined) {
+      e.preventDefault();
+      e.currentTarget.value = inputValue = formatEditableValue(stepped, step, min, max);
+      e.currentTarget.select();
+      inputInvalid = false;
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    e.preventDefault();
+    if (e.key === 'Enter' && evaluateNumber(inputValue, value, min, max, unit) === undefined) {
+      inputInvalid = true;
+      e.currentTarget.select();
+      announce(`${label}: enter a number, for example 24 or 24*2`);
+      return;
+    }
+    if (e.key === 'Enter') handleInputSubmit();
+    else { editingEnded = true; showInput = false; isValueHovered = false; }
+    tick().then(() => trackRef?.focus({ preventScroll: true }));
+  };
+
+  const displayValue = $derived(formatEditableValue(value, step, min, max));
 
   const trackStyle = $derived(`width:calc(100% + ${Math.abs(rubberStretchPx.current)}px);transform:translateX(${rubberStretchPx.current < 0 ? rubberStretchPx.current : 0}px);`);
   const fillStyle = $derived(`width:${fillPercent.current}%;`);
@@ -285,13 +331,11 @@
     aria-valuemin={min}
     aria-valuemax={max}
     aria-valuenow={value}
-    aria-valuetext={`${displayValue}${unit ? ` ${unit}` : ''}`}
-    onkeydown={(event) => handleSliderKey(event, value, min, max, step, (next) => {
-      fillPercent.set(percentFromValue(next), { instant: true }); onChange(next);
-    }, () => {
-      editingEnded = false;
-      inputValue = value.toFixed(decimalsForStep(step, min, max)); showInput = true;
-    })}
+    aria-valuetext={formatValue(value)}
+    onkeydown={(event) => handleSliderKey(event, value, min, max, step, setValueNow, openInput, defaultValue === undefined ? undefined : reset)}
+    onfocus={(event) => (isFocusVisible = event.currentTarget.matches(':focus-visible'))}
+    onblur={() => (isFocusVisible = false)}
+    ondblclick={() => !showInput && reset()}
     style={trackStyle}
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
@@ -325,16 +369,13 @@
         type="text"
         class="dialkit-slider-input"
         aria-label={`${label} value`}
+        aria-invalid={inputInvalid || undefined}
         value={inputValue}
-        oninput={(e) => (inputValue = (e.currentTarget as HTMLInputElement).value)}
-        onkeydown={(e) => {
-          e.stopPropagation();
-          if (e.key !== 'Enter' && e.key !== 'Escape') return;
-          e.preventDefault();
-          if (e.key === 'Enter') handleInputSubmit();
-          else { editingEnded = true; showInput = false; isValueHovered = false; }
-          tick().then(() => trackRef?.focus({ preventScroll: true }));
+        oninput={(e) => {
+          inputValue = (e.currentTarget as HTMLInputElement).value;
+          inputInvalid = false;
         }}
+        onkeydown={handleInputKeyDown}
         onblur={handleInputSubmit}
         onpointerdown={(e) => e.stopPropagation()}
         onclick={(e) => e.stopPropagation()}

@@ -1,3 +1,4 @@
+import { announce } from '../../announce';
 import { buildCopyInstruction } from '../../copy-instruction';
 import { Fragment, computed, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
@@ -65,6 +66,7 @@ export const Panel = defineComponent({
       try { await navigator.clipboard.writeText(instruction); }
       catch { return; }
 
+      announce('Parameters copied');
       copied.value = true;
       if (copiedTimeout) {
         window.clearTimeout(copiedTimeout);
@@ -89,6 +91,7 @@ export const Panel = defineComponent({
         h(motion.button, {
           class: 'dialkit-toolbar-add dialkit-toolbar-primary',
           onClick: handleCopy,
+          type: 'button',
           title: 'Copy parameters', 'aria-label': 'Copy parameters',
           whilePress: { scale: 0.95 },
           transition: { type: 'spring', visualDuration: 0.15, bounce: 0.3 },

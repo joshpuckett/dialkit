@@ -12,7 +12,7 @@ export function ButtonGroup(props: ButtonGroupProps) {
     <div class="dialkit-button-group">
       <For each={props.buttons}>
         {(button) => (
-          <button class="dialkit-button" onClick={button.onClick}>
+          <button type="button" class="dialkit-button" onClick={button.onClick}>
             {button.label}
           </button>
         )}

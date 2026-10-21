@@ -12,6 +12,8 @@
   let dropdownEl: HTMLDivElement | undefined;
   let pos = $state({ top: 0, right: 0 });
 
+  const MODIFIER_NAMES = { alt: 'Option', shift: 'Shift', meta: 'Command' } as const;
+
   function formatShortcutKey(sc: ShortcutConfig): string {
     if (!sc.key) return '\u2014';
     const mod = sc.modifier === 'alt' ? '\u2325'
@@ -19,6 +21,12 @@
       : sc.modifier === 'meta' ? '\u2318'
       : '';
     return `${mod}${sc.key.toUpperCase()}`;
+  }
+
+  // Screen readers skip or misread the modifier glyphs, so the key also gets a spoken name.
+  function describeShortcutKey(sc: ShortcutConfig): string {
+    if (!sc.key) return 'No key';
+    return sc.modifier ? `${MODIFIER_NAMES[sc.modifier]} ${sc.key.toUpperCase()}` : sc.key.toUpperCase();
   }
 
   function formatInteraction(sc: ShortcutConfig): string {
@@ -99,10 +107,10 @@
     bind:this={triggerEl}
     class="dialkit-shortcuts-trigger"
     onclick={toggle}
-    title="Keyboard shortcuts"
+    title="Keyboard shortcuts" aria-label="Keyboard shortcuts"
     type="button" aria-haspopup="dialog" aria-expanded={isOpen}
   >
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="2" y="6" width="20" height="12" rx="2" />
       <path d="M6 10H6.01" />
       <path d="M10 10H10.01" />
@@ -125,7 +133,7 @@
         <div class="dialkit-shortcuts-list">
           {#each rows as row (row.path)}
             <div class="dialkit-shortcuts-row">
-              <span class="dialkit-shortcuts-row-key">
+              <span class="dialkit-shortcuts-row-key" role="img" aria-label={describeShortcutKey(row.shortcut)}>
                 {formatShortcutKey(row.shortcut)}
               </span>
               <span class="dialkit-shortcuts-row-label">{row.label}</span>

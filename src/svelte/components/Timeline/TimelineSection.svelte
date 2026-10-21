@@ -8,7 +8,10 @@
     clamp,
     computeClipStaticFromValues,
     formatClock,
+    handlePlayheadKey,
+    handleTimelineSpaceKey,
     normalizeTimelineValuesForCopy,
+    playheadValueText,
   } from 'dialkit/timeline';
   import type {
     TimelineClipMeta,
@@ -454,6 +457,13 @@
     playheadScrub = null;
   }
 
+  // Keep a keyboard-scrubbed playhead in view so it keeps focus when zoomed.
+  function handlePlayheadKeyDown(event: KeyboardEvent) {
+    handlePlayheadKey(event, meta.id, (next) => {
+      if (next < safeViewStart || next > viewEnd) centerViewAt(next);
+    });
+  }
+
   function handleCopy() {
     const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
     void navigator.clipboard.writeText(buildCopyInstruction('createDialTimeline', meta.name, normalized));
@@ -525,7 +535,7 @@
   }
 </script>
 
-<div class="dialkit-timeline-section">
+<div class="dialkit-timeline-section" role="presentation" onkeydown={(event) => handleTimelineSpaceKey(event, meta.id)}>
   <div class="dialkit-timeline-header" data-open={open || undefined}>
     <div class="dialkit-timeline-identity">
       <span class="dialkit-timeline-title">{meta.name}</span>
@@ -540,12 +550,7 @@
         onpointercancel={finishOverview}
         onlostpointercapture={finishOverview}
         title="Drag to scrub the full timeline"
-        role="slider"
-        tabindex="0"
-        aria-label="Timeline overview"
-        aria-valuemin={0}
-        aria-valuemax={meta.duration}
-        aria-valuenow={transport.time}
+        role="presentation"
       >
         <div
           class="dialkit-timeline-overview-viewport"
@@ -608,8 +613,9 @@
         aria-expanded={open}
         onclick={() => { open = !open; }}
         title={open ? 'Collapse timeline' : 'Expand timeline'}
+        aria-label={open ? 'Collapse timeline' : 'Expand timeline'}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d={ICON_CHEVRON} />
         </svg>
       </button>
@@ -639,12 +645,7 @@
             onpointercancel={finishRuler}
             onlostpointercapture={finishRuler}
             title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
-            role="slider"
-            tabindex="0"
-            aria-label="Timeline ruler"
-            aria-valuemin={safeViewStart}
-            aria-valuemax={viewEnd}
-            aria-valuenow={transport.time}
+            role="presentation"
           >
             {#each ticks.fine as time}
               <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
@@ -669,8 +670,10 @@
                   data-open={!row.collapsed}
                   onclick={() => toggleGroup(row.group)}
                   title={row.collapsed ? 'Expand layer' : 'Collapse layer'}
+                  aria-label={row.collapsed ? 'Expand layer' : 'Collapse layer'}
+                  aria-expanded={!row.collapsed}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d={ICON_CHEVRON} />
                   </svg>
                 </button>
@@ -690,8 +693,10 @@
                       toggleTracks(row.clip.key);
                     }}
                     title={row.tracksOpen ? 'Collapse properties' : 'Expand properties'}
+                    aria-label={row.tracksOpen ? 'Collapse properties' : 'Expand properties'}
+                    aria-expanded={row.tracksOpen}
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d={ICON_CHEVRON} />
                     </svg>
                   </button>
@@ -708,6 +713,7 @@
                   steps={row.clip.stepKeys?.length ? row.stat.tracks[0]?.steps : undefined}
                   fixedDuration={row.clip.tracks?.length ? true : row.stat.isPhysics}
                   composite={Boolean(row.clip.tracks?.length)}
+                  expanded={row.tracksOpen}
                   {pxPerSecond}
                   viewStart={safeViewStart}
                   timelineDuration={meta.duration}
@@ -755,12 +761,14 @@
             onpointerup={finishPlayhead}
             onpointercancel={finishPlayhead}
             onlostpointercapture={finishPlayhead}
+            onkeydown={handlePlayheadKeyDown}
             role="slider"
             tabindex="0"
             aria-label="Timeline current time"
             aria-valuemin={0}
             aria-valuemax={meta.duration}
             aria-valuenow={transport.time}
+            aria-valuetext={playheadValueText(transport.time, meta.duration)}
             title="Drag to scrub the timeline"
           >
             <div class="dialkit-timeline-playhead-stem"></div>

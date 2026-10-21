@@ -25,6 +25,7 @@ export function PresetManager(props: PresetManagerProps) {
   let chevronAnim: AnimationHandle | null = null;
 
   const activePreset = () => props.presets.find((p) => p.id === props.activePresetId);
+  const activeName = () => activePreset()?.name ?? 'Version 1';
 
   const dropdown = createDropdownPresence((el, done) =>
     animate(
@@ -98,10 +99,10 @@ export function PresetManager(props: PresetManagerProps) {
         data-open={String(dropdown.isOpen())}
         data-has-preset={String(!!activePreset())}
         type="button" aria-haspopup="menu" aria-expanded={dropdown.isOpen()}
-        aria-label="Versions" onKeyDown={(e) => openDropdownOnKey(e, openDropdown)}
+        aria-label={`Versions: ${activeName()}`} onKeyDown={(e) => openDropdownOnKey(e, openDropdown)}
       >
         <span class="dialkit-preset-label">
-          {activePreset() ? activePreset()!.name : 'Version 1'}
+          {activeName()}
         </span>
         <svg
           ref={chevronRef}
@@ -160,9 +161,9 @@ export function PresetManager(props: PresetManagerProps) {
                     <button
                       class="dialkit-preset-delete"
                       onClick={(e) => handleDelete(e, preset.id)}
-                      type="button" title={`Delete ${preset.name}`}
+                      type="button" title={`Delete ${preset.name}`} aria-label={`Delete ${preset.name}`}
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d={ICON_TRASH[0]} />
                         <path d={ICON_TRASH[1]} />
                         <path d={ICON_TRASH[2]} />

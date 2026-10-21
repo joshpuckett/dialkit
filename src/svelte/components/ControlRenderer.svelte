@@ -27,6 +27,7 @@
   const shortcutCtx = getContext<ShortcutContextValue | undefined>(SHORTCUT_CTX);
 
   const controlValue = $derived(values[control.path]);
+  const defaultValue = $derived(DialStore.getDefaultValue(panelId, control.path));
   const isShortcutActive = $derived(
     shortcutCtx ? shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path : false
   );
@@ -36,6 +37,7 @@
   <Slider
     label={control.label}
     value={controlValue as number}
+    defaultValue={typeof defaultValue === 'number' ? defaultValue : undefined}
     onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
     min={control.min}
     max={control.max}

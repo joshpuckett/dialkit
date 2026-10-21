@@ -1,5 +1,6 @@
-import { activateOnKey, handleSegmentKey, handleSliderKey, labelSegmentedControl } from '../control-keyboard';
-import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, formatToggleShortcut } from '../shortcut-utils';
+import { activateOnKey, beginSliderDrag, evaluateNumber, formatEditableValue, handleSegmentKey, handleSliderKey, labelSegmentedControl, numericInputKeyValue, updateSliderDrag, type SliderDragState } from '../control-keyboard';
+import { announce } from '../announce';
+import { roundValue, snapToDecile, formatSliderShortcut, formatToggleShortcut } from '../shortcut-utils';
 import { observeTextSize } from '../text-autosize';
 import { createPanelSectionTransition, observePanelHeader } from '../panel-size';
 import { ICON_CLOSE, ICON_CHEVRON, ICON_PANEL } from '../icons';
@@ -59,11 +60,14 @@ export function mountFolder(host: HTMLElement, initial: FolderProps) {
     renderedOpen = open;
     folder.dataset.open = String(open);
     title.textContent = props.title;
-    top.setAttribute('aria-label', props.title);
-    top.setAttribute('aria-expanded', String(open));
-    if (!(props.inline && props.isRoot)) {
+    // An inline root panel is always open, so its header is not a control.
+    if (props.inline && props.isRoot) {
+      ['role', 'tabindex', 'aria-label', 'aria-expanded'].forEach(name => top.removeAttribute(name));
+    } else {
       top.setAttribute('role', 'button');
       top.tabIndex = 0;
+      top.setAttribute('aria-label', props.title);
+      top.setAttribute('aria-expanded', String(open));
     }
     if (!props.isSection) {
       content.style.display = open ? '' : 'none';
@@ -243,6 +247,7 @@ function appendShortcut(label: HTMLElement, shortcut?: ShortcutConfig, active = 
 export interface SliderProps {
   label: string;
   value: number;
+  defaultValue?: number;
   onChange: (value: number) => void;
   min?: number;
   max?: number;
@@ -275,8 +280,9 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     y: number;
     rect: DOMRect;
     moved: boolean;
+    state?: SliderDragState;
   } | undefined;
-  let editing = false, hovered = false, editable = false;
+  let editing = false, hovered = false, editable = false, focusVisible = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let hashSignature = '';
   let clickAnimations: (Animation | undefined)[] = [];
@@ -285,16 +291,17 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     clickAnimations = [];
   };
   const range = () => ({ min: props.min ?? 0, max: props.max ?? 1, step: props.step ?? 0.01 });
-  const formatted = () => {
+  const formatted = (value = props.value) => {
     const { min, max, step } = range();
-    return props.value.toFixed(decimalsForStep(step, min, max));
+    return formatEditableValue(value, step, min, max);
   };
+  const valueText = (value = props.value) => `${formatted(value)}${props.unit ? ` ${props.unit}` : ''}`;
   function render() {
     const { min, max, step } = range();
     const pct = max > min ? Math.max(0, Math.min(100, (props.value - min) / (max - min) * 100)) : 0;
     fill.style.width = `${pct}%`;
     handle.style.left = `max(5px, calc(${pct}% - 9px))`;
-    const active = hovered || !!drag;
+    const active = hovered || focusVisible || !!drag;
     const width = wrapper.offsetWidth;
     const dodge = width > 0 && (pct < (18 + label.offsetWidth) / width * 100 || pct > (width - 20 - display.offsetWidth) / width * 100);
     handle.style.opacity = active ? String(dodge ? 0.1 : drag?.moved ? 0.9 : 0.5) : '0';
@@ -305,7 +312,7 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     track.setAttribute('aria-valuemin', String(min));
     track.setAttribute('aria-valuemax', String(max));
     track.setAttribute('aria-valuenow', String(props.value));
-    track.setAttribute('aria-valuetext', `${formatted()}${props.unit ? ` ${props.unit}` : ''}`);
+    track.setAttribute('aria-valuetext', valueText());
     label.textContent = props.label;
     appendShortcut(label, props.shortcut, props.shortcutActive);
     display.textContent = formatted();
@@ -327,6 +334,16 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     render();
     props.onChange(value);
   };
+  const setValueNow = (value: number) => {
+    cancelClick();
+    commit(value);
+  };
+  const reset = () => {
+    if (props.defaultValue === undefined)
+      return;
+    setValueNow(props.defaultValue);
+    announce(`${props.label} reset to ${valueText(props.defaultValue)}`);
+  };
   const position = (x: number) => {
     const { min, max } = range();
     const rect = drag?.rect ?? wrapper.getBoundingClientRect();
@@ -344,6 +361,7 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
   function edit() {
     endDrag();
     editing = true;
+    input.removeAttribute('aria-invalid');
     input.value = formatted();
     input.style.display = '';
     display.style.display = 'none';
@@ -355,11 +373,10 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     if (!editing)
       return;
     editing = false;
-    const value = input.value.trim() ? Number(input.value) : NaN;
-    if (!cancel && Number.isFinite(value)) {
-      const { min, max, step } = range();
-      commit(roundValue(Math.max(min, Math.min(max, value)), step, min, max));
-    }
+    const { min, max, step } = range();
+    const value = cancel ? undefined : evaluateNumber(input.value, props.value, min, max, props.unit);
+    if (value !== undefined)
+      commit(roundValue(value, step, min, max));
     input.style.display = 'none';
     display.style.display = '';
     track.tabIndex = 0;
@@ -368,7 +385,19 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
   }
   track.addEventListener('keydown', event => {
     const { min, max, step } = range();
-    handleSliderKey(event, props.value, min, max, step, commit, edit);
+    handleSliderKey(event, props.value, min, max, step, setValueNow, edit, props.defaultValue === undefined ? undefined : reset);
+  });
+  track.addEventListener('focus', () => {
+    focusVisible = track.matches(':focus-visible');
+    render();
+  });
+  track.addEventListener('blur', () => {
+    focusVisible = false;
+    render();
+  });
+  track.addEventListener('dblclick', () => {
+    if (!editing)
+      reset();
   });
   track.addEventListener('pointerdown', event => {
     if (editing || event.button !== 0)
@@ -386,12 +415,13 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     drag.moved ||= Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 3;
     if (!drag.moved)
       return;
+    drag.state ??= beginSliderDrag(position(drag.x), drag.x);
     const { min, max, step } = range();
     const overflow = event.clientX < drag.rect.left ? event.clientX - drag.rect.left : event.clientX > drag.rect.right ? event.clientX - drag.rect.right : 0;
     const stretch = Math.sign(overflow) * 8 * Math.sqrt(Math.min(Math.max(0, Math.abs(overflow) - 32) / 200, 1));
     track.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
     track.style.transform = `translateX(${Math.min(0, stretch)}px)`;
-    commit(roundValue(position(event.clientX), step, min, max));
+    commit(updateSliderDrag(drag.state, event.clientX, drag.rect.width, min, max, step, event));
   });
   track.addEventListener('pointerup', event => {
     if (!drag || drag.id !== event.pointerId)
@@ -444,8 +474,25 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     }
   });
   input.addEventListener('pointerdown', event => event.stopPropagation());
+  input.addEventListener('input', () => input.removeAttribute('aria-invalid'));
   input.addEventListener('keydown', event => {
     event.stopPropagation();
+    const { min, max, step } = range();
+    const stepped = numericInputKeyValue(event, input.value, props.value, min, max, step, props.unit);
+    if (stepped !== undefined) {
+      event.preventDefault();
+      input.value = formatted(stepped);
+      input.select();
+      input.removeAttribute('aria-invalid');
+      return;
+    }
+    if (event.key === 'Enter' && evaluateNumber(input.value, props.value, min, max, props.unit) === undefined) {
+      event.preventDefault();
+      input.setAttribute('aria-invalid', 'true');
+      input.select();
+      announce(`${props.label}: enter a number, for example 24 or 24*2`);
+      return;
+    }
     if (event.key === 'Enter' || event.key === 'Escape') {
       event.preventDefault();
       finishEdit(event.key === 'Escape');

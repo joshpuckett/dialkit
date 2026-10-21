@@ -27,12 +27,14 @@ export const ControlRenderer = defineComponent({
     const shortcut = inject(ShortcutKey, undefined);
     const renderControl = (control: ControlMeta): ReturnType<typeof h> | null => {
       const value = props.values[control.path];
+      const defaultValue = DialStore.getDefaultValue(props.panelId, control.path);
       switch (control.type) {
         case 'slider':
           return h(Slider, {
             key: control.path,
             label: control.label,
             value: value as number,
+            defaultValue: typeof defaultValue === 'number' ? defaultValue : undefined,
             min: control.min,
             max: control.max,
             step: control.step,

@@ -1,7 +1,7 @@
 import { DialStore, formatLabel } from '../store/DialStore';
 import { TimelineStore, type TimelineMeta, type TimelineClipMeta } from '../store/TimelineStore';
 import { TimelineUiStore } from '../store/TimelineUiStore';
-import { clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, computeClipStaticFromValues, formatSeconds, formatStepLabel, normalizeTimelineValuesForCopy, TIMELINE_MIN_CLIP_DURATION, timelinePopoverDisplayValues, type TimelineStepStatic } from '../timeline-core';
+import { clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, clipAccessibleName, computeClipStaticFromValues, dockResizeKeyHeight, formatSeconds, formatStepLabel, handlePlayheadKey, handleTimelineClipKey, handleTimelineSpaceKey, normalizeTimelineValuesForCopy, observeClipPopover, playheadValueText, preserveTimelineFocus, TIMELINE_MIN_CLIP_DURATION, timelinePopoverDisplayValues, type TimelineStepStatic } from '../timeline-core';
 import { clamp } from '../transition-math';
 import { findControl } from '../shortcut-utils';
 import { getDropdownPosition } from '../dropdown-position';
@@ -35,24 +35,29 @@ export function createDialTimelineRoot(initial: DialTimelineOptions = {}) {
   const dock = element('div', 'dialkit-timeline-dock');
   root.append(resize, dock);
   let height = 400;
+  const maxHeight = () => Math.max(120, window.innerHeight - 24);
   const size = () => {
     dock.style.maxHeight = `min(${height}px, calc(100vh - 24px))`;
+    resize.setAttribute('aria-valuemin', '120');
+    resize.setAttribute('aria-valuemax', String(maxHeight()));
+    resize.setAttribute('aria-valuenow', String(Math.round(Math.min(height, maxHeight()))));
   };
   size();
   const drag = pointerGesture();
   resize.addEventListener('pointerdown', event => {
     const start = dock.getBoundingClientRect().height;
     drag.start(event, next => {
-      height = clamp(start + event.clientY - next.clientY, 120, Math.max(120, window.innerHeight - 24));
+      height = clamp(start + event.clientY - next.clientY, 120, maxHeight());
       size();
     });
   });
   resize.addEventListener('keydown', event => {
-    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-      event.preventDefault();
-      height = clamp(height + (event.key === 'ArrowUp' ? 20 : -20), 120, Math.max(120, window.innerHeight - 24));
-      size();
-    }
+    const next = dockResizeKeyHeight(event.key, height, 120, maxHeight(), event.shiftKey);
+    if (next === undefined)
+      return;
+    event.preventDefault();
+    height = next;
+    size();
   });
   const sections = new Map<string, ReturnType<typeof mountSection>>();
   const visibilityId = Symbol('vanilla-timeline');
@@ -279,6 +284,7 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
     playhead.setAttribute('aria-valuemin', '0');
     playhead.setAttribute('aria-valuemax', String(meta.duration));
     playhead.setAttribute('aria-valuenow', String(state.time));
+    playhead.setAttribute('aria-valuetext', playheadValueText(state.time, meta.duration));
   }
   function scrub(event: PointerEvent, full = false) {
     const rect = (full ? overview : ruler).getBoundingClientRect();
@@ -319,14 +325,14 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
   ruler.addEventListener('pointerdown', event => scrub(event));
   playhead.addEventListener('pointerdown', event => scrub(event));
   overview.addEventListener('pointerdown', event => scrub(event, true));
-  playhead.addEventListener('keydown', event => {
-    const current = TimelineStore.getTransport(meta.id).time;
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? meta.duration : event.key === 'ArrowLeft' ? current - (event.shiftKey ? 0.1 : 0.001) : event.key === 'ArrowRight' ? current + (event.shiftKey ? 0.1 : 0.001) : undefined;
-    if (next !== undefined) {
-      event.preventDefault();
-      TimelineStore.seek(meta.id, next);
+  // Keep a keyboard-scrubbed playhead in view so it keeps focus when zoomed.
+  playhead.addEventListener('keydown', event => handlePlayheadKey(event, meta.id, next => {
+    if (zoom > 1 && (next < viewStart || next > viewStart + visibleDuration())) {
+      viewStart = next - visibleDuration() / 2;
+      render();
     }
-  });
+  }));
+  section.addEventListener('keydown', event => handleTimelineSpaceKey(event, meta.id));
   body.addEventListener('pointerdown', event => {
     if ((event.target as Element).closest('.dialkit-timeline-lane') && (!(event.target as Element).closest('.dialkit-timeline-clip') || event.shiftKey))
       scrub(event);
@@ -396,6 +402,16 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
         tick.append(element('span', 'dialkit-timeline-tick-label', `${Number((i * major / 10).toFixed(3))}s`));
       ruler.append(tick);
     }
+    // Rows are rebuilt on every change; keep focus on the control at the same place.
+    preserveTimelineFocus(grid, renderRows);
+    scrollRow.style.display = zoom > 1 ? '' : 'none';
+    spacer.style.width = `${width() * zoom}px`;
+    scroll.scrollLeft = viewStart * px;
+    transport();
+    presets.update(presetProps());
+    editor?.update();
+  }
+  function renderRows() {
     rowElements.forEach(r => r.remove());
     rowElements = [];
     const values = DialStore.getValues(meta.id);
@@ -435,12 +451,6 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
           bar(r.lane, trackMeta, stat.at + track.delay, track.duration, trackRef.stepKeys?.length ? track.steps : undefined, !trackRef.stepKeys?.length && track.steps[0]?.isPhysics === true, false, stat.at, true);
         }
     }
-    scrollRow.style.display = zoom > 1 ? '' : 'none';
-    spacer.style.width = `${width() * zoom}px`;
-    scroll.scrollLeft = viewStart * px;
-    transport();
-    presets.update(presetProps());
-    editor?.update();
   }
   function bar(lane: HTMLElement, clip: TimelineClipMeta, at: number, duration: number, steps: TimelineStepStatic[] | undefined, physics: boolean, composite = false, baseAt = 0, delayMode = false) {
     const px = scale();
@@ -452,9 +462,15 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
         lane.append(ghost);
       }
     const node = element('div', 'dialkit-timeline-clip');
-    node.tabIndex = 0;
-    node.setAttribute('role', 'button');
-    node.setAttribute('aria-label', `Edit ${clip.label}`);
+    const isSteps = Boolean(steps?.length) && !composite;
+    node.dataset.clip = clip.key;
+    if (!isSteps) {
+      node.tabIndex = 0;
+      node.setAttribute('role', 'button');
+      node.setAttribute('aria-label', clipAccessibleName(clip.label, at, duration));
+    }
+    if (composite)
+      node.setAttribute('aria-expanded', String(tracks.has(clip.key)));
     Object.assign(node.style, { left: `${(at - viewStart) * px}px`, width: `${Math.max(duration * px, 14)}px`, background: composite ? `${clip.color}80` : clip.color });
     if (steps?.length)
       node.dataset.steps = '';
@@ -473,6 +489,9 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
       for (const [index, step] of steps.entries()) {
         const segment = element('div', 'dialkit-timeline-clip-segment');
         segment.dataset.step = step.key ?? '';
+        segment.tabIndex = 0;
+        segment.setAttribute('role', 'button');
+        segment.setAttribute('aria-label', clipAccessibleName(`${clip.label} · ${formatStepLabel(step.key ?? '')}`, at + step.offset, step.duration));
         segment.style.width = `${step.duration * px}px`;
         if (step.duration * px > 52)
           segment.append(element('span', 'dialkit-timeline-clip-duration', formatSeconds(step.duration)));
@@ -497,8 +516,11 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
         edge('end');
     }
     lane.append(node);
-    if (clip.loop === 'repeat' && duration > 0)
-      lane.append(element('span', 'dialkit-timeline-loop-infinity', '∞'));
+    if (clip.loop === 'repeat' && duration > 0) {
+      const infinity = element('span', 'dialkit-timeline-loop-infinity', '∞');
+      infinity.setAttribute('aria-hidden', 'true');
+      lane.append(infinity);
+    }
     const edit = (target: HTMLElement) => {
       if (composite) {
         if (!tracks.delete(clip.key))
@@ -508,12 +530,7 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
       else
         openEditor(clip, target.closest<HTMLElement>('[data-step]') ?? node);
     };
-    node.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        edit(node);
-      }
-    });
+    node.addEventListener('keydown', event => handleTimelineClipKey(event, meta.id, { key: clip.key, label: clip.label, at, duration, timelineDuration: meta.duration, baseAt, delayMode, fixedDuration: physics || composite, steps }, edit));
     node.addEventListener('pointerdown', event => {
       if (event.shiftKey || event.button !== 0 || px <= 0)
         return;
@@ -522,6 +539,8 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
       const mode = boundary !== undefined ? 'boundary' : target.dataset.edge ?? 'move';
       const durations = steps?.map(s => s.duration);
       let moved = false;
+      // The gesture prevents the default focus change, so focus the bar (or leg) as a click would.
+      (target.closest<HTMLElement>('[data-step]') ?? node).focus({ preventScroll: true });
       gesture.start(event, next => {
         const dx = next.clientX - event.clientX;
         if (!moved && Math.abs(dx) <= 3)
@@ -605,20 +624,14 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
       if (!root.contains(event.target as Node) && !(event.target as Element).closest('.dialkit-timeline-clip'))
         closeEditor();
     };
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) {
-        event.preventDefault();
-        closeEditor();
-      }
-    };
     document.addEventListener('pointerdown', outside);
-    root.addEventListener('keydown', key);
-    close.focus({ preventScroll: true });
+    const stopFocus = observeClipPopover(popup, closeEditor);
     editor = {
       update() {
         root.dataset.theme = theme;
         renderer.update(rendererProps());
       }, destroy() {
+        stopFocus();
         observer.disconnect();
         window.removeEventListener('resize', position);
         document.removeEventListener('pointerdown', outside);

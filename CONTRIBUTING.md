@@ -12,7 +12,7 @@ Thanks for contributing.
 
 After `npm run build`, run `node scripts/build-toolbar-fixtures.mjs` and serve `.toolbar-fixtures` on port 3011 (for example, `python3 -m http.server 3011 --directory .toolbar-fixtures`). The fixtures cover panels and timelines in all five frameworks; append `?theme=dark` to inspect dark mode.
 
-With Playwright and Chrome installed, run `node scripts/test-toolbar-browser.mjs` to check version creation, selection, deletion, numbering, and keyboard focus. `DIALKIT_PLAYWRIGHT` can point to an existing Playwright installation, and `DIALKIT_FIXTURE_URL` overrides the server URL.
+With Playwright and Chrome installed, run `node scripts/test-toolbar-browser.mjs` to check version creation, selection, deletion, numbering, keyboard focus, and panel keyboard access (hotkey, Escape, and moving the panel). `node scripts/test-timeline-browser.mjs` checks the timeline's playhead, clip and editor keys against the same fixtures. `node scripts/test-vanilla-browser.mjs` runs the vanilla example end to end and needs no server. `DIALKIT_PLAYWRIGHT` can point to an existing Playwright installation, and `DIALKIT_FIXTURE_URL` overrides the server URL.
 
 For sticky headers, run `node scripts/build-control-fixtures.mjs` and open `/control-fixtures/react.html?multiple&scroll` in the example app (or use `solid`, `vue`, `svelte`, or `vanilla`). Open the panel, then scroll through both sections: the root header stays visible, each section's title and toolbar pin below it, and the next section pushes the previous one away. Ordinary property folders scroll normally. Append `&inline` to check an embedded panel in the page's scroll area.
 

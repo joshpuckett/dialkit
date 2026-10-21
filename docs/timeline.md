@@ -200,6 +200,19 @@ The toolbar includes play/pause, replay, presets, Copy, and collapse. When `Dial
 | Click a clip or segment | Edit values and transition |
 | Drag the dock's top edge | Resize its height |
 
+### Keyboard
+
+| Control | Keys |
+| --- | --- |
+| Timeline | Space plays or pauses when focus is in the dock but not on a button or field |
+| Playhead | Arrows move 0.05 s; Shift + Arrow moves 0.5 s; Alt/Option + Arrow moves 0.01 s; Home/End goes to the start/end. Playback pauses |
+| Clip or segment | Enter or Space edits it, or expands a property clip; Left/Right moves it 0.05 s (Shift: 0.5 s); Alt/Option + Left/Right changes its duration |
+| Property track | Left/Right changes its delay |
+| Clip editor | Opens with focus on its first control; Escape, Close, or tabbing past either end returns focus to the clip |
+| Dock's top edge | Up/Down resizes by 20 px; Shift + Up/Down by 100 px |
+
+Edits follow the same limits as dragging, and the new timing is announced to screen readers.
+
 ## Apply the result
 
 **Copy** exports an instruction containing the tuned timings, transitions, and values. It preserves the `current` bindings while the animation is being edited and includes a production handoff comment.

@@ -58,8 +58,11 @@ export function Folder({ title, children, open, defaultOpen = true, isRoot = fal
     return () => { ro.disconnect(); stopHeader(); };
   }, [isOpen]);
 
+  // An inline root panel is always open, so its header is not a control.
+  const toggleable = !(inline && isRoot);
+
   const handleToggle = () => {
-    if (inline && isRoot) return;
+    if (!toggleable) return;
     const next = !isOpen;
     setIsOpen(next);
     onOpenChange?.(next);
@@ -72,7 +75,7 @@ export function Folder({ title, children, open, defaultOpen = true, isRoot = fal
       data-open={String(isOpen)}
     >
       <div className={`dialkit-folder-header ${isRoot ? 'dialkit-panel-header' : ''}`} onClick={handleToggle}>
-        <div className="dialkit-folder-header-top" role={inline && isRoot ? undefined : "button"} tabIndex={inline && isRoot ? undefined : 0} aria-label={title} aria-expanded={isOpen} onKeyDown={(e) => activateOnKey(e, handleToggle)}>
+        <div className="dialkit-folder-header-top" role={toggleable ? "button" : undefined} tabIndex={toggleable ? 0 : undefined} aria-label={toggleable ? title : undefined} aria-expanded={toggleable ? isOpen : undefined} onKeyDown={(e) => activateOnKey(e, handleToggle)}>
           {isRoot ? (
             isOpen && (
               <div className="dialkit-folder-title-row">
@@ -133,14 +136,20 @@ export function Folder({ title, children, open, defaultOpen = true, isRoot = fal
         <div className="dialkit-folder-content">
           <div className="dialkit-folder-inner">{children}</div>
         </div>
+      ) : isRoot ? (
+        isOpen && (
+          <div className="dialkit-folder-content">
+            <div className="dialkit-folder-inner">{children}</div>
+          </div>
+        )
       ) : <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
             className="dialkit-folder-content"
-            initial={isRoot ? undefined : { height: 0 }}
-            animate={isRoot ? undefined : { height: 'auto' }}
-            exit={isRoot ? undefined : { height: 0 }}
-            transition={isRoot ? undefined : { type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            transition={{ type: 'spring', visualDuration: 0.35, bounce: 0.1 }}
           >
             <div className="dialkit-folder-inner">{children}</div>
           </motion.div>

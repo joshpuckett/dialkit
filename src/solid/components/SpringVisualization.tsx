@@ -95,7 +95,7 @@ export function SpringVisualization(props: SpringVisualizationProps) {
   }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz">
+    <svg viewBox={`0 0 ${width} ${height}`} class="dialkit-spring-viz" aria-hidden="true">
       {gridLines()}
       <line
         x1={0}

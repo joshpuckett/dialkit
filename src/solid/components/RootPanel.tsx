@@ -49,7 +49,7 @@ export function RootPanel(props: RootPanelProps) {
   const folderContent = () => (
     <div ref={folderRef} class="dialkit-folder dialkit-folder-root" data-open={String(isOpen())}>
       <div class="dialkit-folder-header dialkit-panel-header" onClick={handleToggle}>
-        <div class="dialkit-folder-header-top" role={inline ? undefined : "button"} tabIndex={inline ? undefined : 0} aria-label={props.title} aria-expanded={isOpen()} onKeyDown={(e) => activateOnKey(e, handleToggle)}>
+        <div class="dialkit-folder-header-top" role={inline ? undefined : "button"} tabIndex={inline ? undefined : 0} aria-label={inline ? undefined : props.title} aria-expanded={inline ? undefined : isOpen()} onKeyDown={(e) => activateOnKey(e, handleToggle)}>
           <Show when={isOpen()}>
             <div class="dialkit-folder-title-row">
               <span class="dialkit-folder-title dialkit-folder-title-root">

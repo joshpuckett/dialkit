@@ -26,6 +26,7 @@
   const chevronOpacity = new Spring(0.6, { stiffness: 0.2, damping: 0.6 });
 
   const activePreset = $derived(presets.find((p: Preset) => p.id === activePresetId));
+  const activeName = $derived(activePreset ? activePreset.name : 'Version 1');
 
   const updatePos = () => {
     if (!triggerRef || !portalTarget) return;
@@ -95,10 +96,10 @@
     data-open={String(isOpen)}
     data-has-preset={String(!!activePreset)}
     type="button" aria-haspopup="menu" aria-expanded={isOpen}
-    aria-label="Versions" onkeydown={(e) => openDropdownOnKey(e, openDropdown)}
+    aria-label={`Versions: ${activeName}`} onkeydown={(e) => openDropdownOnKey(e, openDropdown)}
   >
     <span class="dialkit-preset-label">
-      {activePreset ? activePreset.name : 'Version 1'}
+      {activeName}
     </span>
     <svg
       class="dialkit-select-chevron"
@@ -144,9 +145,9 @@
               <button
                 class="dialkit-preset-delete"
                 onclick={(e) => handleDelete(e, preset.id)}
-                type="button" title={`Delete ${preset.name}`}
+                type="button" title={`Delete ${preset.name}`} aria-label={`Delete ${preset.name}`}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d={ICON_TRASH[0]} />
                   <path d={ICON_TRASH[1]} />
                   <path d={ICON_TRASH[2]} />

@@ -11,6 +11,7 @@ export function ButtonGroup({ buttons }: ButtonGroupProps) {
       {buttons.map((button, index) => (
         <button
           key={index}
+          type="button"
           className="dialkit-button"
           onClick={button.onClick}
         >

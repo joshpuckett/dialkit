@@ -26,6 +26,7 @@ export function mountControlRenderer(host: HTMLElement, initial: ControlRenderer
   function build(controls: ControlMeta[], target: HTMLElement) {
     for (const control of controls) {
       const value = () => props.values[control.path];
+      const defaultValue = () => DialStore.getDefaultValue(props.panelId, control.path);
       const change = (v: DialValue) => DialStore.updateValue(props.panelId, control.path, v);
       const shortcut = () => ({ shortcut: control.shortcut, shortcutActive: active?.panelId === props.panelId && active?.path === control.path });
       function mount<P>(factory: (host: HTMLElement, props: P) => Mounted<P>, getProps: () => P) {
@@ -43,7 +44,7 @@ export function mountControlRenderer(host: HTMLElement, initial: ControlRenderer
           break;
         }
         case 'slider':
-          mount(mountSlider, () => ({ label: control.label, value: value() as number, min: control.min, max: control.max, step: control.step, onChange: change, ...shortcut() }));
+          mount(mountSlider, () => ({ label: control.label, value: value() as number, defaultValue: typeof defaultValue() === 'number' ? defaultValue() as number : undefined, min: control.min, max: control.max, step: control.step, onChange: change, ...shortcut() }));
           break;
         case 'toggle':
           mount(mountToggle, () => ({ label: control.label, checked: value() as boolean, onChange: change, ...shortcut() }));

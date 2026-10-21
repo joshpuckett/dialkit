@@ -167,8 +167,8 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     const uploadText = element('span', '', 'Upload image');
     upload.append(icon('upload'), uploadText);
     const status = element('div', 'dialkit-image-status');
+    // Kept in the accessibility tree while empty so its first message is announced.
     status.setAttribute('role', 'status');
-    status.hidden = true;
     upload.addEventListener('click', () => { if (!busy) fileInput.click(); });
     let buttons: HTMLButtonElement[] = [];
     let previousItems: NamedImage[] = [];
@@ -185,14 +185,13 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
       reader?.abort();
       reader = undefined;
       setBusy(false);
-      status.hidden = true;
+      status.textContent = '';
     };
     const acceptFile = (file: File) => {
       if (busy) return;
-      status.hidden = true;
+      status.textContent = '';
       if (!file.type.startsWith('image/') || file.size > MAX_FILE_SIZE) {
         status.textContent = file.size > MAX_FILE_SIZE ? 'Choose an image smaller than 10 MB.' : 'Choose an image file, such as PNG, JPG, WebP, GIF, or SVG.';
-        status.hidden = false;
         return;
       }
       const request = ++uploadRequest;
@@ -201,7 +200,6 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
         if (request !== uploadRequest) return;
         setBusy(false);
         status.textContent = 'This image could not be opened. Try another file.';
-        status.hidden = false;
       };
       reader = new FileReader();
       reader.addEventListener('error', fail);

@@ -9,7 +9,7 @@ export interface SpringVisualizationProps {
   isSimpleMode: boolean;
 }
 export function mountSpringVisualization(host: HTMLElement, initial: SpringVisualizationProps): Mounted<SpringVisualizationProps> {
-  const root = svg('svg', { viewBox: '0 0 256 140', class: 'dialkit-spring-viz', role: 'img', 'aria-label': 'Spring response curve' });
+  const root = svg('svg', { viewBox: '0 0 256 140', class: 'dialkit-spring-viz', 'aria-hidden': 'true' });
   for (let i = 1; i < 4; i++) {
     root.append(svg('line', { x1: i * 64, y1: 0, x2: i * 64, y2: 140, stroke: 'var(--dial-surface-active)' }), svg('line', { x1: 0, y1: i * 35, x2: 256, y2: i * 35, stroke: 'var(--dial-surface-active)' }));
   }
@@ -140,10 +140,9 @@ export function mountTransitionControl(host: HTMLElement, initial: TransitionCon
       updates.push(() => control.update(getProps()));
     }
     if (mode === 'easing') {
-      const row = element('div', 'dialkit-labeled-control');
+      const row = element('label', 'dialkit-labeled-control');
       row.append(element('span', 'dialkit-labeled-control-label', 'Ease'));
       const input = element('input', 'dialkit-text-input');
-      input.setAttribute('aria-label', 'Bézier coordinates');
       input.spellcheck = false;
       row.append(input);
       body.append(row);

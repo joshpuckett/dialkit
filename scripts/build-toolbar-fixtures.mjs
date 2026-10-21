@@ -34,6 +34,17 @@ for (const name of ["react", "solid", "vue", "vanilla"]) {
       );
   entries[name + "-timeline"] = source;
 }
+// Panel fixtures also take ?inline and ?multiple, and open with Control+Period.
+const query = "new URLSearchParams(location.search)";
+for (const name of ["react", "solid", "vue", "vanilla"]) {
+  const entry = name === "react" ? "dialkit" : `dialkit/${name}`;
+  entries[name] =
+    `import {DialStore as FixtureStore} from '${entry}';if(${query}.has('multiple'))FixtureStore.registerPanel('second','Second',{speed:[1,0,2]});` +
+    entries[name].replace(
+      "defaultOpen:true,",
+      `defaultOpen:true,hotkey:'ctrl+period',mode:${query}.has('inline')?'inline':'popover',`,
+    );
+}
 entries["svelte-timeline"] = entries.svelte.replace(
   "Fixture.svelte",
   "TimelineFixture.svelte",
@@ -44,7 +55,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(
   path.join(out, "Fixture.svelte"),
-  `<script>import {DialRoot,createDialKit} from 'dialkit/svelte';createDialKit('Fixture',${config});</script><DialRoot defaultOpen={true} theme={new URLSearchParams(location.search).get('theme') || 'light'} />`,
+  `<script>import {DialRoot,DialStore,createDialKit} from 'dialkit/svelte';createDialKit('Fixture',${config});if(${query}.has('multiple'))DialStore.registerPanel('second','Second',{speed:[1,0,2]});</script><DialRoot defaultOpen={true} hotkey="ctrl+period" mode={${query}.has('inline') ? 'inline' : 'popover'} theme={new URLSearchParams(location.search).get('theme') || 'light'} />`,
 );
 const sveltePlugin = {
   name: "svelte",

@@ -51,11 +51,10 @@ const EaseTextInput = defineComponent({
       }
     };
 
-    return () => h('div', { class: 'dialkit-labeled-control' }, [
+    return () => h('label', { class: 'dialkit-labeled-control' }, [
       h('span', { class: 'dialkit-labeled-control-label' }, 'Ease'),
       h('input', {
         type: 'text',
-        'aria-label': 'Bézier coordinates',
         class: 'dialkit-text-input',
         value: editing.value ? draft.value : formatEase(props.ease),
         spellcheck: false,

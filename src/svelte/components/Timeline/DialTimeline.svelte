@@ -2,6 +2,7 @@
   import {
     TimelineStore,
     TimelineUiStore,
+    dockResizeKeyHeight,
     isDevDefault,
   } from 'dialkit/timeline';
   import type { TimelineMeta } from 'dialkit/timeline';
@@ -98,17 +99,34 @@
     window.addEventListener('pointercancel', finish);
     resizeCleanup = finish;
   }
+
+  function resizeMax() {
+    return Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
+  }
+
+  function handleResizeKeyDown(event: KeyboardEvent) {
+    const next = dockResizeKeyHeight(event.key, dockMaxHeight, MIN_DOCK_MAX_HEIGHT, resizeMax(), event.shiftKey);
+    if (next === undefined) return;
+    event.preventDefault();
+    dockMaxHeight = next;
+  }
 </script>
 
 {#if productionEnabled && mounted && timelines.length > 0}
   <Portal target="body">
     <div class="dialkit-root dialkit-timeline" data-theme={theme} hidden={!dockVisible}>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (a focusable separator is a resize widget) -->
       <div
         class="dialkit-timeline-resize-handle"
         onpointerdown={handleResizePointerDown}
+        onkeydown={handleResizeKeyDown}
         role="separator"
+        tabindex="0"
         aria-label="Resize timeline height"
         aria-orientation="horizontal"
+        aria-valuemin={MIN_DOCK_MAX_HEIGHT}
+        aria-valuemax={resizeMax()}
+        aria-valuenow={Math.round(Math.min(dockMaxHeight, resizeMax()))}
         title="Drag to resize timeline"
       ></div>
       <div
