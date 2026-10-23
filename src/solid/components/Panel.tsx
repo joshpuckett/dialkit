@@ -1,7 +1,7 @@
 import { buildCopyInstruction } from '../../copy-instruction';
 import { batch, createSignal, createEffect, on, onMount, onCleanup, type JSX } from 'solid-js';
 import { animate } from 'motion';
-import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../../icons';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK, ICON_RESET } from '../../icons';
 import { DialStore } from '../../store/DialStore';
 import type { PanelConfig, DialValue } from '../../store/DialStore';
 import type { AnimationHandle } from '../primitives';
@@ -112,6 +112,16 @@ export function Panel(props: PanelProps) {
         presets={presets()}
         activePresetId={activePresetId()}
       />
+
+      <button
+        class="dialkit-toolbar-add"
+        onClick={() => DialStore.resetValues(props.panel.id)}
+        title="Reset current version" aria-label="Reset current version"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d={ICON_RESET} fill="currentColor" />
+        </svg>
+      </button>
 
       <button
         ref={copyButtonRef}

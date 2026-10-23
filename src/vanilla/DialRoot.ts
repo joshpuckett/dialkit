@@ -3,12 +3,12 @@ import { TimelineStore } from '../store/TimelineStore';
 import { TimelineUiStore } from '../store/TimelineUiStore';
 import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved, type PanelDragStart, type PanelDragOffset } from '../panel-drag';
 import { buildCopyInstruction } from '../copy-instruction';
-import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK, ICON_RESET } from '../icons';
 import { mountControlRenderer } from './ControlRenderer';
 import { mountFolder } from './controls';
 import { mountPresetManager } from './menus';
 import { mountShortcutListener } from './shortcuts';
-import { button, element, icon } from './dom';
+import { button, element, icon, svg } from './dom';
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
 export type DialTheme = 'light' | 'dark' | 'system';
@@ -27,6 +27,13 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
   let destroyed = false;
   const presetProps = () => ({ panelId: id, presets: DialStore.getPresets(id), activePresetId: DialStore.getActivePresetId(id) });
   const presets = mountPresetManager(host, presetProps());
+  const reset = element('button', 'dialkit-toolbar-add');
+  reset.title = 'Reset current version';
+  reset.setAttribute('aria-label', 'Reset current version');
+  const resetGlyph = svg('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' });
+  resetGlyph.append(svg('path', { d: ICON_RESET, fill: 'currentColor' }));
+  reset.append(resetGlyph);
+  reset.addEventListener('click', () => DialStore.resetValues(id));
   const copy = button('Copy parameters', [ICON_CLIPBOARD_PLAIN.board, ICON_CLIPBOARD_PLAIN.body], async () => {
     try {
       await navigator.clipboard.writeText(buildCopyInstruction(hookName, DialStore.getPanel(id)?.name ?? '', DialStore.getValues(id)));
@@ -41,7 +48,7 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
     timer = setTimeout(() => copy.replaceChildren(icon([ICON_CLIPBOARD_PLAIN.board, ICON_CLIPBOARD_PLAIN.body])), 1500);
   });
   copy.classList.add('dialkit-toolbar-primary');
-  host.append(copy);
+  host.append(reset, copy);
   const stop = DialStore.subscribe(id, () => presets.update(presetProps()));
   return {
     destroy() {
@@ -49,6 +56,7 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
       clearTimeout(timer);
       stop();
       presets.destroy();
+      reset.remove();
       copy.remove();
     }
   };

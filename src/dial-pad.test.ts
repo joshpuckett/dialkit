@@ -83,7 +83,7 @@ describe('DialPad', () => {
     assert.equal(padValueFromKey(value, 'Tab', false), undefined);
   });
 
-  it('updates both axes atomically, preserves presets, reconciles ranges, and resets defaults', () => {
+  it('updates both axes atomically, preserves presets, reconciles ranges, and resets the current version', () => {
     const id = 'pad-presets';
     const config = { position: { type: 'pad' } } satisfies DialConfig;
     try {
@@ -104,7 +104,7 @@ describe('DialPad', () => {
       DialStore.updateValue(id, 'position', { x: 90, y: 0.26 });
       assert.deepEqual(DialStore.getValue(id, 'position'), { x: 0.5, y: 0.3 });
       DialStore.resetValues(id);
-      assert.deepEqual(DialStore.getValue(id, 'position'), { x: 0.1, y: 0.2 });
+      assert.deepEqual(DialStore.getValue(id, 'position'), { x: 0.5, y: 0 });
       DialStore.updatePanel(id, 'Slider', { position: [0.5, 0, 1] });
       assert.equal(DialStore.getValue(id, 'position'), 0.5);
       DialStore.updatePanel(id, 'Pad again', config);

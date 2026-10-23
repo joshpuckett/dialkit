@@ -70,7 +70,7 @@ describe('DialStore config lifecycle', () => {
       DialStore.triggerAction(id, 'group.run');
       assert.deepEqual(actions, ['group.run']);
       DialStore.resetValues(id);
-      assert.equal(DialStore.getValue(id, 'amount'), 2);
+      assert.equal(DialStore.getValue(id, 'amount'), 4);
     } finally { unsubscribe(); DialStore.unregisterPanel(id); }
   });
 

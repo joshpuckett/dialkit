@@ -137,6 +137,8 @@ export type Preset = {
   id: string;
   name: string;
   values: Record<string, DialValue>;
+  /** Values captured when this version was created, independent of later edits. */
+  initialValues?: Record<string, DialValue>;
 };
 
 export type DialKitPersistOptions = boolean | {
@@ -552,10 +554,16 @@ class DialStoreClass {
     const defaults = this.defaultValues.get(panelId);
     if (!panel || !defaults) return;
 
-    panel.values = { ...defaults };
+    const activeId = this.activePreset.get(panelId);
+    const preset = this.presets.get(panelId)?.find(preset => preset.id === activeId);
+    const initialValues = preset?.initialValues ?? defaults;
+    panel.values = structuredClone(initialValues);
+    if (preset) {
+      preset.values = { ...panel.values };
+    } else {
+      this.baseValues.set(panelId, { ...panel.values });
+    }
     this.snapshots.set(panelId, { ...panel.values });
-    this.baseValues.set(panelId, { ...defaults });
-    this.activePreset.set(panelId, null);
     this.persistPanel(panelId);
     this.notify(panelId);
   }
@@ -667,6 +675,7 @@ class DialStoreClass {
       id,
       name,
       values: { ...panel.values },
+      initialValues: structuredClone(panel.values),
     };
 
     const existing = this.presets.get(panelId) ?? [];
@@ -825,6 +834,10 @@ class DialStoreClass {
     return presets.map((preset) => ({
       ...preset,
       values: this.reconcileValues(defaultValues, preset.values, controlsByPath),
+      // Older persisted versions have no creation snapshot; use their saved values.
+      initialValues: this.reconcileValues(
+        defaultValues, isRecord(preset.initialValues) ? preset.initialValues : preset.values, controlsByPath
+      ),
     }));
   }
 

@@ -28,7 +28,7 @@ describe('image controls', () => {
     } finally { DialStore.unregisterPanel(id); }
   });
 
-  it('preserves uploaded values through config changes and presets, then resets to the default', () => {
+  it('preserves uploaded values through config changes and presets, then resets to its initial version', () => {
     const id = 'image-presets';
     const config = { cover: { type: 'image', options: ['/coast.jpg', '/forest.jpg'] } } satisfies DialConfig;
     const uploaded = 'data:image/png;base64,uploaded';
@@ -46,7 +46,7 @@ describe('image controls', () => {
       DialStore.updatePanel(id, 'Images', config);
       assert.equal(DialStore.getValue(id, 'cover'), '');
       DialStore.resetValues(id);
-      assert.equal(DialStore.getValue(id, 'cover'), '/coast.jpg');
+      assert.equal(DialStore.getValue(id, 'cover'), uploaded);
     } finally { DialStore.unregisterPanel(id); }
   });
 
