@@ -1,6 +1,7 @@
 import { clamp, colorFormat, colorToRgb, fitGamut, formatColor, maxChroma, parseColor, type Color } from './color';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from './dropdown-position';
 import { handleSegmentKey } from './control-keyboard';
+import { eventWithin, getActiveElement, observeFocusOutside } from './shortcut-utils';
 
 export type ColorControlProps = { label: string; value: string; onChange: (value: string) => void };
 
@@ -41,7 +42,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   const render = () => {
     label.textContent = props.label;
     valueInput.setAttribute('aria-label', `${props.label} color value`);
-    if (document.activeElement !== valueInput) valueInput.value = props.value;
+    if (getActiveElement(valueInput) !== valueInput) valueInput.value = props.value;
     valueInput.title = props.value;
     swatch.style.setProperty('--dial-color', props.value);
     swatch.setAttribute('aria-label', `Pick ${props.label.toLowerCase()} color`);
@@ -87,7 +88,10 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     e.stopPropagation();
   });
 
+  let stopFocus: (() => void) | undefined;
   const close = (restoreFocus = false) => {
+    stopFocus?.();
+    stopFocus = undefined;
     stopPosition?.();
     stopPosition = undefined;
     cancelAnimationFrame(paintFrame);
@@ -97,14 +101,10 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     delete row.dataset.open;
     swatch.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside);
-    document.removeEventListener('focusin', focusOutside);
     if (restoreFocus) swatch.focus({ preventScroll: true });
   };
   const outside = (e: PointerEvent) => {
-    if (!popup?.contains(e.target as Node) && !row.contains(e.target as Node)) close();
-  };
-  const focusOutside = (e: FocusEvent) => {
-    if (!popup?.contains(e.target as Node) && !row.contains(e.target as Node)) close();
+    if (!eventWithin(e, popup, row)) close();
   };
 
   const open = () => {
@@ -227,7 +227,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
         button.dataset.active = String(active);
         if (active) formatPill.style.transform = `translateX(${i * 100}%)`;
       });
-      if (document.activeElement !== output) { output.value = props.value; output.removeAttribute('aria-invalid'); }
+      if (getActiveElement(output) !== output) { output.value = props.value; output.removeAttribute('aria-invalid'); }
       output.title = props.value;
       cancelAnimationFrame(paintFrame);
       paintFrame = requestAnimationFrame(paint);
@@ -260,7 +260,8 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
       if (e.key === 'Escape') { e.preventDefault(); close(true); }
       if (e.key === 'Tab') {
         const first = formatButtons.find(button => button.tabIndex === 0);
-        if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === output)) {
+        const active = getActiveElement(output);
+        if ((e.shiftKey && active === first) || (!e.shiftKey && active === output)) {
           swatch.focus({ preventScroll: true });
           close();
         }
@@ -281,7 +282,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     row.dataset.open = 'true';
     swatch.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', outside);
-    document.addEventListener('focusin', focusOutside);
+    stopFocus = observeFocusOutside([popup, row], close);
     formatButtons.find(button => button.getAttribute('aria-checked') === 'true')?.focus({ preventScroll: true });
   };
   swatch.addEventListener('click', open);

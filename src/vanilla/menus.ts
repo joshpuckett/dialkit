@@ -2,14 +2,14 @@ import { DialStore, type Preset } from '../store/DialStore';
 import { observeDropdownKeyboard } from '../dropdown-keyboard';
 import { openDropdownOnKey } from '../control-keyboard';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from '../dropdown-position';
-import { findControl, formatToggleShortcut } from '../shortcut-utils';
+import { eventWithin, findControl, formatToggleShortcut } from '../shortcut-utils';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../icons';
 import { element, icon, type Mounted } from './dom';
 export function popupMenu(trigger: HTMLButtonElement, className: string, kind: 'select' | 'presets' | 'help', populate: (popup: HTMLElement) => void) {
   let popup: HTMLDivElement | undefined;
   let stopKeyboard: (() => void) | undefined, stopPosition: (() => void) | undefined;
   const outside = (event: Event) => {
-    if (!trigger.contains(event.target as Node) && !popup?.contains(event.target as Node))
+    if (!eventWithin(event, trigger, popup))
       close();
   };
   function close() {

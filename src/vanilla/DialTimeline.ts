@@ -3,8 +3,8 @@ import { TimelineStore, type TimelineMeta, type TimelineClipMeta } from '../stor
 import { TimelineUiStore } from '../store/TimelineUiStore';
 import { clampClipMove, clampClipResizeEnd, clampClipResizeStart, clampStepResize, clampTrackDelay, computeClipStaticFromValues, formatSeconds, formatStepLabel, normalizeTimelineValuesForCopy, TIMELINE_MIN_CLIP_DURATION, timelinePopoverDisplayValues, type TimelineStepStatic } from '../timeline-core';
 import { clamp } from '../transition-math';
-import { findControl } from '../shortcut-utils';
-import { getDropdownPosition } from '../dropdown-position';
+import { eventWithin, findControl } from '../shortcut-utils';
+import { getDropdownPosition, showInTopLayer } from '../dropdown-position';
 import { buildCopyInstruction } from '../copy-instruction';
 import { ICON_CHEVRON, ICON_PLAY, ICON_PAUSE, ICON_REPLAY, ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { mountControlRenderer } from './ControlRenderer';
@@ -583,7 +583,12 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
     const content = element('div', 'dialkit-timeline-popover-body');
     popup.append(heading, content);
     root.append(popup);
-    document.body.append(root);
+    // Keep the owning tree's styles without inheriting the dock's lower stacking context.
+    const tree = target.getRootNode();
+    const container = tree instanceof ShadowRoot ? tree : target.ownerDocument.body;
+    container.append(root);
+    // A transformed host is the containing block for fixed descendants, so render in the top layer.
+    showInTopLayer(popup);
     const rendererProps = () => {
       const values = DialStore.getValues(meta.id);
       const durationMeta = getControl(`${path}.duration`);
@@ -602,7 +607,8 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
     window.addEventListener('resize', position);
     position();
     const outside = (event: PointerEvent) => {
-      if (!root.contains(event.target as Node) && !(event.target as Element).closest('.dialkit-timeline-clip'))
+      const origin = event.composedPath()[0];
+      if (!eventWithin(event, root) && !(origin instanceof Element && origin.closest('.dialkit-timeline-clip')))
         closeEditor();
     };
     const key = (event: KeyboardEvent) => {

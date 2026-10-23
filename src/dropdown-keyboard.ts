@@ -1,5 +1,6 @@
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from './dropdown-position';
 import { adjacentTabStop, optionKeyIndex } from './control-keyboard';
+import { getActiveElement, observeFocusOutside } from './shortcut-utils';
 
 let dropdownId = 0;
 
@@ -69,7 +70,7 @@ export function observeDropdownKeyboard(trigger: HTMLElement, getPopup: () => HT
         event.preventDefault(); event.stopPropagation(); restore(); close(); return;
       }
       const options = items();
-      const index = options.indexOf(document.activeElement as HTMLElement);
+      const index = options.indexOf(getActiveElement(popup) as HTMLElement);
       const next = optionKeyIndex(event.key, Math.max(0, index), options.length);
       if (next !== undefined) {
         event.preventDefault(); event.stopPropagation(); focusItem(next); return;
@@ -95,13 +96,11 @@ export function observeDropdownKeyboard(trigger: HTMLElement, getPopup: () => HT
       const target = (event.target as HTMLElement).closest(selector);
       if (target && !target.classList.contains('dialkit-preset-delete')) restore();
     };
-    const focusin = (event: FocusEvent) => {
-      const target = event.target as Node;
-      if (!leaving && !popup.contains(target) && !trigger.contains(target)) { leaving = true; close(); }
-    };
+    const stopFocus = observeFocusOutside([popup, trigger], () => {
+      if (!leaving) { leaving = true; close(); }
+    });
     popup.addEventListener('keydown', keydown);
     popup.addEventListener('click', click, true);
-    document.addEventListener('focusin', focusin);
 
     // Older preset/help portals live under body; inherit the owner's theme and position.
     let stopPosition: (() => void) | undefined;
@@ -124,13 +123,13 @@ export function observeDropdownKeyboard(trigger: HTMLElement, getPopup: () => HT
     focusItem(Math.max(0, selected));
     dispose = () => {
       leaving = true;
-      if (popup.contains(document.activeElement)) trigger.focus({ preventScroll: true });
+      if (popup.contains(getActiveElement(popup))) trigger.focus({ preventScroll: true });
       popup.inert = true;
       popup.setAttribute('aria-hidden', 'true');
       observer.disconnect(); stopPosition?.();
       popup.removeEventListener('keydown', keydown);
       popup.removeEventListener('click', click, true);
-      document.removeEventListener('focusin', focusin);
+      stopFocus();
       trigger.removeAttribute('aria-controls');
     };
   };

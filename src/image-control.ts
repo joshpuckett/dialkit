@@ -1,6 +1,7 @@
 import type { ImageOption } from './store/DialStore';
 import { adjacentTabStop } from './control-keyboard';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from './dropdown-position';
+import { eventWithin, getActiveElement, observeFocusOutside } from './shortcut-utils';
 
 export type ImageControlProps = {
   label: string;
@@ -121,7 +122,10 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     render();
     props.onChange(value);
   };
+  let stopFocus: (() => void) | undefined;
   const close = (restoreFocus = false) => {
+    stopFocus?.();
+    stopFocus = undefined;
     uploadRequest++;
     reader?.abort();
     reader = undefined;
@@ -136,14 +140,10 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     trigger.setAttribute('aria-expanded', 'false');
     trigger.removeAttribute('aria-controls');
     document.removeEventListener('pointerdown', outside);
-    document.removeEventListener('focusin', focusOutside);
     if (restoreFocus) trigger.focus({ preventScroll: true });
   };
   const outside = (event: PointerEvent) => {
-    if (!popup?.contains(event.target as Node) && !host.contains(event.target as Node)) close();
-  };
-  const focusOutside = (event: FocusEvent) => {
-    if (!popup?.contains(event.target as Node) && !host.contains(event.target as Node)) close();
+    if (!eventWithin(event, popup, trigger, fileInput)) close();
   };
 
   const open = () => {
@@ -246,7 +246,7 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     });
     grid.addEventListener('keydown', event => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const index = buttons.indexOf(getActiveElement(grid) as HTMLButtonElement);
       if (index < 0) return;
       const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
       const next = event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowLeft' ? index - 1
@@ -265,7 +265,8 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
       if (event.key === 'Escape') { event.preventDefault(); close(true); }
       if (event.key === 'Tab') {
         const first = clear.hidden ? buttons.find(button => button.tabIndex === 0) ?? upload : clear;
-        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === upload)) {
+        const active = getActiveElement(upload);
+        if ((event.shiftKey && active === first) || (!event.shiftKey && active === upload)) {
           const next = adjacentTabStop(trigger, event.shiftKey);
           close(true);
           if (next) { event.preventDefault(); next.focus(); }
@@ -281,7 +282,7 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
       empty.hidden = items.length > 0;
       grid.hidden = items.length === 0;
       if (items.length !== previousItems.length || items.some((item, i) => item.value !== previousItems[i].value || item.label !== previousItems[i].label)) {
-        const focusedIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const focusedIndex = buttons.indexOf(getActiveElement(grid) as HTMLButtonElement);
         previousItems = items;
         buttons = items.map(item => {
           const button = element('button', 'dialkit-image-option');
@@ -321,7 +322,7 @@ export function mountImageControl(host: HTMLElement, initial: ImageControlProps,
     trigger.setAttribute('aria-expanded', 'true');
     trigger.setAttribute('aria-controls', popupId);
     document.addEventListener('pointerdown', outside);
-    document.addEventListener('focusin', focusOutside);
+    stopFocus = observeFocusOutside([popup, trigger, fileInput], close);
     (buttons.find(button => button.tabIndex === 0) ?? upload).focus({ preventScroll: true });
   };
   trigger.addEventListener('click', open);

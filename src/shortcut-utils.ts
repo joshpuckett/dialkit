@@ -43,8 +43,51 @@ export function snapToDecile(rawValue: number, min: number, max: number): number
 
 // ── DOM helpers ──
 
-export function isInputFocused(): boolean {
-  const el = document.activeElement;
+/**
+ * Focused element as seen from `from`'s tree, following open shadow roots downward.
+ * Resolving from an owned element also works inside closed shadow roots; without an
+ * element the walk starts at `document`, so focus inside closed roots stays opaque.
+ */
+export function getActiveElement(from?: Element | null): Element | null {
+  const root = (from?.getRootNode() ?? document) as Document | ShadowRoot;
+  let active = root.activeElement ?? null;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+  return active;
+}
+
+/**
+ * True when the event started inside any of `nodes`, across open shadow boundaries. Listeners outside
+ * a closed shadow root cannot see its nodes in the composed path, so outside-click detection needs open roots.
+ */
+export function eventWithin(event: Event, ...nodes: Array<Node | null | undefined>): boolean {
+  const path = event.composedPath();
+  return nodes.some(node => node != null && path.includes(node));
+}
+
+/**
+ * Observe focus departures on every enclosing shadow root and the document. A listener on `document` alone
+ * misses focus moving between two elements inside one shadow tree: dispatch stops where the target and
+ * relatedTarget retarget to the same host, so the event never leaves that tree.
+ */
+export function observeFocusOutside(nodes: Element[], outside: () => void): () => void {
+  const roots = new Set<Document | ShadowRoot>();
+  for (const node of nodes) {
+    let root = node.getRootNode();
+    while (root instanceof ShadowRoot) {
+      roots.add(root);
+      root = root.host.getRootNode();
+    }
+    roots.add(node.ownerDocument);
+  }
+  const focusin = (event: Event) => {
+    if (!eventWithin(event, ...nodes)) outside();
+  };
+  roots.forEach(root => root.addEventListener('focusin', focusin));
+  return () => roots.forEach(root => root.removeEventListener('focusin', focusin));
+}
+
+export function isInputFocused(from?: Element | null): boolean {
+  const el = getActiveElement(from);
   if (!el) return false;
   const tag = el.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return true;

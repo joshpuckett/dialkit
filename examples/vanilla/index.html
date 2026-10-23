@@ -49,13 +49,17 @@
       if (action === 'actions.replay') timeline.replay();
       if (action === 'actions.reset') kit.resetValues();
     } });
-    const root = createDialRoot({ theme: params.get('theme') || 'dark', position: params.get('position') || 'top-right', mode: params.has('inline') ? 'inline' : 'popover', target: params.has('inline') ? document.querySelector('main') : undefined });
+    // ?shadow mounts the editor inside a shadow root under <main> (open by default, ?shadow=closed for a closed one).
+    const shadow = params.has('shadow') ? document.querySelector('main').appendChild(document.createElement('div')).attachShadow({ mode: params.get('shadow') === 'closed' ? 'closed' : 'open' }) : undefined;
+    if (shadow) shadow.append(Object.assign(document.createElement('link'), { rel: 'stylesheet', href: '../../dist/vanilla/styles.css' }), document.createElement('div'));
+    const target = shadow ? shadow.lastElementChild : document.querySelector('main');
+    const root = createDialRoot({ theme: params.get('theme') || 'dark', position: params.get('position') || 'top-right', mode: params.has('inline') ? 'inline' : 'popover', target: params.has('inline') || shadow ? target : undefined });
     const timeline = createDialTimeline('Card movement', {
       duration: 4,
       card: { move: { at: .5, duration: 2, from: { x: -80 }, to: { x: 80 }, transition: { type: 'easing', duration: 2, ease: [.25, .1, .25, 1] } },
         pulse: { at: 0, from: { opacity: .4 }, steps: [{ duration: 1, to: { opacity: 1 } }, { duration: 1, to: { opacity: .4 } }] } }
     }, { autoplay: false });
-    const dock = createDialTimelineRoot({ theme: params.get('theme') || 'dark' });
+    const dock = createDialTimelineRoot({ theme: params.get('theme') || 'dark', target: shadow ? target : undefined });
     function render() {
       const p = kit.values;
       Object.assign(document.getElementById('card').style, { borderRadius: p.radius + 'px', backgroundColor: p.accent, backgroundImage: p.cover ? 'url(' + JSON.stringify(p.cover) + ')' : '', transform: 'translate(' + (timeline.values.card.move.current.x + p.position.x * 40) + 'px,' + (-p.position.y * 40) + 'px) scale(' + p.scale + ')', visibility: p.visible ? 'visible' : 'hidden', opacity: timeline.values.card.pulse.current.opacity, textAlign: p.choice });
@@ -68,6 +72,7 @@
     document.getElementById('close').onclick = () => kit.setOpen(false);
     // Exposed for the browser integration fixture.
     window.demo = { kit, root, timeline, dock };
+    window.demoShadow = shadow;
     window.addEventListener('pagehide', () => { dock.destroy(); root.destroy(); timeline.destroy(); kit.destroy(); }, { once: true });
   </script>
 </body>

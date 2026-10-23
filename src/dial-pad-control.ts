@@ -1,4 +1,5 @@
 import { PAD_GRID_DIVISIONS, normalizePadValue, padGridIntersection, padValueFromKey, padValueFromPoint, resolvePadAxis, snapPadAxis, type DialPadConfig, type DialPadValue } from './dial-pad';
+import { getActiveElement } from './shortcut-utils';
 
 export type DialPadProps = Omit<DialPadConfig, 'type'> & {
   label: string;
@@ -109,7 +110,7 @@ export function mountDialPad(host: HTMLElement, initial: DialPadProps) {
       input.setAttribute('aria-valuemin', String(range.min));
       input.setAttribute('aria-valuemax', String(range.max));
       input.setAttribute('aria-valuenow', String(value[axis]));
-      if (document.activeElement !== input) input.value = String(value[axis]);
+      if (getActiveElement(input) !== input) input.value = String(value[axis]);
       const fraction = (value[axis] - range.min) / (range.max - range.min);
       point.style[axis === 'x' ? 'left' : 'top'] = `${(axis === 'x' ? fraction : 1 - fraction) * 100}%`;
     });
