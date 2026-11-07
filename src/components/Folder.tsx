@@ -1,4 +1,5 @@
 import { activateOnKey } from '../control-keyboard';
+import { COLLAPSED_PANEL_SIZE, PANEL_WIDTH } from '../panel-drag';
 import { createPanelSectionTransition, measurePanelHeight, observePanelHeader } from '../panel-size';
 import { useState, useRef, useEffect, useLayoutEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -159,8 +160,8 @@ export function Folder({ title, children, open, defaultOpen = true, isRoot = fal
     }
 
     const panelStyle = isOpen
-      ? { width: 280, height: contentHeight !== undefined ? Math.min(contentHeight + panelHeightOffset, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--dial-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
-      : { width: 42, height: 42, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden' as const, cursor: 'pointer' as const };
+      ? { width: PANEL_WIDTH, height: contentHeight !== undefined ? Math.min(contentHeight + panelHeightOffset, windowHeight - 32) : 'auto' as const, borderRadius: 14, boxShadow: 'var(--dial-shadow)', cursor: undefined as string | undefined, overflowY: 'auto' as const }
+      : { width: COLLAPSED_PANEL_SIZE, height: COLLAPSED_PANEL_SIZE, borderRadius: '50%', boxSizing: 'border-box' as const, boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden' as const, cursor: 'pointer' as const };
 
     return (
       <motion.div

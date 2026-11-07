@@ -82,7 +82,7 @@ export function useDialTimeline<T extends TimelineConfig>(
   useEffect(() => {
     TimelineStore.register(buildMetaRef.current(), { autoplay: optionsRef.current?.autoplay ?? true });
     return () => TimelineStore.unregister(panelId);
-  }, [panelId, name]);
+  }, [panelId]);
 
   const mountedRef = useRef(false);
   useEffect(() => {

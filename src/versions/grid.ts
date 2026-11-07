@@ -207,8 +207,10 @@ export function openVersionGrid(options: VersionGridOptions): VersionGridHandle 
     options.onClose?.();
   };
 
-  const choose = (key: string) => {
+  const choose = (requested: string) => {
     if (closing) return;
+    // A card can outlive its version when something else deletes it.
+    const key = versions.some((v) => v.key === requested) ? requested : activeKey;
     closing = true;
     overlay.dataset.closing = 'true';
     if (key !== activeKey) {
@@ -246,6 +248,7 @@ export function openVersionGrid(options: VersionGridOptions): VersionGridHandle 
   const onResize = () => {
     if (closing) return;
     animations.forEach((a) => a.cancel());
+    delete overlay.dataset.animating;
     render();
   };
 
@@ -290,10 +293,23 @@ export function openVersionGrid(options: VersionGridOptions): VersionGridHandle 
     update: (next, nextActive) => {
       versions = next;
       activeKey = nextActive;
-      // Only refresh thumbnails in place; re-rendering would reset motion.
+      for (const [key, card] of cards) {
+        if (versions.some((v) => v.key === key)) continue;
+        card.remove();
+        cards.delete(key);
+      }
+      // Only refresh cards in place; re-rendering would reset motion. A new version
+      // has nothing in motion to lose once the grid is at rest.
+      if (versions.some((v) => !cards.has(v.key)) && !closing) {
+        render();
+        return;
+      }
       for (const version of versions) {
-        const img = cards.get(version.key)?.querySelector('img');
+        const card = cards.get(version.key);
+        const img = card?.querySelector('img');
         if (img && version.thumbnail && img.src !== version.thumbnail.src) img.src = version.thumbnail.src;
+        const label = card?.querySelector('.dialkit-version-card-label');
+        if (label && label.textContent !== version.name) label.textContent = version.name;
       }
     },
   };

@@ -1,4 +1,5 @@
 import { activateOnKey } from '../../control-keyboard';
+import { COLLAPSED_PANEL_SIZE, PANEL_WIDTH } from '../../panel-drag';
 import { createPanelSectionTransition, measurePanelHeight, observePanelHeader } from '../../panel-size';
 import { computed, defineComponent, h, onMounted, onUnmounted, ref, watch, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
@@ -49,8 +50,13 @@ export const Folder = defineComponent({
       if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     });
 
-    const handleToggle = () => {
+    // The header and the collapsed panel both toggle, and Vue patches between
+    // listeners only sometimes: one click must count once either way.
+    let lastClick: Event | undefined;
+    const handleToggle = (event?: Event) => {
       if (props.inline && props.isRoot) return;
+      if (event && event === lastClick) return;
+      lastClick = event;
       const next = !isOpen.value;
       localOpen.value = next;
       emit('openChange', next);
@@ -175,7 +181,7 @@ export const Folder = defineComponent({
 
         const panelStyle = isOpen.value
           ? {
-            width: 280,
+            width: PANEL_WIDTH,
             height: contentHeight.value !== undefined ? Math.min(contentHeight.value + props.panelHeightOffset, windowHeight.value - 32) : 'auto',
             borderRadius: 14,
             boxShadow: 'var(--dial-shadow)',
@@ -183,9 +189,10 @@ export const Folder = defineComponent({
             overflowY: 'auto' as const,
           }
           : {
-            width: 42,
-            height: 42,
-            borderRadius: 21,
+            width: COLLAPSED_PANEL_SIZE,
+            height: COLLAPSED_PANEL_SIZE,
+            borderRadius: '50%',
+            boxSizing: 'border-box' as const,
             boxShadow: 'var(--dial-shadow-collapsed)',
             overflow: 'hidden',
             cursor: 'pointer',

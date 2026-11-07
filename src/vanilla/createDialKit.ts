@@ -7,6 +7,13 @@ export interface CreateDialOptions {
   onAction?: (action: string) => void;
   shortcuts?: Record<string, ShortcutConfig>;
 }
+/** Options `updateConfig` can change. A key set to undefined clears that option. */
+export interface DialKitUpdateOptions {
+  name?: string;
+  persist?: DialKitPersistOptions;
+  onAction?: (action: string) => void;
+  shortcuts?: Record<string, ShortcutConfig>;
+}
 export interface DialKitController<T extends DialConfig> {
   readonly id: string;
   readonly values: ResolvedValues<T>;
@@ -18,21 +25,27 @@ export interface DialKitController<T extends DialConfig> {
   getOpen(): boolean | undefined;
   /** Called immediately by default, then whenever the panel changes. */
   subscribe(listener: (values: ResolvedValues<T>) => void, immediate?: boolean): () => void;
-  updateConfig(config: T): void;
+  updateConfig(config: T, options?: DialKitUpdateOptions): void;
   /** Release this registration and all of its subscriptions. Safe to call twice. */
   destroy(): void;
 }
 let nextId = 0;
 /** A framework-free panel with explicit subscriptions and lifecycle. */
 export function createDialKit<T extends DialConfig>(name: string, config: T, options: CreateDialOptions = {}): DialKitController<T> {
-  const id = options.id ?? `vanilla-${name}-${++nextId}`;
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const id = options.id ?? `vanilla-${++nextId}`;
+  // 2.1's generated id, so data it saved for a panel without an id still loads.
+  const legacyId = `vanilla-${name}-${nextId}`;
+  let currentName = name;
   let currentConfig = config;
+  let settings = options;
   let destroyed = false;
   const subscriptions = new Set<() => void>();
-  const registration = { retainOnUnmount: options.id !== undefined, persist: options.persist, defaultCollapsed: options.defaultCollapsed };
+  // `persist` is always an explicit key, so removing the option removes persistence.
+  const registration = () => ({ retainOnUnmount: options.id !== undefined, legacyId, persist: settings.persist, defaultCollapsed: settings.defaultCollapsed });
   const getValues = () => resolveDialValues(currentConfig, DialStore.getValues(id));
-  DialStore.registerPanel(id, name, currentConfig, options.shortcuts, registration);
-  const stopActions = options.onAction ? DialStore.subscribeActions(id, options.onAction) : undefined;
+  DialStore.registerPanel(id, currentName, currentConfig, settings.shortcuts, registration());
+  const stopActions = DialStore.subscribeActions(id, action => settings.onAction?.(action));
   return {
     id,
     get values() {
@@ -72,18 +85,21 @@ export function createDialKit<T extends DialConfig>(name: string, config: T, opt
         listener(getValues());
       return unsubscribe;
     },
-    updateConfig(next) {
+    updateConfig(next, nextOptions = {}) {
       if (destroyed)
         return;
+      const { name: nextName, ...rest } = nextOptions;
+      currentName = nextName ?? currentName;
       currentConfig = next;
-      DialStore.updatePanel(id, name, currentConfig, options.shortcuts, registration);
+      settings = { ...settings, ...rest };
+      DialStore.updatePanel(id, currentName, currentConfig, settings.shortcuts, registration());
     },
     destroy() {
       if (destroyed)
         return;
       destroyed = true;
       subscriptions.forEach(stop => stop());
-      stopActions?.();
+      stopActions();
       DialStore.unregisterPanel(id);
     },
   };

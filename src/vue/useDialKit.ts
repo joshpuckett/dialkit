@@ -43,7 +43,10 @@ export function useDialKitController<T extends DialConfig>(
   options?: UseDialOptions
 ): DialKitController<T> {
   const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const panelId = options?.id ?? `dialkit-panel-${++dialKitInstance}`;
+  // 2.1's generated id, so data it saved for a panel without an id still loads.
+  const legacyId = `${name}-${dialKitInstance}`;
   const flatValues = shallowRef<Record<string, DialValue>>(DialStore.getValues(panelId));
   let mounted = false;
   const serializedConfig = computed(() => JSON.stringify(config));
@@ -56,6 +59,7 @@ export function useDialKitController<T extends DialConfig>(
   const register = () => {
     DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
       retainOnUnmount: hasStableId,
+      legacyId,
       persist: options?.persist,
       defaultCollapsed: options?.defaultCollapsed,
     });
@@ -74,6 +78,7 @@ export function useDialKitController<T extends DialConfig>(
     if (mounted) {
       DialStore.updatePanel(panelId, name, config, options?.shortcuts, {
         retainOnUnmount: hasStableId,
+        legacyId,
         persist: options?.persist,
         defaultCollapsed: options?.defaultCollapsed,
       });
@@ -84,6 +89,7 @@ export function useDialKitController<T extends DialConfig>(
   onMounted(() => { register(); mounted = true; });
 
   onUnmounted(() => {
+    if (!mounted) return;
     mounted = false;
     unsubscribeValues?.();
     unsubscribeActions?.();

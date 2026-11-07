@@ -18,7 +18,6 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   let props = initial;
   let color: Color = parseColor(props.value) ?? { l: 0, c: 0, h: 0, a: 1 };
   let format = colorFormat(props.value);
-  let lastEmitted: string | undefined;
   let popup: HTMLDivElement | undefined;
   let stopPosition: (() => void) | undefined;
   let paintFrame = 0;
@@ -52,7 +51,6 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     // Hex and P3 are bounded output spaces. Keep the handle on the emitted color.
     color = format === 'oklch' ? next : fitGamut(next, format === 'p3' ? 'p3' : 'srgb');
     const value = formatColor(color, format);
-    lastEmitted = value;
     props = { ...props, value };
     render();
     props.onChange(value);
@@ -68,7 +66,6 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
     color = parsed;
     format = colorFormat(input.value);
     const value = input.value.trim();
-    lastEmitted = value;
     props = { ...props, value };
     render();
     props.onChange(value);
@@ -83,7 +80,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   });
   valueInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') { if (acceptText(valueInput)) valueInput.blur(); }
-    if (e.key === 'Escape') { valueInput.value = props.value; valueInput.removeAttribute('aria-invalid'); valueInput.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); valueInput.value = props.value; valueInput.removeAttribute('aria-invalid'); valueInput.blur(); }
     e.stopPropagation();
   });
 
@@ -290,7 +287,7 @@ export function mountColorControl(host: HTMLElement, initial: ColorControlProps,
   return {
     update(next: ColorControlProps) {
       const parsed = parseColor(next.value);
-      if (parsed && next.value !== lastEmitted && next.value !== props.value) {
+      if (parsed && next.value !== props.value) {
         color = { ...parsed, h: parsed.c < 1e-7 ? color.h : parsed.h };
         format = colorFormat(next.value);
       }

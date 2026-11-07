@@ -4,6 +4,7 @@ import { Teleport, defineComponent, h, ref, watch, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../../icons';
 import { DialStore } from '../../store/DialStore';
+import { deleteVersion } from '../../versions/controller';
 import type { Preset } from '../../store/DialStore';
 
 export const PresetManager = defineComponent({
@@ -89,7 +90,7 @@ export const PresetManager = defineComponent({
 
     const handleDelete = (event: MouseEvent, presetId: string) => {
       event.stopPropagation();
-      DialStore.deletePreset(props.panelId, presetId);
+      deleteVersion(props.panelId, presetId);
     };
 
     const glyph = (path: string | null) => h('svg', { class: 'dialkit-preset-check', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'aria-hidden': 'true' }, path ? [h('path', { d: path })] : []);

@@ -1,10 +1,9 @@
 import { useContext } from 'react';
-import { DialStore, ControlMeta, DialValue, SpringConfig, TransitionConfig } from '../store/DialStore';
+import { DialStore, ControlMeta, DialValue, TransitionConfig } from '../store/DialStore';
 import { ShortcutContext } from './ShortcutListener';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
-import { SpringControl } from './SpringControl';
 import { TransitionControl } from './TransitionControl';
 import { TextControl } from './TextControl';
 import { SelectControl } from './SelectControl';
@@ -60,18 +59,6 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
             shortcut={control.shortcut}
             shortcutActive={shortcutCtx.activePanelId === panelId && shortcutCtx.activePath === control.path}
-          />
-        );
-
-      case 'spring':
-        return (
-          <SpringControl
-            key={control.path}
-            panelId={panelId}
-            path={control.path}
-            label={control.label}
-            spring={value as SpringConfig}
-            onChange={(v) => DialStore.updateValue(panelId, control.path, v)}
           />
         );
 

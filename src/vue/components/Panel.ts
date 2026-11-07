@@ -1,5 +1,5 @@
-import { buildCopyInstruction } from '../../copy-instruction';
-import { Fragment, computed, defineComponent, h, onMounted, onUnmounted, ref, type PropType, type VNodeChild } from 'vue';
+import { buildCopyInstruction, copyText } from '../../copy-instruction';
+import { Fragment, computed, defineComponent, h, onMounted, onUnmounted, ref, shallowRef, type PropType, type VNodeChild } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHECK, ICON_CLIPBOARD_PLAIN } from '../../icons';
 import { DialStore } from '../../store/DialStore';
@@ -38,7 +38,7 @@ export const Panel = defineComponent({
   },
   emits: ['openChange'],
   setup(props, { emit }) {
-    const values = ref<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
+    const values = shallowRef<Record<string, DialValue>>(DialStore.getValues(props.panel.id));
     const presets = ref(DialStore.getPresets(props.panel.id));
     const activePresetId = ref<string | null>(DialStore.getActivePresetId(props.panel.id));
     const copied = ref(false);
@@ -67,10 +67,7 @@ export const Panel = defineComponent({
     });
 
     const handleCopy = async () => {
-      const instruction = buildCopyInstruction('useDialKit', props.panel.name, values.value);
-
-      try { await navigator.clipboard.writeText(instruction); }
-      catch { return; }
+      if (!(await copyText(buildCopyInstruction('useDialKit', props.panel.name, values.value)))) return;
 
       copied.value = true;
       if (copiedTimeout) {

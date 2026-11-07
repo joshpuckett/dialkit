@@ -1,9 +1,9 @@
 export { createDialKit, createDialKitController } from './createDialKit';
-export type { CreateDialOptions, DialKitController } from './createDialKit';
+export type { CreateDialOptions, DialKitController, DialKitUpdateOptions } from './createDialKit';
 export { createDialRoot, DialRoot } from './DialRoot';
 export type { DialRootOptions, DialPosition, DialMode, DialTheme } from './DialRoot';
 export { createDialTimeline } from './createDialTimeline';
-export type { CreateDialTimelineOptions, DialTimelineController } from './createDialTimeline';
+export type { CreateDialTimelineOptions, DialTimelineController, DialTimelineUpdateOptions } from './createDialTimeline';
 export { mountControlRenderer, mountControlRenderer as ControlRenderer } from './ControlRenderer';
 export type { ControlRendererProps } from './ControlRenderer';
 export { mountSlider, mountSlider as Slider, mountToggle, mountToggle as Toggle, mountTextControl, mountTextControl as TextControl, mountFolder, mountFolder as Folder, mountButtonGroup, mountButtonGroup as ButtonGroup, mountSegmentedControl, mountSegmentedControl as SegmentedControl } from './controls';
@@ -30,4 +30,4 @@ export { TimelineStore } from '../store/TimelineStore';
 export type { TimelineMeta, TimelineClipMeta, TimelineClipTrackMeta, TimelineTransport } from '../store/TimelineStore';
 export type { TimelineClipConfig, TimelineClipCss, TimelineClipLoop, TimelineConfig, TimelineClipValues, TimelineGroupConfig, TimelineGroupValues, TimelinePropConfig, TimelinePropStepConfig, TimelineStepConfig, TimelineStepValues, DialTimelineValues } from '../timeline';
 export { createDialTimelineRoot, DialTimeline } from './DialTimeline';
-export type { DialTimelineOptions, DialTimelineProps } from './DialTimeline';
+export type { DialTimelineHandle, DialTimelineOptions, DialTimelineProps } from './DialTimeline';

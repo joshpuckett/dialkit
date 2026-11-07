@@ -8,6 +8,7 @@
     timelinePopoverDisplayValues,
   } from 'dialkit/timeline';
   import type { TimelineClipMeta } from 'dialkit/timeline';
+  import { isFloatingControlTarget, type AnchorRect } from '../../../dropdown-position';
   import { findControl } from '../../../shortcut-utils';
   import Portal from '../../Portal.svelte';
   import ControlRenderer from '../ControlRenderer.svelte';
@@ -18,23 +19,29 @@
   export type PopoverState = {
     clip: TimelineClipMeta;
     stepKey?: string;
-    anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number };
+    anchor: AnchorRect;
   };
 
-  let { panelId, popover, values, theme, onClose } = $props<{
+  let { panelId, popover, values, theme, onClose, onDismiss } = $props<{
     panelId: string;
     popover: PopoverState;
     values: Record<string, DialValue>;
     theme: DialTheme;
     onClose: () => void;
+    onDismiss: () => void;
   }>();
 
   let element = $state<HTMLDivElement>();
+  let closeButton = $state<HTMLButtonElement>();
   let naturalHeight = $state(0);
+  const measured = $derived(naturalHeight > 0);
   let viewport = $state(readViewport());
 
+  // The anchor moves on every scroll; these only change with the target.
+  const clip = $derived(popover.clip);
+  const stepKey = $derived(popover.stepKey);
+
   const presentation = $derived.by(() => {
-    const { clip, stepKey } = popover;
     let controls: ControlMeta[];
     let title: string;
     if (stepKey) {
@@ -99,10 +106,17 @@
     };
   });
 
+  // Focus moves in once it has a height: until then it's hidden, and can't take focus.
+  $effect(() => {
+    clip.key;
+    stepKey;
+    if (measured) closeButton?.focus({ preventScroll: true });
+  });
+
   $effect(() => {
     if (!element) return;
-    popover.clip.key;
-    popover.stepKey;
+    clip.key;
+    stepKey;
     const measure = () => {
       if (element) naturalHeight = element.scrollHeight + 2;
     };
@@ -117,23 +131,27 @@
     const updateViewport = () => { viewport = readViewport(); };
     const outside = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
-      if (element?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
+      if (element?.contains(target) || isFloatingControlTarget(target)) return;
+      // Let clip clicks handle their own toggle/switch
+      if (target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       onClose();
     };
+    // Svelte delegates its own keydown handlers to the document, so stopping one
+    // can't stop a listener there. The window hears the key after them.
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && !event.defaultPrevented) onDismiss();
     };
     window.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('scroll', updateViewport);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('keydown', keydown);
+    window.addEventListener('keydown', keydown);
     return () => {
       window.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('scroll', updateViewport);
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', keydown);
+      window.removeEventListener('keydown', keydown);
     };
   });
 
@@ -147,8 +165,8 @@
     };
   }
 
-  function clipPopoverExclusions(clip: TimelineClipMeta) {
-    return new Set([...(clip.stepKeys ?? []), ...(clip.tracks?.map((track) => track.prop) ?? [])]);
+  function clipPopoverExclusions(target: TimelineClipMeta) {
+    return new Set([...(target.stepKeys ?? []), ...(target.tracks?.map((track) => track.prop) ?? [])]);
   }
 
   function getClipControls(panel: string, path: string, exclusions?: Set<string>): ControlMeta[] {
@@ -184,7 +202,7 @@
       >
         <div class="dialkit-timeline-popover-header">
           <span class="dialkit-timeline-popover-title">{presentation.title}</span>
-          <button class="dialkit-timeline-popover-close" onclick={onClose} title="Close editor" aria-label="Close editor">
+          <button bind:this={closeButton} class="dialkit-timeline-popover-close" onclick={onDismiss} title="Close editor" aria-label="Close editor">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 6L18 18M18 6L6 18" />
             </svg>

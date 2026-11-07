@@ -1,11 +1,11 @@
-import { DialStore, type ControlMeta, type DialValue, type SpringConfig, type TransitionConfig } from '../store/DialStore';
+import { DialStore, type ControlMeta, type DialValue, type TransitionConfig } from '../store/DialStore';
 import { mountColorControl } from '../color-control';
 import { mountImageControl } from '../image-control';
 import { mountDialPad } from '../dial-pad-control';
 import type { DialPadValue } from '../dial-pad';
 import { mountFolder, mountSlider, mountTextControl, mountToggle } from './controls';
 import { mountSelectControl } from './menus';
-import { mountSpringControl, mountTransitionControl, type TransitionControlProps } from './transitions';
+import { mountTransitionControl, type TransitionControlProps } from './transitions';
 import { subscribeShortcut, type ActiveShortcut } from './shortcuts';
 import { element, type Mounted } from './dom';
 export interface ControlRendererProps {
@@ -62,9 +62,6 @@ export function mountControlRenderer(host: HTMLElement, initial: ControlRenderer
           break;
         case 'pad':
           mount(mountDialPad, () => ({ ...control.pad, label: control.label, value: value() as DialPadValue, onChange: change }));
-          break;
-        case 'spring':
-          mount(mountSpringControl, () => ({ panelId: props.panelId, path: control.path, label: control.label, spring: value() as SpringConfig, onChange: change }));
           break;
         case 'transition':
           mount(mountTransitionControl, () => ({ panelId: props.panelId, path: control.path, label: control.label, value: value() as TransitionConfig, durationControl: props.transitionDuration, onChange: change }));

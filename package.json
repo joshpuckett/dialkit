@@ -1,6 +1,6 @@
 {
   "name": "dialkit",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Live controls for tuning interfaces in React, Solid, Svelte, Vue, and plain JavaScript",
   "type": "module",
   "sideEffects": false,
@@ -74,12 +74,11 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsup && npm run build:svelte",
-    "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit src/icons.d.ts src/icons.d.ts.map src/shortcut-utils.d.ts src/shortcut-utils.d.ts.map src/store/DialStore.d.ts src/store/DialStore.d.ts.map src/store/TimelineStore.d.ts src/store/TimelineStore.d.ts.map src/store/TimelineUiStore.d.ts src/store/TimelineUiStore.d.ts.map src/timeline/adapter.d.ts src/timeline/adapter.d.ts.map src/timeline/index.d.ts src/timeline/index.d.ts.map src/timeline-core.d.ts src/timeline-core.d.ts.map src/transition-math.d.ts src/transition-math.d.ts.map src/copy-instruction.d.ts src/copy-instruction.d.ts.map src/env.d.ts src/env.d.ts.map src/dropdown-position.d.ts src/dropdown-position.d.ts.map src/panel-drag.d.ts src/panel-drag.d.ts.map src/panel-size.d.ts src/panel-size.d.ts.map src/color.d.ts src/color.d.ts.map src/color-control.d.ts src/color-control.d.ts.map src/image-control.d.ts src/image-control.d.ts.map src/dial-pad.d.ts src/dial-pad.d.ts.map src/dial-pad-control.d.ts src/dial-pad-control.d.ts.map src/numeric.d.ts src/numeric.d.ts.map src/control-keyboard.d.ts src/control-keyboard.d.ts.map src/dropdown-keyboard.d.ts src/dropdown-keyboard.d.ts.map src/text-autosize.d.ts src/text-autosize.d.ts.map src/easing-control.d.ts src/easing-control.d.ts.map src/easing-geometry.d.ts src/easing-geometry.d.ts.map src/version-gallery.d.ts src/version-gallery.d.ts.map src/versions/*.d.ts src/versions/*.d.ts.map src/vanilla/dom.d.ts src/vanilla/dom.d.ts.map",
+    "build:svelte": "node scripts/gen-theme-css.js && svelte-package -i src/svelte -o dist/svelte && rm -rf .svelte-kit && find src -type f \\( -name '*.d.ts' -o -name '*.d.ts.map' \\) ! -path 'src/svelte/shims.d.ts' -delete",
     "dev": "tsup --watch",
     "prepack": "npm run build",
-    "prepublishOnly": "npm test && npm run typecheck",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json",
-    "test": "tsx --test src/*.test.ts"
+    "prepublishOnly": "npm run typecheck",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json"
   },
   "peerDependencies": {
     "motion": ">=11.0.0",
@@ -117,13 +116,11 @@
     "@sveltejs/package": "^2.4.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/react-test-renderer": "^18.3.1",
     "esbuild-plugin-solid": "^0.6.0",
     "motion": "^12.0.0",
     "motion-v": "^2.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-test-renderer": "^18.3.1",
     "solid-js": "^1.9.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",

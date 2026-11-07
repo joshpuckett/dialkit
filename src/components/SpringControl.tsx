@@ -1,4 +1,4 @@
-import { SpringConfig, DialStore } from '../store/DialStore';
+import { SpringConfig, DialStore, isPhysicsSpring, SPRING_DEFAULTS } from '../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -31,8 +31,8 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
     simple: SpringConfig;
     advanced: SpringConfig;
   }>({
-    simple: spring.visualDuration !== undefined ? spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
-    advanced: spring.stiffness !== undefined ? spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+    simple: !isPhysicsSpring(spring) ? spring : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: isPhysicsSpring(spring) ? spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
   });
 
   if (isSimpleMode) {
@@ -42,8 +42,6 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
   }
 
   const handleModeChange = (newMode: 'simple' | 'advanced') => {
-    DialStore.updateSpringMode(panelId, path, newMode);
-
     if (newMode === 'simple') {
       onChange(cache.current.simple);
     } else {
@@ -84,7 +82,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
           <>
             <Slider
               label="Duration"
-              value={spring.visualDuration ?? 0.3}
+              value={spring.visualDuration ?? SPRING_DEFAULTS.visualDuration}
               onChange={(v) => handleUpdate('visualDuration', v)}
               min={0.1}
               max={1}
@@ -93,7 +91,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
             />
             <Slider
               label="Bounce"
-              value={spring.bounce ?? 0.2}
+              value={spring.bounce ?? SPRING_DEFAULTS.bounce}
               onChange={(v) => handleUpdate('bounce', v)}
               min={0}
               max={1}
@@ -104,7 +102,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
           <>
             <Slider
               label="Stiffness"
-              value={spring.stiffness ?? 400}
+              value={spring.stiffness ?? SPRING_DEFAULTS.stiffness}
               onChange={(v) => handleUpdate('stiffness', v)}
               min={1}
               max={1000}
@@ -112,7 +110,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
             />
             <Slider
               label="Damping"
-              value={spring.damping ?? 17}
+              value={spring.damping ?? SPRING_DEFAULTS.damping}
               onChange={(v) => handleUpdate('damping', v)}
               min={1}
               max={100}
@@ -120,7 +118,7 @@ export function SpringControl({ panelId, path, label, spring, onChange }: Spring
             />
             <Slider
               label="Mass"
-              value={spring.mass ?? 1}
+              value={spring.mass ?? SPRING_DEFAULTS.mass}
               onChange={(v) => handleUpdate('mass', v)}
               min={0.1}
               max={10}

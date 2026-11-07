@@ -1,4 +1,4 @@
-import { SpringConfig } from '../store/DialStore';
+import { SpringConfig, SPRING_DEFAULTS } from '../store/DialStore';
 import { springParams, springProgress } from '../transition-math';
 
 interface SpringVisualizationProps {
@@ -13,8 +13,8 @@ export function SpringVisualization({ spring, isSimpleMode }: SpringVisualizatio
   // Same param mapping and closed-form curve as timeline scrubbing, so the
   // preview shows exactly the physics that plays.
   const params = isSimpleMode
-    ? springParams({ type: 'spring', visualDuration: spring.visualDuration ?? 0.3, bounce: spring.bounce ?? 0.2 })
-    : springParams({ type: 'spring', stiffness: spring.stiffness ?? 400, damping: spring.damping ?? 17, mass: spring.mass ?? 1 });
+    ? springParams({ type: 'spring', visualDuration: spring.visualDuration, bounce: spring.bounce })
+    : springParams({ type: 'spring', stiffness: spring.stiffness ?? SPRING_DEFAULTS.stiffness, damping: spring.damping, mass: spring.mass });
 
   const duration = 2;
   const steps = 100;

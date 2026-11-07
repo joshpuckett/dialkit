@@ -2,6 +2,8 @@ import { activateOnKey, handleSegmentKey, handleSliderKey, labelSegmentedControl
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, formatToggleShortcut } from '../shortcut-utils';
 import { observeTextSize } from '../text-autosize';
 import { createPanelSectionTransition, observePanelHeader } from '../panel-size';
+import { COLLAPSED_PANEL_SIZE, PANEL_WIDTH } from '../panel-drag';
+import { startPointerGesture, type StopGesture } from '../pointer-gesture';
 import { ICON_CLOSE, ICON_CHEVRON, ICON_PANEL } from '../icons';
 import type { ShortcutConfig } from '../store/DialStore';
 import { element, icon, svg, type Mounted } from './dom';
@@ -83,8 +85,8 @@ export function mountFolder(host: HTMLElement, initial: FolderProps) {
       node.dataset.collapsed = String(!open);
       if (!props.inline)
         Object.assign(node.style, open
-          ? { width: '280px', height: 'auto', maxHeight: 'calc(100dvh - 32px)', borderRadius: '14px', boxShadow: 'var(--dial-shadow)', overflowX: 'hidden', overflowY: 'auto', cursor: '' }
-          : { width: '42px', height: '42px', maxHeight: '42px', borderRadius: '50%', boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden', cursor: 'pointer' });
+          ? { width: `${PANEL_WIDTH}px`, height: 'auto', maxHeight: 'calc(100dvh - 32px)', borderRadius: '14px', boxShadow: 'var(--dial-shadow)', overflowX: 'hidden', overflowY: 'auto', cursor: '' }
+          : { width: `${COLLAPSED_PANEL_SIZE}px`, height: `${COLLAPSED_PANEL_SIZE}px`, maxHeight: `${COLLAPSED_PANEL_SIZE}px`, borderRadius: '50%', boxShadow: 'var(--dial-shadow-collapsed)', overflow: 'hidden', cursor: 'pointer' });
     }
     else {
       glyph.style.transform = open ? 'rotate(180deg)' : '';
@@ -269,35 +271,91 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
   track.append(hashes, fill, handle, label, display, input);
   wrapper.append(track);
   host.append(wrapper);
-  let drag: {
-    id: number;
-    x: number;
-    y: number;
-    rect: DOMRect;
-    moved: boolean;
-  } | undefined;
   let editing = false, hovered = false, editable = false;
+  let interacting = false, dragging = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let hashSignature = '';
-  let clickAnimations: (Animation | undefined)[] = [];
-  const cancelClick = () => {
-    clickAnimations.forEach(animation => animation?.cancel());
-    clickAnimations = [];
-  };
+  let stopGesture: StopGesture | null = null;
+  let wrapperRect: DOMRect | null = null;
+  let scale = 1;
+  // What the fill shows, which leads the value during a drag and a click's spring.
+  let fillPercent = 0;
+  let fillSpring: Animation[] = [];
+  let springTarget: number | null = null;
+  let stretch = 0;
+  let stretchSpring: Animation | undefined;
   const range = () => ({ min: props.min ?? 0, max: props.max ?? 1, step: props.step ?? 0.01 });
   const formatted = () => {
     const { min, max, step } = range();
     return props.value.toFixed(decimalsForStep(step, min, max));
   };
+  const percentFromValue = (value: number) => {
+    const { min, max } = range();
+    return max > min ? Math.max(0, Math.min(100, (value - min) / (max - min) * 100)) : 0;
+  };
+  const handleLeft = (percent: number) => `max(5px, calc(${percent}% - 9px))`;
+  const setFill = (percent: number) => {
+    fillPercent = percent;
+    fill.style.width = `${percent}%`;
+    handle.style.left = handleLeft(percent);
+  };
+  const stopSpring = () => {
+    fillSpring.forEach(animation => animation.cancel());
+    fillSpring = [];
+  };
+  const springFillTo = (target: number) => {
+    // Pick up from wherever a running spring has got to.
+    const from = fillSpring.length ? fill.getBoundingClientRect().width / (track.getBoundingClientRect().width || 1) * 100 : fillPercent;
+    stopSpring();
+    setFill(target);
+    springTarget = target;
+    const spring = { stiffness: 300, damping: 25, mass: 0.8 };
+    const position = (progress: number) => from + (target - from) * progress;
+    const animations = [
+      animateSpring(fill, p => ({ width: `${position(p)}%` }), spring),
+      animateSpring(handle, p => ({ left: handleLeft(position(p)) }), spring),
+    ].filter((animation): animation is Animation => animation !== undefined);
+    fillSpring = animations;
+    animations[0]?.addEventListener('finish', () => {
+      fillSpring = [];
+    });
+  };
+  const stretchStyle = (px: number) => ({ width: `calc(100% + ${Math.abs(px)}px)`, transform: `translateX(${Math.min(0, px)}px)` });
+  const setStretch = (px: number) => {
+    stretchSpring?.cancel();
+    stretchSpring = undefined;
+    stretch = px;
+    Object.assign(track.style, px ? stretchStyle(px) : { width: '', transform: '' });
+  };
+  const rubberStretch = (clientX: number) => {
+    if (!wrapperRect)
+      return 0;
+    const sign = clientX < wrapperRect.left ? -1 : clientX > wrapperRect.right ? 1 : 0;
+    const past = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
+    return sign * 8 * Math.sqrt(Math.min(Math.max(0, past - 32) / 200, 1));
+  };
+  const positionToValue = (clientX: number) => {
+    const { min, max } = range();
+    if (!wrapperRect)
+      return props.value;
+    const percent = Math.max(0, Math.min(1, (clientX - wrapperRect.left) / scale / (wrapper.offsetWidth || 1)));
+    return min + percent * (max - min);
+  };
   function render() {
     const { min, max, step } = range();
-    const pct = max > min ? Math.max(0, Math.min(100, (props.value - min) / (max - min) * 100)) : 0;
-    fill.style.width = `${pct}%`;
-    handle.style.left = `max(5px, calc(${pct}% - 9px))`;
-    const active = hovered || !!drag;
+    const pct = percentFromValue(props.value);
+    // Sync from the value when not interacting. A click's spring keeps running only
+    // while the value is the one it is heading to; any other value takes over at once.
+    if (!interacting) {
+      if (!fillSpring.length || springTarget !== pct) {
+        stopSpring();
+        setFill(pct);
+      }
+    }
+    const active = hovered || interacting;
     const width = wrapper.offsetWidth;
     const dodge = width > 0 && (pct < (18 + label.offsetWidth) / width * 100 || pct > (width - 20 - display.offsetWidth) / width * 100);
-    handle.style.opacity = active ? String(dodge ? 0.1 : drag?.moved ? 0.9 : 0.5) : '0';
+    handle.style.opacity = active ? String(dodge ? 0.1 : dragging ? 0.9 : 0.5) : '0';
     handle.style.transform = `translateY(-50%) scale(${active ? 1 : 0.25}, ${active && dodge ? 0.75 : 1})`;
     handle.style.transition = 'opacity 150ms, transform 200ms';
     track.classList.toggle('dialkit-slider-active', active);
@@ -327,22 +385,7 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     render();
     props.onChange(value);
   };
-  const position = (x: number) => {
-    const { min, max } = range();
-    const rect = drag?.rect ?? wrapper.getBoundingClientRect();
-    return min + Math.max(0, Math.min(1, (x - rect.left) / (rect.width || 1))) * (max - min);
-  };
-  function endDrag() {
-    const id = drag?.id;
-    drag = undefined;
-    track.style.width = '';
-    track.style.transform = '';
-    if (id !== undefined && track.hasPointerCapture(id))
-      track.releasePointerCapture(id);
-    render();
-  }
   function edit() {
-    endDrag();
     editing = true;
     input.value = formatted();
     input.style.display = '';
@@ -355,8 +398,8 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
     if (!editing)
       return;
     editing = false;
-    const value = input.value.trim() ? Number(input.value) : NaN;
-    if (!cancel && Number.isFinite(value)) {
+    const value = parseFloat(input.value);
+    if (!cancel && !Number.isNaN(value)) {
       const { min, max, step } = range();
       commit(roundValue(Math.max(min, Math.min(max, value)), step, min, max));
     }
@@ -368,52 +411,68 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
   }
   track.addEventListener('keydown', event => {
     const { min, max, step } = range();
-    handleSliderKey(event, props.value, min, max, step, commit, edit);
+    handleSliderKey(event, props.value, min, max, step, next => {
+      stopSpring();
+      commit(next);
+    }, edit);
   });
   track.addEventListener('pointerdown', event => {
-    if (editing || event.button !== 0)
+    if (editing || stopGesture)
+      return;
+    const startValue = props.value;
+    const startX = event.clientX, startY = event.clientY;
+    let isClick = true;
+    stopGesture = startPointerGesture(event, track, {
+      move(next) {
+        if (isClick && Math.hypot(next.clientX - startX, next.clientY - startY) > 3) {
+          isClick = false;
+          dragging = true;
+        }
+        if (isClick)
+          return;
+        setStretch(rubberStretch(next.clientX));
+        const { min, max, step } = range();
+        const value = positionToValue(next.clientX);
+        stopSpring();
+        setFill(percentFromValue(value));
+        commit(roundValue(value, step, min, max));
+      },
+      end(cancelled, last) {
+        stopGesture = null;
+        if (cancelled) {
+          setStretch(0);
+          if (!isClick)
+            commit(startValue);
+        }
+        else {
+          if (isClick && last) {
+            const { min, max, step } = range();
+            const raw = positionToValue(last.clientX);
+            const snapped = (max - min) / step <= 10 ? Math.max(min, Math.min(max, min + Math.round((raw - min) / step) * step)) : snapToDecile(raw, min, max);
+            const committed = roundValue(snapped, step, min, max);
+            springFillTo(percentFromValue(committed));
+            commit(committed);
+          }
+          if (stretch !== 0) {
+            const from = stretch;
+            setStretch(0);
+            stretchSpring = animateSpring(track, p => stretchStyle(from * (1 - p)), { visualDuration: 0.35, bounce: 0.15 });
+          }
+        }
+        interacting = false;
+        dragging = false;
+        render();
+      },
+    });
+    if (!stopGesture)
       return;
     event.preventDefault();
-    cancelClick();
     track.focus({ preventScroll: true });
-    track.setPointerCapture(event.pointerId);
-    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, rect: wrapper.getBoundingClientRect(), moved: false };
+    interacting = true;
+    wrapperRect = wrapper.getBoundingClientRect();
+    scale = wrapperRect.width / (wrapper.offsetWidth || 1) || 1;
     render();
   });
-  track.addEventListener('pointermove', event => {
-    if (!drag || drag.id !== event.pointerId)
-      return;
-    drag.moved ||= Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 3;
-    if (!drag.moved)
-      return;
-    const { min, max, step } = range();
-    const overflow = event.clientX < drag.rect.left ? event.clientX - drag.rect.left : event.clientX > drag.rect.right ? event.clientX - drag.rect.right : 0;
-    const stretch = Math.sign(overflow) * 8 * Math.sqrt(Math.min(Math.max(0, Math.abs(overflow) - 32) / 200, 1));
-    track.style.width = `calc(100% + ${Math.abs(stretch)}px)`;
-    track.style.transform = `translateX(${Math.min(0, stretch)}px)`;
-    commit(roundValue(position(event.clientX), step, min, max));
-  });
-  track.addEventListener('pointerup', event => {
-    if (!drag || drag.id !== event.pointerId)
-      return;
-    if (!drag.moved) {
-      const { min, max, step } = range();
-      const raw = position(event.clientX);
-      const next = (max - min) / step <= 10 ? min + Math.round((raw - min) / step) * step : snapToDecile(raw, min, max);
-      const from = props.value;
-      commit(roundValue(next, step, min, max));
-      const startPct = (from - min) / (max - min) * 100;
-      const endPct = (props.value - min) / (max - min) * 100;
-      if (max > min)
-        clickAnimations = [
-          animateSpring(fill, p => ({ width: `${startPct + (endPct - startPct) * p}%` }), 0.25),
-          animateSpring(handle, p => ({ left: `max(5px, calc(${startPct + (endPct - startPct) * p}% - 9px))` }), 0.25),
-        ];
-    }
-    endDrag();
-  });
-  track.addEventListener('pointercancel', endDrag);
-  track.addEventListener('lostpointercapture', endDrag);
   track.addEventListener('mouseenter', () => {
     hovered = true;
     render();
@@ -460,8 +519,9 @@ export function mountSlider(host: HTMLElement, initial: SliderProps): Mounted<Sl
       render();
     }, destroy() {
       clearTimeout(timer);
-      cancelClick();
-      endDrag();
+      stopGesture?.(false);
+      stopSpring();
+      stretchSpring?.cancel();
       wrapper.remove();
     }
   };

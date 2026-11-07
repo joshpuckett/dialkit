@@ -6,9 +6,7 @@ export function buildCopyInstruction(
   panelName: string,
   values: Record<string, DialValue>
 ): string {
-  const jsonStr = JSON.stringify(Object.fromEntries(
-    Object.entries(values).filter(([path]) => !path.endsWith('.__mode'))
-  ), null, 2);
+  const jsonStr = JSON.stringify(values, null, 2);
 
   if (hookName === 'useDialTimeline' || hookName === 'createDialTimeline') {
     return `Update the ${hookName} configuration for "${panelName}" with these values:
@@ -35,4 +33,14 @@ ${jsonStr}
 \`\`\`
 
 Apply these values as the new defaults in the ${hookName} call.`;
+}
+
+/** False when the clipboard is unavailable or the write was refused. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }

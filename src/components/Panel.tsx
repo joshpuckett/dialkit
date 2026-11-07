@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, PanelConfig } from '../store/DialStore';
-import { buildCopyInstruction } from '../copy-instruction';
+import { buildCopyInstruction, copyText } from '../copy-instruction';
 import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { ControlRenderer } from './ControlRenderer';
 import { Folder } from './Folder';
@@ -54,8 +54,7 @@ export function Panel({ panel, defaultOpen = true, inline = false, onOpenChange,
 
 
   const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(buildCopyInstruction('useDialKit', panel.name, values)); }
-    catch { return; }
+    if (!(await copyText(buildCopyInstruction('useDialKit', panel.name, values)))) return;
     setCopied(true);
     clearTimeout(copyTimeout.current);
     copyTimeout.current = setTimeout(() => setCopied(false), 1500);

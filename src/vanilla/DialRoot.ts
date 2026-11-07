@@ -1,14 +1,15 @@
 import { DialStore, type PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
 import { TimelineUiStore } from '../store/TimelineUiStore';
-import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved, type PanelDragStart, type PanelDragOffset } from '../panel-drag';
-import { buildCopyInstruction } from '../copy-instruction';
-import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
+import { blockPanelDragClick, clampPanelOffset, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved, type PanelDragOffset } from '../panel-drag';
+import { startPointerGesture, type StopGesture } from '../pointer-gesture';
+import { buildCopyInstruction, copyText } from '../copy-instruction';
+import { ICON_CLIPBOARD_PLAIN, ICON_CHECK, ICON_TIMELINE } from '../icons';
 import { mountControlRenderer } from './ControlRenderer';
 import { mountFolder } from './controls';
 import { mountPresetManager } from './menus';
 import { mountShortcutListener } from './shortcuts';
-import { button, element, icon } from './dom';
+import { button, element, icon, svg } from './dom';
 import { mountVersionGallery, type DialVersions } from '../versions/gallery';
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -37,13 +38,7 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
     return gallery ? [glyph, element('span', '', copied ? 'Copied' : 'Copy parameters')] : [glyph];
   };
   const copy = button('Copy parameters', [ICON_CLIPBOARD_PLAIN.board, ICON_CLIPBOARD_PLAIN.body], async () => {
-    try {
-      await navigator.clipboard.writeText(buildCopyInstruction(hookName, DialStore.getPanel(id)?.name ?? '', DialStore.getValues(id)));
-    }
-    catch {
-      return;
-    }
-    if (destroyed)
+    if (!(await copyText(buildCopyInstruction(hookName, DialStore.getPanel(id)?.name ?? '', DialStore.getValues(id)))) || destroyed)
       return;
     copy.replaceChildren(...copyContent(true));
     clearTimeout(timer);
@@ -68,48 +63,98 @@ export function mountPanelToolbar(host: HTMLElement, id: string, hookName = 'cre
 }
 export function createDialRoot(options: DialRootOptions = {}) {
   const root = element('div', 'dialkit-root');
+  const inline = options.mode === 'inline';
+  root.dataset.mode = inline ? 'inline' : 'popover';
+  root.dataset.theme = options.theme ?? 'system';
+  // Off means off: nothing subscribes and nothing fires.
+  if (options.productionEnabled === false)
+    return { element: root, destroy() { root.remove(); } };
   const shell = element('div', 'dialkit-panel');
   root.append(shell);
-  const inline = options.mode === 'inline';
-  root.dataset.mode = shell.dataset.mode = inline ? 'inline' : 'popover';
-  root.dataset.theme = options.theme ?? 'system';
-  let position = options.position ?? 'top-right';
-  shell.dataset.position = position;
+  shell.dataset.mode = root.dataset.mode;
+  const position = options.position ?? 'top-right';
+  const defaultOpen = inline || (options.defaultOpen ?? true);
+  let activePosition = position;
   let offset: PanelDragOffset | null = null;
-  let drag: {
-    start: PanelDragStart;
-    handle: HTMLElement;
-    id: number;
-    moved: boolean;
-  } | undefined;
-  const origin = () => {
-    shell.dataset.originX = getPanelOriginX(position, offset);
-    shell.dataset.originY = getPanelOriginY(position, offset);
+  let lastDragOffset: PanelDragOffset | null = null;
+  let stopDrag: StopGesture | null = null;
+  const setOffset = (next: PanelDragOffset | null) => {
+    offset = next;
+    if (inline)
+      return;
+    if (offset) {
+      delete shell.dataset.position;
+      Object.assign(shell.style, { left: `${offset.x}px`, top: `${offset.y}px`, right: 'auto', bottom: 'auto' });
+    }
+    else {
+      shell.dataset.position = activePosition;
+      Object.assign(shell.style, { left: '', top: '', right: '', bottom: '' });
+    }
+    shell.dataset.originX = getPanelOriginX(activePosition, offset);
+    shell.dataset.originY = getPanelOriginY(activePosition, offset);
   };
-  origin();
-  let shellOpen = inline || (options.defaultOpen ?? true);
-  let lastOpen = shellOpen;
+  setOffset(null);
+  let panels: PanelConfig[] = [];
+  let timelineCount = 0;
+  let shellOpen = defaultOpen;
+  let wasOpen = shellOpen;
+  let reported: boolean | null = null;
+  let layout: { count: number; open: boolean } | null = null;
   let signature = '';
   let children: {
     destroy(): void;
   }[] = [];
   let shellFolder: ReturnType<typeof mountFolder> | undefined;
   let destroyed = false;
-  const notify = (open: boolean) => {
-    if (lastOpen !== open) {
-      lastOpen = open;
-      options.onOpenChange?.(open);
+  const isVisible = () => panels.length > 0 || timelineCount > 0;
+  // One home per layout: a lone panel is its own root, everything else is the shell.
+  const rootOpen = () => panels.length === 1 ? DialStore.getPanelOpen(panels[0].id) ?? defaultOpen : shellOpen;
+  // Runs before views mount, so a carried state beats a panel's own default.
+  function carryOpenAcrossLayouts() {
+    if (!isVisible() || !layout || layout.count === panels.length || layout.open === rootOpen())
+      return;
+    if (panels.length !== 1)
+      shellOpen = layout.open;
+    else if (layout.count > 1)
+      DialStore.setPanelOpen(panels[0].id, layout.open);
+    else if (DialStore.getPanelOpen(panels[0].id) === undefined)
+      DialStore.initPanelOpen(panels[0].id, layout.open);
+  }
+  function settleOpen() {
+    if (!isVisible())
+      return;
+    const open = rootOpen();
+    layout = { count: panels.length, open };
+    // Snap to a corner on open, and restore the dragged position on close.
+    if (wasOpen !== open && !inline) {
+      if (open) {
+        lastDragOffset = offset ?? lastDragOffset;
+        activePosition = offset ? getPanelCorner(position, offset) : position;
+        setOffset(null);
+      }
+      else if (offset)
+        lastDragOffset = offset;
+      else if (lastDragOffset)
+        setOffset(lastDragOffset);
     }
-  };
+    wasOpen = open;
+    const changed = reported !== null && reported !== open;
+    reported = open;
+    if (changed)
+      options.onOpenChange?.(open);
+  }
   function setShellOpen(open: boolean) {
     shellOpen = open;
     shellFolder?.update({ title: 'DialKit', open, isRoot: true, inline, onOpenChange: setShellOpen });
-    notify(open);
+    settleOpen();
   }
   function timelineToggle(host: HTMLElement) {
-    if (!TimelineStore.getTimelines().length)
+    if (!timelineCount)
       return;
-    const toggle = button('Toggle timeline', ['M3 5h18v14H3z', 'M7 9h10M7 13h6'], () => TimelineUiStore.toggle());
+    const toggle = button('Toggle timeline', [], () => TimelineUiStore.toggle());
+    const glyph = svg('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' });
+    ICON_TIMELINE.forEach(d => glyph.append(svg('path', { d, fill: 'currentColor' })));
+    toggle.replaceChildren(glyph);
     host.append(toggle);
     const sync = () => toggle.setAttribute('aria-pressed', String(TimelineUiStore.getVisible()));
     const stop = TimelineUiStore.subscribe(sync);
@@ -122,13 +167,9 @@ export function createDialRoot(options: DialRootOptions = {}) {
     });
   }
   function panelView(panel: PanelConfig, host: HTMLElement, isRoot: boolean) {
-    DialStore.initPanelOpen(panel.id, isRoot ? inline || (options.defaultOpen ?? true) : true);
+    DialStore.initPanelOpen(panel.id, isRoot ? defaultOpen : true);
     const folderProps = () => ({
-      title: DialStore.getPanel(panel.id)?.name ?? panel.name, open: DialStore.getPanelOpen(panel.id), isRoot, isSection: !isRoot, inline: isRoot && inline, onOpenChange: (open: boolean) => {
-        DialStore.setPanelOpen(panel.id, open);
-        if (isRoot)
-          notify(open);
-      }
+      title: DialStore.getPanel(panel.id)?.name ?? panel.name, open: DialStore.getPanelOpen(panel.id), isRoot, isSection: !isRoot, inline: isRoot && inline, onOpenChange: (open: boolean) => DialStore.setPanelOpen(panel.id, open)
     });
     const folder = mountFolder(host, folderProps());
     const toolbar = folder.toolbar;
@@ -142,6 +183,8 @@ export function createDialRoot(options: DialRootOptions = {}) {
     const update = () => {
       folder.update(folderProps());
       renderer.update(rendererProps());
+      if (isRoot)
+        settleOpen();
     };
     const stop = DialStore.subscribe(panel.id, update);
     children.push({
@@ -157,103 +200,94 @@ export function createDialRoot(options: DialRootOptions = {}) {
   function render() {
     if (destroyed)
       return;
-    const panels = DialStore.getPanels('panel');
-    const timelines = TimelineStore.getTimelines();
-    root.style.display = panels.length || timelines.length ? '' : 'none';
-    const next = JSON.stringify([panels.map(p => [p.id, p.name, p.controls]), timelines.length > 0]);
-    if (next === signature)
-      return;
-    signature = next;
-    children.forEach(child => child.destroy());
-    children = [];
-    shell.replaceChildren();
-    shellFolder = undefined;
-    if (!panels.length && !timelines.length)
-      return;
-    const wrapper = element('div', 'dialkit-panel-wrapper');
-    shell.append(wrapper);
-    shell.dataset.multiple = String(panels.length > 1);
-    if (panels.length === 1)
-      panelView(panels[0], wrapper, true);
-    else {
-      shellFolder = mountFolder(wrapper, { title: 'DialKit', open: shellOpen, isRoot: true, inline, onOpenChange: setShellOpen });
-      children.push(shellFolder);
-      timelineToggle(shellFolder.toolbar);
-      panels.forEach(panel => panelView(panel, shellFolder!.body, false));
-      if (!panels.length)
-        shellFolder.body.append(element('div', 'dialkit-timeline-toolkit-only', 'Timeline'));
+    panels = DialStore.getPanels('panel');
+    // Timeline panels render in the dock, so they only add a toggle while one is mounted.
+    timelineCount = TimelineUiStore.hasDock() ? TimelineStore.getTimelines().length : 0;
+    carryOpenAcrossLayouts();
+    root.style.display = isVisible() ? '' : 'none';
+    const next = JSON.stringify([panels.map(p => [p.id, p.name, p.controls]), timelineCount > 0]);
+    if (next !== signature) {
+      signature = next;
+      children.forEach(child => child.destroy());
+      children = [];
+      shell.replaceChildren();
+      shellFolder = undefined;
+      if (isVisible()) {
+        const wrapper = element('div', 'dialkit-panel-wrapper');
+        shell.append(wrapper);
+        shell.dataset.multiple = String(panels.length > 1);
+        if (panels.length === 1)
+          panelView(panels[0], wrapper, true);
+        else {
+          shellFolder = mountFolder(wrapper, { title: 'DialKit', open: shellOpen, isRoot: true, inline, onOpenChange: setShellOpen });
+          children.push(shellFolder);
+          timelineToggle(shellFolder.toolbar);
+          panels.forEach(panel => panelView(panel, shellFolder!.body, false));
+          if (!panels.length)
+            shellFolder.body.append(element('div', 'dialkit-timeline-toolkit-only', 'Timeline'));
+        }
+      }
     }
+    settleOpen();
   }
-  const endDrag = () => {
-    if (!drag)
-      return;
-    const current = drag;
-    drag = undefined;
-    releasePanelPointer(current.handle, current.id);
-    if (current.moved)
-      blockPanelDragClick(current.handle);
+  const onResize = () => {
+    if (offset)
+      setOffset(clampPanelOffset(offset, shell.getBoundingClientRect().width));
+    if (lastDragOffset)
+      lastDragOffset = clampPanelOffset(lastDragOffset);
   };
   if (!inline) {
     shell.addEventListener('pointerdown', event => {
-      if (event.button !== 0)
-        return;
       const handle = getPanelDragHandle(event.target, shell);
-      if (!handle)
+      if (!handle || stopDrag)
         return;
-      event.preventDefault();
-      drag = { start: getPanelDragStart(event.clientX, event.clientY, shell), handle, id: event.pointerId, moved: false };
-      capturePanelPointer(handle, event.pointerId);
+      const start = getPanelDragStart(event.clientX, event.clientY, shell);
+      const startOffset = offset;
+      let moved = false;
+      stopDrag = startPointerGesture(event, handle, {
+        move(next) {
+          if (!moved && !hasPanelDragMoved(start, next.clientX, next.clientY))
+            return;
+          moved = true;
+          setOffset(getPanelDragOffset(start, next.clientX, next.clientY));
+        },
+        end(cancelled) {
+          stopDrag = null;
+          if (!moved)
+            return;
+          if (cancelled)
+            setOffset(startOffset);
+          // A drag must not also count as a click that toggles the panel.
+          else
+            blockPanelDragClick(handle);
+        },
+      });
     });
-    shell.addEventListener('pointermove', event => {
-      if (!drag || drag.id !== event.pointerId || (!drag.moved && !hasPanelDragMoved(drag.start, event.clientX, event.clientY)))
-        return;
-      drag.moved = true;
-      offset = getPanelDragOffset(drag.start, event.clientX, event.clientY);
-      delete shell.dataset.position;
-      Object.assign(shell.style, { left: `${offset.x}px`, top: `${offset.y}px`, right: 'auto', bottom: 'auto' });
-      origin();
-    });
-    shell.addEventListener('pointerup', endDrag);
-    shell.addEventListener('pointercancel', endDrag);
-    shell.addEventListener('lostpointercapture', endDrag);
+    window.addEventListener('resize', onResize);
   }
-  if (options.productionEnabled !== false)
-    (options.target ?? document.body).append(root);
-  const shortcuts = options.productionEnabled !== false ? mountShortcutListener() : undefined;
-  const stopGlobal = options.productionEnabled !== false ? DialStore.subscribeGlobal(render) : () => {
-  };
-  const stopTimelines = options.productionEnabled !== false ? TimelineStore.subscribeGlobal(render) : () => {
-  };
+  (options.target ?? document.body).append(root);
+  const shortcuts = mountShortcutListener();
+  const stopGlobal = DialStore.subscribeGlobal(render);
+  const stopTimelines = TimelineStore.subscribeGlobal(render);
+  const stopDock = TimelineUiStore.subscribe(render);
+  // Requests to open a panel also reveal the shell it sits in.
   const stopOpen = DialStore.subscribePanelOpen((id, open) => {
-    if (destroyed)
-      return;
-    const panels = DialStore.getPanels('panel');
-    if (!panels.some(p => p.id === id))
-      return;
-    if (panels.length > 1 && open)
+    if (open && panels.length > 1 && panels.some(p => p.id === id))
       setShellOpen(true);
-    else if (panels.length === 1)
-      notify(open);
-    if (!open && !inline && offset) {
-      position = getPanelCorner(position, offset);
-      offset = null;
-      shell.style.cssText = '';
-      shell.dataset.position = position;
-      origin();
-    }
   });
-  if (options.productionEnabled !== false)
-    render();
+  render();
   return {
     element: root, destroy() {
       if (destroyed)
         return;
       destroyed = true;
-      endDrag();
+      stopDrag?.(false);
+      window.removeEventListener('resize', onResize);
       stopGlobal();
       stopTimelines();
+      stopDock();
       stopOpen();
-      shortcuts?.destroy();
+      shortcuts.destroy();
       children.forEach(child => child.destroy());
       root.remove();
     }

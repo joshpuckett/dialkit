@@ -12,7 +12,8 @@ const externalPackageStorePlugin = {
 };
 
 export default defineConfig([
-  // Store build (shared across all framework entries)
+  // Store build. Framework entries bundle their own copy of the store code, and
+  // pageSingleton (store/shared.ts) makes every copy use the same instance.
   {
     entry: { index: 'src/store/DialStore.ts' },
     outDir: 'dist/store',
@@ -50,6 +51,7 @@ export default defineConfig([
       'dropdown-keyboard': 'src/dropdown-keyboard.ts',
       'text-autosize': 'src/text-autosize.ts',
       'shortcut-utils': 'src/shortcut-utils.ts',
+      'pointer-gesture': 'src/pointer-gesture.ts',
       'version-gallery': 'src/version-gallery.ts',
     },
     format: ['esm'],

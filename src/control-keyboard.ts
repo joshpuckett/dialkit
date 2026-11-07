@@ -1,4 +1,4 @@
-type KeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'metaKey' | 'ctrlKey' | 'target' | 'currentTarget' | 'preventDefault' | 'stopPropagation'>;
+export type KeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'metaKey' | 'ctrlKey' | 'target' | 'currentTarget' | 'preventDefault' | 'stopPropagation'>;
 
 /** Keyboard steps are relative to the range minimum, including fractional ranges. */
 export function sliderKeyValue(key: string, value: number, min: number, max: number, step: number, shift = false): number | undefined {

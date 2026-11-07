@@ -60,13 +60,14 @@ try {
   await page.getByRole('button', { name: 'Replay', exact: true }).click();
   assert.equal(await page.getByRole('status', { name: 'Last action' }).textContent(), 'actions.replay');
   await page.evaluate(() => window.demo.timeline.pause());
-  // Presets keep their edits while the base version remains independent.
+  // Edits made before saving go with the new version, and the version they
+  // were made on keeps what it held. After that, each version keeps its own.
   await page.getByRole('button', { name: 'Versions', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'New version', exact: true }).click();
   await page.evaluate(() => window.demo.kit.setValue('radius', 50));
   await page.getByRole('button', { name: 'Versions', exact: true }).first().click();
   await page.getByRole('menuitemradio', { name: 'V1', exact: true }).click();
-  assert.equal((await values()).radius, 42);
+  assert.equal((await values()).radius, 24);
   await page.getByRole('button', { name: 'Versions', exact: true }).first().click();
   await page.getByRole('menuitemradio', { name: 'V2', exact: true }).click();
   assert.equal((await values()).radius, 50);
@@ -129,8 +130,9 @@ try {
   assert.ok(await page.locator('.dialkit-timeline-clip-ghost').count() > 0);
   await page.evaluate(() => window.trackTimeline.destroy());
   // Zoom and reset work without changing the timeline values.
+  // Start beside the playhead: as in every adapter, a press on its flag scrubs.
   await page.keyboard.down('Alt');
-  await page.mouse.move(ruler.x + ruler.width / 2, ruler.y + ruler.height / 2); await page.mouse.down(); await page.mouse.move(ruler.x + ruler.width / 2 + 100, ruler.y + ruler.height / 2, { steps: 5 }); await page.mouse.up();
+  await page.mouse.move(ruler.x + ruler.width * 0.75, ruler.y + ruler.height / 2); await page.mouse.down(); await page.mouse.move(ruler.x + ruler.width * 0.75 + 100, ruler.y + ruler.height / 2, { steps: 5 }); await page.mouse.up();
   await page.keyboard.up('Alt');
   assert.equal(await page.locator('.dialkit-timeline-horizontal-scroll').isVisible(), true);
   await page.keyboard.down('Shift'); await page.mouse.click(ruler.x + ruler.width / 2, ruler.y + ruler.height / 2); await page.keyboard.up('Shift');

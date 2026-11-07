@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { DialStore, Preset } from '../store/DialStore';
+import { deleteVersion } from '../versions/controller';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../icons';
 
 interface PresetManagerProps {
@@ -65,7 +66,7 @@ export function PresetManager({ panelId, presets, activePresetId, onAdd }: Prese
 
   const handleDelete = (e: React.MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.deletePreset(panelId, presetId);
+    deleteVersion(panelId, presetId);
   };
 
   return (

@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { DialStore, flattenDialValueUpdates, isLeafConfigValue, resolveDialValues } from 'dialkit/store';
 import type {
   DialConfig,
@@ -44,36 +45,59 @@ export function createDialKitController<T extends DialConfig>(
   options?: CreateDialOptions
 ): DialKitController<T> {
   const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${++dialKitInstance}`;
-  const resolve = () => resolveDialValues(config, DialStore.getValues(panelId));
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const panelId = options?.id ?? `dialkit-${++dialKitInstance}`;
+  // 2.1's generated id, so data it saved for a panel without an id still loads.
+  const legacyId = `${name}-${dialKitInstance}`;
+  // Listeners can run inside someone else's effect, which must not pick up these reads.
+  const resolve = () => untrack(() => resolveDialValues(config, DialStore.getValues(panelId)));
+  const panelOptions = () => ({
+    retainOnUnmount: hasStableId,
+    legacyId,
+    persist: options?.persist,
+    defaultCollapsed: options?.defaultCollapsed,
+  });
 
   let values = $state<ResolvedValues<T>>(resolve());
 
+  const serializedConfig = $derived(JSON.stringify(config));
+  const serializedShortcuts = $derived(JSON.stringify(options?.shortcuts));
+  const serializedPersist = $derived(JSON.stringify(options?.persist));
+
   $effect(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
-      retainOnUnmount: hasStableId,
-      persist: options?.persist,
-      defaultCollapsed: options?.defaultCollapsed,
-    });
+    untrack(() => DialStore.registerPanel(panelId, name, config, options?.shortcuts, panelOptions()));
     values = resolve();
 
     const unsubValues = DialStore.subscribe(panelId, () => {
       values = resolve();
     });
-
-    const unsubActions = options?.onAction
-      ? DialStore.subscribeActions(panelId, options.onAction)
-      : undefined;
+    const unsubActions = DialStore.subscribeActions(panelId, (action) => {
+      options?.onAction?.(action);
+    });
 
     return () => {
       unsubValues();
-      unsubActions?.();
+      unsubActions();
       DialStore.unregisterPanel(panelId);
     };
   });
 
+  // Push changes without re-registering. The first run only records the
+  // dependencies: the effect above has just registered this same state.
+  let registered = false;
+  $effect(() => {
+    void serializedConfig;
+    void serializedShortcuts;
+    void serializedPersist;
+    if (!registered) {
+      registered = true;
+      return;
+    }
+    untrack(() => DialStore.updatePanel(panelId, name, config, options?.shortcuts, panelOptions()));
+  });
+
   return {
-    values: buildReactiveValues(config, () => values, '') as DialKitValues<ResolvedValues<T>>,
+    values: reactiveValues(config, () => values) as DialKitValues<ResolvedValues<T>>,
     setOpen(open) { DialStore.setPanelOpen(panelId, open); },
     getOpen() { return DialStore.getPanelOpen(panelId); },
     setValue(path, value) {
@@ -91,38 +115,36 @@ export function createDialKitController<T extends DialConfig>(
   };
 }
 
-function buildReactiveValues<T extends DialConfig>(
-  config: T,
-  getValues: () => ResolvedValues<T>,
-  prefix: string
-): DialKitValues<ResolvedValues<T>> {
-  const result: Record<string, unknown> = {};
+/** A stable object over the latest values. Reads follow the config's current
+ * shape, so a control added after creation shows up on it too. */
+function reactiveValues(config: DialConfig, getValues: () => unknown, prefix = ''): unknown {
+  const folders = new Map<string, unknown>();
+  const current = (): object => {
+    const value = prefix ? getPathValue(getValues(), prefix) : getValues();
+    return typeof value === 'object' && value !== null ? value : {};
+  };
 
-  for (const [key, configValue] of Object.entries(config)) {
-    if (key === '_collapsed') continue;
-    const path = prefix ? `${prefix}.${key}` : key;
-
-    if (typeof configValue === 'object' && configValue !== null && !isLeafConfigValue(configValue)) {
-      const nested = buildReactiveValues(configValue as DialConfig, getValues, path);
-
-      Object.defineProperty(result, key, {
-        enumerable: true,
-        get() {
-          return nested;
-        },
-      });
-      continue;
-    }
-
-    Object.defineProperty(result, key, {
-      enumerable: true,
-      get() {
-        return getPathValue(getValues(), path);
-      },
-    });
-  }
-
-  return result as DialKitValues<ResolvedValues<T>>;
+  return new Proxy({}, {
+    get(_target, key) {
+      if (typeof key !== 'string') return undefined;
+      const path = prefix ? `${prefix}.${key}` : key;
+      const configValue = getPathValue(config, path);
+      if (typeof configValue === 'object' && configValue !== null && !isLeafConfigValue(configValue)) {
+        if (!folders.has(key)) folders.set(key, reactiveValues(config, getValues, path));
+        return folders.get(key);
+      }
+      return getPathValue(getValues(), path);
+    },
+    has(_target, key) {
+      return typeof key === 'string' && key in current();
+    },
+    ownKeys() {
+      return Reflect.ownKeys(current());
+    },
+    getOwnPropertyDescriptor(_target, key) {
+      return typeof key === 'string' && key in current() ? { enumerable: true, configurable: true } : undefined;
+    },
+  });
 }
 
 function getPathValue(source: unknown, path: string): unknown {

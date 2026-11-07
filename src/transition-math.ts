@@ -3,10 +3,15 @@
 // Motion's own visualDuration/bounce → stiffness/damping mapping, so a
 // scrubbed position matches what Motion plays.
 
-import { isEasingConfigValue, isSpringConfigValue } from './store/DialStore';
+import { isEasingConfigValue, isPhysicsSpring, isSpringConfigValue, SPRING_DEFAULTS } from './store/DialStore';
 import type { EasingConfig, SpringConfig, TransitionConfig } from './store/DialStore';
 
+export { isPhysicsSpring };
+
 export type SpringParams = { stiffness: number; damping: number; mass: number };
+
+/** The bounce a timeline clip starts with when its config names none. */
+export const DEFAULT_CLIP_BOUNCE = 0.2;
 
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -20,20 +25,17 @@ export function isTransitionConfig(value: unknown): value is TransitionConfig {
   return isSpringConfigValue(value) || isEasingConfigValue(value);
 }
 
-export function isPhysicsSpring(transition: TransitionConfig): boolean {
-  return (
-    transition.type === 'spring' &&
-    (transition.stiffness !== undefined || transition.damping !== undefined || transition.mass !== undefined)
-  );
-}
-
 export function springParams(spring: SpringConfig): SpringParams {
   if (isPhysicsSpring(spring)) {
-    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
+    return {
+      stiffness: spring.stiffness ?? SPRING_DEFAULTS.stiffness,
+      damping: spring.damping ?? SPRING_DEFAULTS.damping,
+      mass: spring.mass ?? SPRING_DEFAULTS.mass,
+    };
   }
   // Motion's mapping (motion-dom spring generator)
-  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
-  const bounce = spring.bounce ?? 0.3;
+  const visualDuration = Math.max(0.05, spring.visualDuration ?? SPRING_DEFAULTS.visualDuration);
+  const bounce = spring.bounce ?? SPRING_DEFAULTS.bounce;
   const root = (2 * Math.PI) / (visualDuration * 1.2);
   const stiffness = root * root;
   const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
@@ -140,7 +142,7 @@ export function resolveClipTransition(
     };
   }
   return {
-    transition: { type: 'spring', bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
+    transition: { type: 'spring', bounce: raw.bounce ?? DEFAULT_CLIP_BOUNCE, visualDuration: safeDuration },
     duration: safeDuration,
     isPhysics: false,
   };

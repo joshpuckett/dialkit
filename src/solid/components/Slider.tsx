@@ -9,6 +9,7 @@ import {
   snapToDecile,
   formatSliderShortcut,
 } from '../../shortcut-utils';
+import { startPointerGesture, type StopGesture } from '../../pointer-gesture';
 
 interface SliderProps {
   label: string;
@@ -49,7 +50,13 @@ export function Slider(props: SliderProps) {
   const [showInput, setShowInput] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
 
-  const fillPercent = motionValue(((props.value - min()) / (max() - min())) * 100);
+  const percentFromValue = (v: number) => {
+    const range = max() - min();
+    return range > 0 ? ((v - min()) / range) * 100 : 0;
+  };
+  const percentage = () => percentFromValue(props.value);
+
+  const fillPercent = motionValue(percentage());
   const rubberStretchPx = motionValue(0);
   const handleOpacityMv = motionValue(0);
   const handleScaleXMv = motionValue(0.25);
@@ -72,26 +79,36 @@ export function Slider(props: SliderProps) {
     handleRef.style.transform = `translateY(-50%) scaleX(${handleScaleXMv.get()}) scaleY(${handleScaleYMv.get()})`;
   };
 
-  // Sync fill from props when not interacting
-  createEffect(() => {
-    if (!isInteracting() && !snapAnim) {
-      fillPercent.jump(((props.value - min()) / (max() - min())) * 100);
-    }
-  });
-
-  const percentage = () => ((props.value - min()) / (max() - min())) * 100;
   const isActive = () => isInteracting() || isHovered();
 
-  let pointerDownPos: { x: number; y: number } | null = null;
-  let isClickFlag = true;
+  let gesture: StopGesture | null = null;
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
   let snapAnim: AnimationHandle | null = null;
+  let springTarget: number | null = null;
   let rubberAnim: AnimationHandle | null = null;
   let handleOpacityAnim: AnimationHandle | null = null;
   let handleScaleXAnim: AnimationHandle | null = null;
   let handleScaleYAnim: AnimationHandle | null = null;
+
+  const stopSpring = () => {
+    snapAnim?.stop();
+    snapAnim = null;
+  };
+
+  // Sync from props when not interacting. A click's spring keeps running only
+  // while the value is still the one it is heading to; a value that arrives from
+  // anywhere else (a version switch, a shortcut) takes over at once.
+  createEffect(() => {
+    const target = percentage();
+    if (isInteracting()) return;
+    if (snapAnim) {
+      if (springTarget === target) return;
+      stopSpring();
+    }
+    fillPercent.jump(target);
+  });
 
   const positionToValue = (clientX: number) => {
     if (!wrapperRect) return props.value;
@@ -103,8 +120,6 @@ export function Slider(props: SliderProps) {
     return Math.max(min(), Math.min(max(), rawValue));
   };
 
-  const percentFromValue = (v: number) => ((v - min()) / (max() - min())) * 100;
-
   const computeRubberStretch = (clientX: number, sign: number) => {
     if (!wrapperRect) return 0;
     const distancePast = sign < 0 ? wrapperRect.left - clientX : clientX - wrapperRect.right;
@@ -112,101 +127,84 @@ export function Slider(props: SliderProps) {
     return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1.0));
   };
 
-  const cancelInteraction = () => {
-    if (!isInteracting()) return;
-    setIsInteracting(false);
-    setIsDragging(false);
-    rubberStretchPx.jump(0);
-    pointerDownPos = null;
-  };
-
   const handlePointerDown = (e: PointerEvent) => {
-    if (showInput()) return;
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    pointerDownPos = { x: e.clientX, y: e.clientY };
-    isClickFlag = true;
-    setIsInteracting(true);
+    if (showInput() || gesture) return;
+    const startValue = props.value;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isClick = true;
 
+    gesture = startPointerGesture(e, e.currentTarget as HTMLElement, {
+      move(next) {
+        const distance = Math.hypot(next.clientX - startX, next.clientY - startY);
+        if (isClick && distance > CLICK_THRESHOLD) {
+          isClick = false;
+          setIsDragging(true);
+        }
+        if (isClick) return;
+
+        if (wrapperRect) {
+          if (next.clientX < wrapperRect.left) rubberStretchPx.jump(computeRubberStretch(next.clientX, -1));
+          else if (next.clientX > wrapperRect.right) rubberStretchPx.jump(computeRubberStretch(next.clientX, 1));
+          else rubberStretchPx.jump(0);
+        }
+
+        const newValue = positionToValue(next.clientX);
+        stopSpring();
+        fillPercent.jump(percentFromValue(newValue));
+        props.onChange(roundValue(newValue, step(), min(), max()));
+      },
+      end(cancelled, last) {
+        gesture = null;
+        if (cancelled) {
+          rubberStretchPx.jump(0);
+          if (!isClick) props.onChange(startValue);
+        } else {
+          if (isClick && last) {
+            const rawValue = positionToValue(last.clientX);
+            const discreteSteps = (max() - min()) / step();
+            const snappedValue = discreteSteps <= 10
+              ? Math.max(min(), Math.min(max(), min() + Math.round((rawValue - min()) / step()) * step()))
+              : snapToDecile(rawValue, min(), max());
+            const committed = roundValue(snappedValue, step(), min(), max());
+
+            stopSpring();
+            springTarget = percentFromValue(committed);
+            snapAnim = animate(fillPercent, springTarget, {
+              type: 'spring',
+              stiffness: 300,
+              damping: 25,
+              mass: 0.8,
+              onComplete: () => {
+                snapAnim = null;
+              },
+            });
+            props.onChange(committed);
+          }
+
+          if (rubberStretchPx.get() !== 0) {
+            rubberAnim?.stop();
+            rubberAnim = animate(rubberStretchPx, 0, {
+              type: 'spring',
+              visualDuration: 0.35,
+              bounce: 0.15,
+            });
+          }
+        }
+
+        setIsInteracting(false);
+        setIsDragging(false);
+      },
+    });
+    if (!gesture) return;
+
+    e.preventDefault();
+    setIsInteracting(true);
+    // Capture wrapper rect at pointer down for stable reference
     if (wrapperRef) {
       wrapperRect = wrapperRef.getBoundingClientRect();
       scaleVal = wrapperRect.width / wrapperRef.offsetWidth;
     }
-  };
-
-  const handlePointerMove = (e: PointerEvent) => {
-    if (!isInteracting() || !pointerDownPos) return;
-
-    const dx = e.clientX - pointerDownPos.x;
-    const dy = e.clientY - pointerDownPos.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (isClickFlag && distance > CLICK_THRESHOLD) {
-      isClickFlag = false;
-      setIsDragging(true);
-    }
-
-    if (!isClickFlag) {
-      if (wrapperRect) {
-        if (e.clientX < wrapperRect.left) {
-          rubberStretchPx.jump(computeRubberStretch(e.clientX, -1));
-        } else if (e.clientX > wrapperRect.right) {
-          rubberStretchPx.jump(computeRubberStretch(e.clientX, 1));
-        } else {
-          rubberStretchPx.jump(0);
-        }
-      }
-
-      const newValue = positionToValue(e.clientX);
-      const newPct = percentFromValue(newValue);
-      if (snapAnim) { snapAnim.stop(); snapAnim = null; }
-      fillPercent.jump(newPct);
-      props.onChange(roundValue(newValue, step(), min(), max()));
-    }
-  };
-
-  const handlePointerUp = (e: PointerEvent) => {
-    if (!isInteracting()) return;
-
-    if (isClickFlag) {
-      const rawValue = positionToValue(e.clientX);
-      const discreteSteps = (max() - min()) / step();
-      const snappedValue = discreteSteps <= 10
-        ? Math.max(min(), Math.min(max(), min() + Math.round((rawValue - min()) / step()) * step()))
-        : snapToDecile(rawValue, min(), max());
-
-      const newPct = percentFromValue(snappedValue);
-
-      if (snapAnim) snapAnim.stop();
-      snapAnim = animate(fillPercent, newPct, {
-        type: 'spring',
-        stiffness: 300,
-        damping: 25,
-        mass: 0.8,
-        onComplete: () => {
-          snapAnim = null;
-        },
-      });
-
-      props.onChange(roundValue(snappedValue, step(), min(), max()));
-    }
-
-    if (rubberStretchPx.get() !== 0) {
-      if (rubberAnim) rubberAnim.stop();
-      rubberAnim = animate(rubberStretchPx, 0, {
-        type: 'spring',
-        visualDuration: 0.35,
-        bounce: 0.15,
-      });
-    }
-
-    setIsInteracting(false);
-    setIsDragging(false);
-    pointerDownPos = null;
-  };
-
-  const handlePointerCancel = () => {
-    cancelInteraction();
   };
 
   // Handle value hover delay — clear pending timer on each re-run
@@ -227,6 +225,7 @@ export function Slider(props: SliderProps) {
   });
 
   onCleanup(() => {
+    gesture?.(false);
     if (hoverTimeout) clearTimeout(hoverTimeout);
     snapAnim?.stop();
     rubberAnim?.stop();
@@ -377,16 +376,13 @@ export function Slider(props: SliderProps) {
         aria-valuenow={props.value}
         aria-valuetext={`${displayValue()}${props.unit ? ` ${props.unit}` : ''}`}
         onKeyDown={(e) => handleSliderKey(e, props.value, min(), max(), step(), (next) => {
-          snapAnim?.stop(); snapAnim = null;
+          stopSpring();
           fillPercent.jump(percentFromValue(next)); props.onChange(next);
         }, () => {
           editingEnded = false;
           setInputValue(props.value.toFixed(decimalsForStep(step(), min(), max()))); setShowInput(true);
         })}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >

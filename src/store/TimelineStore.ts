@@ -1,3 +1,5 @@
+import { callListeners, pageSingleton } from './shared';
+
 // Playback transport + registry for DialKit timelines.
 // Clip values (at/duration/from/to) live in DialStore under the timeline's
 // panel id — this store only owns time: the clock, play state, and the
@@ -38,12 +40,20 @@ export type TimelineTransport = {
   time: number;
   playing: boolean;
   duration: number;
-  /** Completed loop passes — keeps looping clips phase-continuous across
-   * timeline wraps. Reset by seek/replay so scrubbing stays deterministic. */
+  /** Loop passes in units of the current span — keeps looping clips
+   * phase-continuous across timeline wraps, so it turns fractional when an edit
+   * changes the span. Reset by seek/replay so scrubbing stays deterministic. */
   wraps: number;
 };
 
 type Listener = () => void;
+
+type Scrub = {
+  /** Gestures currently holding the transport. */
+  holds: number;
+  /** Play again when the last hold ends. */
+  resume: boolean;
+};
 
 /** Length of the repeating span — the whole timeline unless a loop region
  * narrows it. Degenerate regions (start ≥ duration) fall back to the whole
@@ -81,6 +91,7 @@ const EMPTY_TRANSPORT: TimelineTransport = Object.freeze({ time: 0, playing: fal
 class TimelineStoreClass {
   private timelines: Map<string, TimelineMeta> = new Map();
   private transports: Map<string, TimelineTransport> = new Map();
+  private scrubs: Map<string, Scrub> = new Map();
   private listeners: Map<string, Set<Listener>> = new Map();
   private globalListeners: Set<Listener> = new Set();
   private registrationCounts: Map<string, number> = new Map();
@@ -115,6 +126,7 @@ class TimelineStoreClass {
     this.registrationCounts.delete(id);
     this.timelines.delete(id);
     this.transports.delete(id);
+    this.scrubs.delete(id);
     // Keep listener sets: subscribers (e.g. a mounted dock) may outlive the
     // registration — HMR tears down and re-registers the same id, and their
     // subscriptions must survive it. Cleanup happens via unsubscribe closures.
@@ -126,6 +138,11 @@ class TimelineStoreClass {
   play(id: string): void {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0 || transport.playing) return;
+    const scrub = this.scrubs.get(id);
+    if (scrub) {
+      scrub.resume = true;
+      return;
+    }
     // Play from the top when the playhead is parked at the end
     const restart = transport.time >= transport.duration;
     this.transports.set(id, {
@@ -139,6 +156,8 @@ class TimelineStoreClass {
   }
 
   pause(id: string): void {
+    const scrub = this.scrubs.get(id);
+    if (scrub) scrub.resume = false;
     const transport = this.transports.get(id);
     if (!transport || !transport.playing) return;
     this.transports.set(id, { ...transport, playing: false });
@@ -148,9 +167,39 @@ class TimelineStoreClass {
   replay(id: string): void {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0) return;
-    this.transports.set(id, { ...transport, time: 0, wraps: 0, playing: true });
+    const scrub = this.scrubs.get(id);
+    if (scrub) scrub.resume = true;
+    this.transports.set(id, { ...transport, time: 0, wraps: 0, playing: !scrub });
     this.notify(id);
-    this.ensureLoop();
+    if (!scrub) this.ensureLoop();
+  }
+
+  /**
+   * A scrub owns the playhead until the returned function runs: playback stops,
+   * and a host's play/pause/replay during it decide what happens afterwards
+   * instead of fighting the gesture. Safe to call the returned function twice.
+   */
+  beginScrub(id: string): () => void {
+    let scrub = this.scrubs.get(id);
+    if (!scrub) {
+      const transport = this.transports.get(id);
+      scrub = { holds: 0, resume: Boolean(transport?.playing) };
+      if (transport?.playing) {
+        this.transports.set(id, { ...transport, playing: false });
+        this.notify(id);
+      }
+      this.scrubs.set(id, scrub);
+    }
+    const held = scrub;
+    held.holds++;
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      if (--held.holds > 0 || this.scrubs.get(id) !== held) return;
+      this.scrubs.delete(id);
+      if (held.resume) this.play(id);
+    };
   }
 
   seek(id: string, time: number): void {
@@ -204,16 +253,31 @@ class TimelineStoreClass {
       ? Math.min(duration, Math.max(0, meta.loopStart))
       : 0;
     const safeMeta = { ...meta, duration, loopStart };
+    const previous = this.timelines.get(meta.id);
+    const existing = this.transports.get(meta.id);
+    if (
+      previous && existing &&
+      previous.name === meta.name &&
+      previous.duration === duration &&
+      previous.loop === meta.loop &&
+      previous.loopStart === loopStart &&
+      previous.clips === meta.clips
+    ) {
+      return;
+    }
     this.timelines.set(meta.id, safeMeta);
 
-    const existing = this.transports.get(meta.id);
     if (existing) {
-      // Structure changed or remounted — keep the playhead, clamp to the new length
+      // Structure changed or remounted — keep the playhead, clamp to the new length.
+      // Passes are measured in spans, so a new span rescales them: looping clips
+      // read wraps × span + time, and that must not jump because a bar was edited.
+      const previousSpan = previous ? loopSpan(previous.duration, previous.loopStart) : 0;
+      const span = loopSpan(duration, loopStart);
       this.transports.set(meta.id, {
         time: Math.min(existing.time, duration),
         playing: duration > 0 && existing.playing,
         duration,
-        wraps: existing.wraps,
+        wraps: span > 0 && previousSpan > 0 ? (existing.wraps * previousSpan) / span : existing.wraps,
       });
     } else {
       const playing = duration > 0 && autoplay;
@@ -233,12 +297,14 @@ class TimelineStoreClass {
   }
 
   private tick = (now: number): void => {
+    // This frame is spent, so a listener that starts playback below can
+    // schedule the next one.
+    this.rafId = null;
     // Advance by wall time. A backgrounded tab lands at the state it would
     // have reached, rather than silently slowing the animation on return.
     const dt = Math.max(0, (now - this.lastTick) / 1000);
     this.lastTick = now;
 
-    let anyPlaying = false;
     for (const [id, transport] of this.transports) {
       if (!transport.playing) continue;
 
@@ -265,21 +331,26 @@ class TimelineStoreClass {
       }
 
       this.transports.set(id, { time, playing, duration, wraps });
-      if (playing) anyPlaying = true;
       this.notify(id);
     }
 
-    this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
+    // Read this after notifying: a listener may have started or stopped playback.
+    for (const transport of this.transports.values()) {
+      if (transport.playing) {
+        this.rafId ??= window.requestAnimationFrame(this.tick);
+        break;
+      }
+    }
   };
 
   private notify(id: string): void {
-    this.listeners.get(id)?.forEach((fn) => fn());
+    callListeners(this.listeners.get(id));
   }
 
   private notifyGlobal(): void {
-    this.globalListeners.forEach((fn) => fn());
+    callListeners(this.globalListeners);
   }
 }
 
 // PURE lets bundlers drop the timeline entirely for panel-only users.
-export const TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
+export const TimelineStore = /* @__PURE__ */ pageSingleton('TimelineStore', () => new TimelineStoreClass());

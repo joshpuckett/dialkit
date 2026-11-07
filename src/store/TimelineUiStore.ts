@@ -1,3 +1,5 @@
+import { callListeners, pageSingleton, warnOnce } from './shared';
+
 type Listener = () => void;
 
 type VisibilityController = {
@@ -24,20 +26,26 @@ class TimelineUiStoreClass {
     return this.visible;
   }
 
+  /** Whether a dock is mounted to show the timelines. */
+  hasDock(): boolean {
+    return this.controllers.size > 0;
+  }
+
   registerController(id: symbol, controller: VisibilityController): () => void {
-    const previous = this.getVisible();
+    if (this.controllers.size > 0) {
+      warnOnce('More than one DialTimeline is mounted. One dock shows every registered timeline.');
+    }
     if (!this.initialized) {
       this.visible = controller.defaultVisible;
       this.initialized = true;
     }
     this.controllers.set(id, controller);
-    if (previous !== this.getVisible()) this.notify();
+    this.notify();
 
     return () => {
-      const before = this.getVisible();
       this.controllers.delete(id);
       if (this.controllers.size === 0) this.initialized = false;
-      if (before !== this.getVisible()) this.notify();
+      this.notify();
     };
   }
 
@@ -75,8 +83,8 @@ class TimelineUiStoreClass {
   }
 
   private notify(): void {
-    this.listeners.forEach((listener) => listener());
+    callListeners(this.listeners);
   }
 }
 
-export const TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
+export const TimelineUiStore = /* @__PURE__ */ pageSingleton('TimelineUiStore', () => new TimelineUiStoreClass());

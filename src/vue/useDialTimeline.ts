@@ -22,7 +22,10 @@ export function useDialTimeline<T extends TimelineConfig>(
   options?: UseDialTimelineOptions
 ): ComputedRef<DialTimelineValues<T>> {
   const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${++timelineInstance}`;
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const panelId = options?.id ?? `dialkit-timeline-${++timelineInstance}`;
+  // 2.1's generated id, so data it saved for a timeline without an id still loads.
+  const legacyId = `${name}-${timelineInstance}`;
   const serializedConfig = computed(() => JSON.stringify(config));
   const serializedPersist = computed(() => JSON.stringify(options?.persist));
   const serializedLoop = computed(() => JSON.stringify(options?.loop));
@@ -56,6 +59,7 @@ export function useDialTimeline<T extends TimelineConfig>(
     if (!mounted) return;
     DialStore.updatePanel(panelId, name, parsed.value.dialConfig, undefined, {
       retainOnUnmount: hasStableId,
+      legacyId,
       persist: options?.persist,
       kind: 'timeline',
     });
@@ -76,6 +80,7 @@ export function useDialTimeline<T extends TimelineConfig>(
 
     DialStore.registerPanel(panelId, name, parsed.value.dialConfig, undefined, {
       retainOnUnmount: hasStableId,
+      legacyId,
       persist: options?.persist,
       kind: 'timeline',
     });
@@ -86,6 +91,7 @@ export function useDialTimeline<T extends TimelineConfig>(
   });
 
   onUnmounted(() => {
+    if (!mounted) return;
     mounted = false;
     unsubscribeValues?.();
     unsubscribeTransport?.();

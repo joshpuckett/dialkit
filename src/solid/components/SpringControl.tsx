@@ -1,6 +1,6 @@
-import { DialStore } from '../../store/DialStore';
+import { createEffect, createMemo } from 'solid-js';
+import { isPhysicsSpring, SPRING_DEFAULTS } from '../../store/DialStore';
 import type { SpringConfig } from '../../store/DialStore';
-import { fromStore } from '../primitives';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -15,13 +15,12 @@ interface SpringControlProps {
 }
 
 export function SpringControl(props: SpringControlProps) {
-  const mode = fromStore(
-    () => DialStore.getSpringMode(props.panelId, props.path),
-    (notify) => DialStore.subscribe(props.panelId, notify)
-  );
+  // Read from the value: a store subscription can fire before the prop updates.
+  const mode = createMemo<'simple' | 'advanced'>(() => (isPhysicsSpring(props.spring) ? 'advanced' : 'simple'));
 
   const isSimpleMode = () => mode() === 'simple';
 
+  // Cache per-mode values so switching back restores previous edits
   const cache: {
     simple: SpringConfig;
     advanced: SpringConfig;
@@ -30,22 +29,13 @@ export function SpringControl(props: SpringControlProps) {
     advanced: props.spring.stiffness !== undefined ? props.spring : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
   };
 
-  const handleModeChange = (newMode: 'simple' | 'advanced') => {
-    // Save current mode's values before switching
-    if (isSimpleMode()) {
-      cache.simple = props.spring;
-    } else {
-      cache.advanced = props.spring;
-    }
+  createEffect(() => {
+    const spring = props.spring;
+    if (isPhysicsSpring(spring)) cache.advanced = spring;
+    else cache.simple = spring;
+  });
 
-    DialStore.updateSpringMode(props.panelId, props.path, newMode);
-
-    if (newMode === 'simple') {
-      props.onChange(cache.simple);
-    } else {
-      props.onChange(cache.advanced);
-    }
-  };
+  const handleModeChange = (newMode: 'simple' | 'advanced') => props.onChange(cache[newMode]);
 
   const handleUpdate = (key: keyof SpringConfig, value: number) => {
     if (isSimpleMode()) {
@@ -78,7 +68,7 @@ export function SpringControl(props: SpringControlProps) {
           <>
             <Slider
               label="Duration"
-              value={props.spring.visualDuration ?? 0.3}
+              value={props.spring.visualDuration ?? SPRING_DEFAULTS.visualDuration}
               onChange={(v) => handleUpdate('visualDuration', v)}
               min={0.1}
               max={1}
@@ -87,7 +77,7 @@ export function SpringControl(props: SpringControlProps) {
             />
             <Slider
               label="Bounce"
-              value={props.spring.bounce ?? 0.2}
+              value={props.spring.bounce ?? SPRING_DEFAULTS.bounce}
               onChange={(v) => handleUpdate('bounce', v)}
               min={0}
               max={1}
@@ -98,7 +88,7 @@ export function SpringControl(props: SpringControlProps) {
           <>
             <Slider
               label="Stiffness"
-              value={props.spring.stiffness ?? 400}
+              value={props.spring.stiffness ?? SPRING_DEFAULTS.stiffness}
               onChange={(v) => handleUpdate('stiffness', v)}
               min={1}
               max={1000}
@@ -106,7 +96,7 @@ export function SpringControl(props: SpringControlProps) {
             />
             <Slider
               label="Damping"
-              value={props.spring.damping ?? 17}
+              value={props.spring.damping ?? SPRING_DEFAULTS.damping}
               onChange={(v) => handleUpdate('damping', v)}
               min={1}
               max={100}
@@ -114,7 +104,7 @@ export function SpringControl(props: SpringControlProps) {
             />
             <Slider
               label="Mass"
-              value={props.spring.mass ?? 1}
+              value={props.spring.mass ?? SPRING_DEFAULTS.mass}
               onChange={(v) => handleUpdate('mass', v)}
               min={0.1}
               max={10}

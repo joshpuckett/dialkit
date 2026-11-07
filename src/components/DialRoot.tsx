@@ -1,14 +1,18 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { DialStore, PanelConfig } from '../store/DialStore';
 import { TimelineStore } from '../store/TimelineStore';
+import { TimelineUiStore } from '../store/TimelineUiStore';
 import { isDevDefault } from '../env';
 import { Folder } from './Folder';
 import { Panel } from './Panel';
 import type { DialVersions } from '../versions/gallery';
 import { ShortcutListener } from './ShortcutListener';
 import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
-import { blockPanelDragClick, capturePanelPointer, releasePanelPointer, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved } from '../panel-drag';
+import { blockPanelDragClick, clampPanelOffset, getPanelCorner, getPanelDragHandle, getPanelDragOffset, getPanelDragStart, getPanelOriginX, getPanelOriginY, hasPanelDragMoved } from '../panel-drag';
+import { startPointerGesture, type StopGesture } from '../pointer-gesture';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export type DialPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type DialMode = 'popover' | 'inline';
@@ -25,8 +29,14 @@ interface DialRootProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, versions = 'thumbnails', onOpenChange }: DialRootProps) {
+// The production gate is a hook-free wrapper, so flipping the prop can never
+// change hook order in the component that actually uses hooks.
+export function DialRoot({ productionEnabled = isDevDefault, ...props }: DialRootProps) {
   if (!productionEnabled) return null;
+  return <DialRootContent {...props} />;
+}
+
+function DialRootContent({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', versions = 'thumbnails', onOpenChange }: Omit<DialRootProps, 'productionEnabled'>) {
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [timelineCount, setTimelineCount] = useState(0);
   const [mounted, setMounted] = useState(false);
@@ -36,141 +46,148 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
   // Drag state
   const panelRef = useRef<HTMLDivElement>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const dragOffsetRef = useRef(dragOffset);
+  dragOffsetRef.current = dragOffset;
   const [activePosition, setActivePosition] = useState(position);
   const lastDragOffset = useRef<{ x: number; y: number } | null>(null);
-  const draggingRef = useRef(false);
-  const dragStartRef = useRef<{ pointerX: number; pointerY: number; elX: number; elY: number } | null>(null);
-  const didDragRef = useRef(false);
-  const dragTargetRef = useRef<HTMLElement | null>(null);
-  const panelOpenStatesRef = useRef<Map<string, boolean>>(new Map());
-  const rootOpenRef = useRef<boolean | null>(null);
+  const stopDragRef = useRef<StopGesture | null>(null);
 
   // Subscribe to registered editing surfaces. Timeline-backed panels render
-  // in DialTimeline, but their presence adds a visibility toggle here.
+  // in DialTimeline, but their presence adds a visibility toggle here, as long
+  // as a dock is mounted for that toggle to show and hide.
   useEffect(() => {
+    const syncTimelines = () => setTimelineCount(TimelineUiStore.hasDock() ? TimelineStore.getTimelines().length : 0);
     setMounted(true);
     setPanels(DialStore.getPanels('panel'));
-    setTimelineCount(TimelineStore.getTimelines().length);
+    syncTimelines();
 
     const unsubscribePanels = DialStore.subscribeGlobal(() => {
       setPanels(DialStore.getPanels('panel'));
     });
-    const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
-      setTimelineCount(TimelineStore.getTimelines().length);
-    });
+    const unsubscribeTimelines = TimelineStore.subscribeGlobal(syncTimelines);
+    const unsubscribeDock = TimelineUiStore.subscribe(syncTimelines);
 
     return () => {
       unsubscribePanels();
       unsubscribeTimelines();
+      unsubscribeDock();
     };
   }, []);
 
-  useEffect(() => {
-    const fallbackOpen = inline || defaultOpen;
-    const nextStates = new Map<string, boolean>();
-    for (const panel of panels) {
-      nextStates.set(panel.id, panelOpenStatesRef.current.get(panel.id) ?? DialStore.getPanelOpen(panel.id) ?? fallbackOpen);
+  // The root's open state has one home per layout: a lone panel is its own root,
+  // and everything else lives in the shell.
+  const single = panels.length === 1 ? panels[0] : null;
+  const singleId = single?.id;
+  const subscribeSingle = useCallback(
+    (callback: () => void) => (singleId ? DialStore.subscribe(singleId, callback) : () => {}),
+    [singleId]
+  );
+  const getSingleOpen = useCallback(() => (singleId ? DialStore.getPanelOpen(singleId) : undefined), [singleId]);
+  const singleOpen = useSyncExternalStore(subscribeSingle, getSingleOpen, getSingleOpen);
+  const rootOpen = single ? (singleOpen ?? (inline || defaultOpen)) : shellOpen;
+  const visible = mounted && (panels.length > 0 || timelineCount > 0);
+
+  // Panels coming and going move that state between homes, so the root stays as
+  // the person left it.
+  const layoutRef = useRef<{ count: number; open: boolean } | null>(null);
+  const skipReportRef = useRef(false);
+  useIsomorphicLayoutEffect(() => {
+    if (!visible) return;
+    const previous = layoutRef.current;
+    layoutRef.current = { count: panels.length, open: rootOpen };
+    if (!previous || previous.count === panels.length || previous.open === rootOpen) return;
+    if (panels.length !== 1) {
+      setShellOpen(previous.open);
+    } else if (previous.count > 1) {
+      DialStore.setPanelOpen(panels[0].id, previous.open);
+    } else if (DialStore.getPanelOpen(panels[0].id) === undefined) {
+      DialStore.initPanelOpen(panels[0].id, previous.open);
+    } else {
+      return;
     }
-    panelOpenStatesRef.current = nextStates;
-    rootOpenRef.current = Array.from(nextStates.values()).some(Boolean);
-  }, [defaultOpen, inline, panels]);
+    layoutRef.current = { count: panels.length, open: previous.open };
+    skipReportRef.current = true;
+  }, [visible, panels.length, rootOpen]);
 
-  // Watch for panel open/close — snap to corner on open, restore drag position on close
+  // Report changes to the root, whichever home they happened in.
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const reportedOpenRef = useRef<boolean | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    if (!visible) return;
+    if (skipReportRef.current) {
+      skipReportRef.current = false;
+      return;
+    }
+    if (reportedOpenRef.current !== null && reportedOpenRef.current !== rootOpen) {
+      onOpenChangeRef.current?.(rootOpen);
+    }
+    reportedOpenRef.current = rootOpen;
+  });
+
+  // Snap to a corner on open, and restore the dragged position on close.
+  const wasOpenRef = useRef(rootOpen);
+  useIsomorphicLayoutEffect(() => {
+    if (wasOpenRef.current === rootOpen) return;
+    wasOpenRef.current = rootOpen;
+    if (inline) return;
+    const offset = dragOffsetRef.current;
+    if (rootOpen) {
+      lastDragOffset.current = offset ?? lastDragOffset.current;
+      setActivePosition(offset ? getPanelCorner(position, offset) : position);
+      setDragOffset(null);
+    } else if (offset) {
+      lastDragOffset.current = offset;
+    } else if (lastDragOffset.current) {
+      setDragOffset(lastDragOffset.current);
+    }
+  }, [rootOpen, inline, position]);
+
   useEffect(() => {
-    if (!panelRef.current || inline) return;
-    const observer = new MutationObserver(() => {
-      const inners = panelRef.current?.querySelectorAll('.dialkit-panel-inner');
-      if (!inners || inners.length === 0) return;
-      const collapsed = Array.from(inners).every(
-        (el) => el.getAttribute('data-collapsed') === 'true'
-      );
-      const currentDragOffset = dragOffset;
+    if (!dragOffsetRef.current && !lastDragOffset.current) setActivePosition(position);
+  }, [position]);
 
-      if (!collapsed) {
-        // Opening — save drag position, determine corner, snap
-        if (currentDragOffset) {
-          lastDragOffset.current = currentDragOffset;
-          setActivePosition(getPanelCorner(position, currentDragOffset));
-        } else {
-          setActivePosition(position);
-        }
-        setDragOffset(null);
-      } else if (currentDragOffset) {
-        lastDragOffset.current = currentDragOffset;
-      } else if (lastDragOffset.current) {
-        // Closing — restore the dragged position
-        setDragOffset(lastDragOffset.current);
-      }
-    });
-    observer.observe(panelRef.current, { subtree: true, attributes: true, attributeFilter: ['data-collapsed'] });
-    return () => observer.disconnect();
-  }, [inline, dragOffset, position]);
+  // Keep a dragged panel on screen when the window shrinks.
+  useEffect(() => {
+    if (inline) return;
+    const onResize = () => {
+      setDragOffset((offset) => offset && clampPanelOffset(offset, panelRef.current?.getBoundingClientRect().width));
+      if (lastDragOffset.current) lastDragOffset.current = clampPanelOffset(lastDragOffset.current);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [inline]);
+
+  useEffect(() => () => stopDragRef.current?.(false), []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     const panel = panelRef.current;
     const handle = getPanelDragHandle(e.target, panel);
-    if (!panel || !handle) return;
+    if (!panel || !handle || stopDragRef.current) return;
 
-    dragTargetRef.current = handle;
-    dragStartRef.current = getPanelDragStart(e.clientX, e.clientY, panel);
-    didDragRef.current = false;
-    draggingRef.current = true;
-    capturePanelPointer(handle, e.pointerId);
+    const start = getPanelDragStart(e.clientX, e.clientY, panel);
+    const startOffset = dragOffsetRef.current;
+    let moved = false;
+    stopDragRef.current = startPointerGesture(e.nativeEvent, handle, {
+      move(next) {
+        if (!moved && !hasPanelDragMoved(start, next.clientX, next.clientY)) return;
+        moved = true;
+        setDragOffset(getPanelDragOffset(start, next.clientX, next.clientY));
+      },
+      end(cancelled) {
+        stopDragRef.current = null;
+        if (!moved) return;
+        if (cancelled) setDragOffset(startOffset);
+        // A drag must not also count as a click that toggles the panel.
+        else blockPanelDragClick(handle);
+      },
+    });
   }, []);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!draggingRef.current || !dragStartRef.current) return;
-
-    if (!didDragRef.current && !hasPanelDragMoved(dragStartRef.current, e.clientX, e.clientY)) return;
-    didDragRef.current = true;
-
-    setDragOffset(getPanelDragOffset(dragStartRef.current, e.clientX, e.clientY));
-  }, []);
-
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    dragStartRef.current = null;
-    const dragTarget = dragTargetRef.current;
-
-    if (dragTarget?.hasPointerCapture(e.pointerId)) {
-      releasePanelPointer(dragTarget, e.pointerId);
-    }
-
-    // If we actually dragged, prevent the click from opening the panel
-    if (didDragRef.current) {
-      e.stopPropagation();
-      if (dragTarget) {
-        blockPanelDragClick(dragTarget);
-      }
-    }
-    dragTargetRef.current = null;
-  }, []);
-
-  const handlePanelOpenChange = useCallback((panelId: string, open: boolean) => {
-    panelOpenStatesRef.current.set(panelId, open);
-    const fallbackOpen = inline || defaultOpen;
-    const nextRootOpen = panels.some((panel) => (
-      panelOpenStatesRef.current.get(panel.id) ?? fallbackOpen
-    ));
-
-    if (rootOpenRef.current === nextRootOpen) return;
-    rootOpenRef.current = nextRootOpen;
-    onOpenChange?.(nextRootOpen);
-  }, [defaultOpen, inline, onOpenChange, panels]);
-
-  const handleRootOpenChange = useCallback((open: boolean) => {
-    setShellOpen(open);
-    if (rootOpenRef.current === open) return;
-    rootOpenRef.current = open;
-    onOpenChange?.(open);
-  }, [onOpenChange]);
-
+  // Requests to open a panel also reveal the shell it sits in.
   useEffect(() => DialStore.subscribePanelOpen((id, open) => {
-    if (!panels.some(panel => panel.id === id)) return;
-    if (panels.length > 1 && open) handleRootOpenChange(true);
-    else if (panels.length === 1) handlePanelOpenChange(id, open);
-  }), [panels, handleRootOpenChange, handlePanelOpenChange]);
+    if (open && panels.length > 1 && panels.some(panel => panel.id === id)) setShellOpen(true);
+  }), [panels]);
 
   // Don't render on server
   if (!mounted || typeof window === 'undefined') {
@@ -206,9 +223,6 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
         data-multiple={hasMultiplePanels ? 'true' : undefined}
         style={dragStyle}
         onPointerDown={!inline ? handlePointerDown : undefined}
-        onPointerMove={!inline ? handlePointerMove : undefined}
-        onPointerUp={!inline ? handlePointerUp : undefined}
-        onPointerCancel={!inline ? handlePointerUp : undefined}
       >
         {panels.length === 0 ? (
           <div className="dialkit-panel-wrapper">
@@ -218,7 +232,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               defaultOpen={inline || defaultOpen}
               isRoot={true}
               inline={inline}
-              onOpenChange={handleRootOpenChange}
+              onOpenChange={setShellOpen}
               toolbar={timelineToggle}
             >
               <div className="dialkit-timeline-toolkit-only">Timeline</div>
@@ -232,7 +246,7 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               defaultOpen={inline || defaultOpen}
               isRoot={true}
               inline={inline}
-              onOpenChange={handleRootOpenChange}
+              onOpenChange={setShellOpen}
               toolbar={timelineToggle}
             >
               {panels.map((panel) => (
@@ -257,7 +271,6 @@ export function DialRoot({ position = 'top-right', defaultOpen = true, mode = 'p
               toolbarExtra={timelineToggle}
               versions={versions}
               theme={theme}
-              onOpenChange={(open) => handlePanelOpenChange(panel.id, open)}
             />
           ))
         )}

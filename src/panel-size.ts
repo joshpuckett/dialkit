@@ -56,8 +56,9 @@ function finishSectionFold(section: Pick<SectionFold, 'content' | 'toolbar' | 'o
  * down immediately, instead of waiting for off-screen content to fold first.
  */
 export function createPanelSectionTransition(folder: HTMLElement, initiallyOpen: boolean) {
-  const content = folder.querySelector<HTMLElement>(':scope > .dialkit-folder-content')!;
-  const toolbar = folder.querySelector<HTMLElement>(':scope > .dialkit-folder-header > .dialkit-panel-section-toolbar-clip')!;
+  const content = folder.querySelector<HTMLElement>(':scope > .dialkit-folder-content');
+  const toolbar = folder.querySelector<HTMLElement>(':scope > .dialkit-folder-header > .dialkit-panel-section-toolbar-clip');
+  if (!content || !toolbar) return { setOpen() {}, destroy() {} };
   let open = initiallyOpen;
   let panel: HTMLElement | null = null;
   finishSectionFold({ content, toolbar, open });
@@ -72,7 +73,11 @@ export function createPanelSectionTransition(folder: HTMLElement, initiallyOpen:
         return;
       }
 
-      const root = panel.querySelector<HTMLElement>(':scope > .dialkit-folder-root')!;
+      const root = panel.querySelector<HTMLElement>(':scope > .dialkit-folder-root');
+      if (!root) {
+        finishSectionFold({ content, toolbar, open });
+        return;
+      }
       const shell = panel.closest<HTMLElement>('.dialkit-panel');
       const inline = panel.classList.contains('dialkit-panel-inline');
       let group = panelFolds.get(panel);
@@ -117,7 +122,7 @@ export function createPanelSectionTransition(folder: HTMLElement, initiallyOpen:
       const activePanel = panel;
       const activeGroup = group;
       // Keep the override outside the framework-owned inline size styles.
-      const heightHost = activePanel.parentElement!;
+      const heightHost = activePanel.parentElement ?? activePanel;
       activePanel.setAttribute('data-folding', 'true');
 
       const tick = (now: number) => {

@@ -1,5 +1,5 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { DialStore } from '../../store/DialStore';
+import { defineComponent, h, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
+import { DialStore, SPRING_DEFAULTS, isPhysicsSpring } from '../../store/DialStore';
 import type { SpringConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
@@ -34,26 +34,19 @@ export const SpringControl = defineComponent({
 
     const isSimpleMode = () => mode.value === 'simple';
 
-    const cache = {
-      simple: props.spring.visualDuration !== undefined ? { ...props.spring } : { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 },
-      advanced: props.spring.stiffness !== undefined ? { ...props.spring } : { type: 'spring' as const, stiffness: 200, damping: 25, mass: 1 },
+    // Per-mode values, so switching back restores previous edits.
+    const cache: { simple: SpringConfig; advanced: SpringConfig } = {
+      simple: { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+      advanced: { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
     };
-
-    const handleModeChange = (nextMode: 'simple' | 'advanced') => {
-      if (isSimpleMode()) {
-        cache.simple = { ...props.spring };
-      } else {
-        cache.advanced = { ...props.spring };
-      }
-
-      DialStore.updateSpringMode(props.panelId, props.path, nextMode);
-
-      if (nextMode === 'simple') {
-        emit('change', cache.simple);
-      } else {
-        emit('change', cache.advanced);
-      }
+    const remember = (spring: SpringConfig) => {
+      cache[isPhysicsSpring(spring) ? 'advanced' : 'simple'] = spring;
     };
+    remember(props.spring);
+    watch(() => props.spring, remember);
+
+    // The mode follows the value, so switching mode is writing that mode's value.
+    const handleModeChange = (nextMode: 'simple' | 'advanced') => emit('change', cache[nextMode]);
 
     const handleUpdate = (key: keyof SpringConfig, value: number) => {
       if (isSimpleMode()) {
@@ -84,7 +77,7 @@ export const SpringControl = defineComponent({
             ? [
               h(Slider, {
                 label: 'Duration',
-                value: props.spring.visualDuration ?? 0.3,
+                value: props.spring.visualDuration ?? SPRING_DEFAULTS.visualDuration,
                 min: 0.1,
                 max: 1,
                 step: 0.05,
@@ -93,7 +86,7 @@ export const SpringControl = defineComponent({
               }),
               h(Slider, {
                 label: 'Bounce',
-                value: props.spring.bounce ?? 0.2,
+                value: props.spring.bounce ?? SPRING_DEFAULTS.bounce,
                 min: 0,
                 max: 1,
                 step: 0.05,
@@ -103,7 +96,7 @@ export const SpringControl = defineComponent({
             : [
               h(Slider, {
                 label: 'Stiffness',
-                value: props.spring.stiffness ?? 400,
+                value: props.spring.stiffness ?? SPRING_DEFAULTS.stiffness,
                 min: 1,
                 max: 1000,
                 step: 10,
@@ -111,7 +104,7 @@ export const SpringControl = defineComponent({
               }),
               h(Slider, {
                 label: 'Damping',
-                value: props.spring.damping ?? 17,
+                value: props.spring.damping ?? SPRING_DEFAULTS.damping,
                 min: 1,
                 max: 100,
                 step: 1,
@@ -119,7 +112,7 @@ export const SpringControl = defineComponent({
               }),
               h(Slider, {
                 label: 'Mass',
-                value: props.spring.mass ?? 1,
+                value: props.spring.mass ?? SPRING_DEFAULTS.mass,
                 min: 0.1,
                 max: 10,
                 step: 0.1,

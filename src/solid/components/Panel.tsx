@@ -1,5 +1,6 @@
-import { buildCopyInstruction } from '../../copy-instruction';
+import { buildCopyInstruction, copyText } from '../../copy-instruction';
 import { batch, createSignal, createEffect, on, onMount, onCleanup, type JSX } from 'solid-js';
+import { isServer } from 'solid-js/web';
 import { animate } from 'motion';
 import { ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../../icons';
 import { DialStore } from '../../store/DialStore';
@@ -24,15 +25,17 @@ interface PanelProps {
 }
 
 export function Panel(props: PanelProps) {
+  // DialRoot keeps one Panel per id, so this never changes.
+  const panelId = props.panel.id;
   const [copied, setCopied] = createSignal(false);
   let copyTimeout: ReturnType<typeof setTimeout> | undefined;
   const [values, setValues] = createSignal<Record<string, DialValue>>(
-    DialStore.getValues(props.panel.id)
+    DialStore.getValues(panelId)
   );
-  const [presets, setPresets] = createSignal(DialStore.getPresets(props.panel.id));
-  const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(props.panel.id));
+  const [presets, setPresets] = createSignal(DialStore.getPresets(panelId));
+  const [activePresetId, setActivePresetId] = createSignal(DialStore.getActivePresetId(panelId));
   // The store owns open/collapsed state so it can be driven programmatically.
-  const [storeOpen, setStoreOpen] = createSignal(DialStore.getPanelOpen(props.panel.id));
+  const [storeOpen, setStoreOpen] = createSignal(DialStore.getPanelOpen(panelId));
   const isOpen = () => storeOpen() ?? props.defaultOpen ?? true;
   const versions = () => props.versions ?? 'thumbnails';
   let copyButtonRef!: HTMLButtonElement;
@@ -44,23 +47,22 @@ export function Panel(props: PanelProps) {
 
   const tapTransition = { type: 'spring' as const, visualDuration: 0.15, bounce: 0.3 };
 
-  onMount(() => {
-    const unsub = DialStore.subscribe(props.panel.id, () => {
+  // Subscribed at setup: DialRoot can carry open state into this panel before it mounts.
+  if (!isServer) {
+    onCleanup(DialStore.subscribe(panelId, () => {
       batch(() => {
-        setValues(DialStore.getValues(props.panel.id));
-        setPresets(DialStore.getPresets(props.panel.id));
-        setActivePresetId(DialStore.getActivePresetId(props.panel.id));
-        setStoreOpen(DialStore.getPanelOpen(props.panel.id));
+        setValues(DialStore.getValues(panelId));
+        setPresets(DialStore.getPresets(panelId));
+        setActivePresetId(DialStore.getActivePresetId(panelId));
+        setStoreOpen(DialStore.getPanelOpen(panelId));
       });
-    });
-    DialStore.initPanelOpen(props.panel.id, props.defaultOpen ?? true);
-    onCleanup(unsub);
-  });
+    }));
+  }
+
+  onMount(() => DialStore.initPanelOpen(panelId, props.defaultOpen ?? true));
 
   const handleCopy = async () => {
-    const instruction = buildCopyInstruction('createDialKit', props.panel.name, values());
-    try { await navigator.clipboard.writeText(instruction); }
-    catch { return; }
+    if (!(await copyText(buildCopyInstruction('createDialKit', props.panel.name, values())))) return;
     setCopied(true);
     clearTimeout(copyTimeout);
     copyTimeout = setTimeout(() => setCopied(false), 1500);
@@ -106,7 +108,7 @@ export function Panel(props: PanelProps) {
   };
 
   const handleOpenChange = (open: boolean) => {
-    DialStore.setPanelOpen(props.panel.id, open);
+    DialStore.setPanelOpen(panelId, open);
     props.onOpenChange?.(open);
   };
 
@@ -114,7 +116,7 @@ export function Panel(props: PanelProps) {
     <>
       {versions() === 'menu' && (
         <PresetManager
-          panelId={props.panel.id}
+          panelId={panelId}
           presets={presets()}
           activePresetId={activePresetId()}
         />
@@ -163,9 +165,9 @@ export function Panel(props: PanelProps) {
   const content = () => (
     <>
       {versions() !== 'menu' && (
-        <VersionGallery panelId={props.panel.id} theme={props.theme} />
+        <VersionGallery panelId={panelId} theme={props.theme} />
       )}
-      <ControlRenderer panelId={props.panel.id} controls={props.panel.controls} values={values()} />
+      <ControlRenderer panelId={panelId} controls={props.panel.controls} values={values()} />
     </>
   );
 

@@ -1,6 +1,6 @@
 import { formatEase, parseEase } from '../../easing-geometry';
-import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
-import { DialStore } from '../../store/DialStore';
+import { defineComponent, h, onMounted, onUnmounted, ref, watch, type PropType } from 'vue';
+import { DialStore, SPRING_DEFAULTS, isPhysicsSpring } from '../../store/DialStore';
 import type { EasingConfig, SpringConfig, TransitionConfig } from '../../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
@@ -96,41 +96,25 @@ export const TransitionControl = defineComponent({
 
     onUnmounted(() => unsub?.());
 
-    const cache = {
-      easing: (props.value.type === 'easing' ? { ...props.value } : { type: 'easing' as const, duration: 0.3, ease: [1, -0.4, 0.5, 1] as [number, number, number, number] }) as EasingConfig,
-      simple: (props.value.type === 'spring' && props.value.visualDuration !== undefined ? { ...props.value } : { type: 'spring' as const, visualDuration: 0.3, bounce: 0.2 }) as SpringConfig,
-      advanced: (props.value.type === 'spring' && props.value.stiffness !== undefined ? { ...props.value } : { type: 'spring' as const, stiffness: 200, damping: 25, mass: 1 }) as SpringConfig,
+    // Per-mode values, so switching back restores previous edits. A value only
+    // ever lands in the slot of its own kind, whatever the mode says right now.
+    const cache: { easing: EasingConfig; simple: SpringConfig; advanced: SpringConfig } = {
+      easing: { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
+      simple: { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+      advanced: { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
     };
-
-    const spring = (): SpringConfig => {
-      if (props.value.type === 'spring') {
-        // Keep cache updated
-        if (mode.value === 'simple') cache.simple = props.value;
-        else if (mode.value === 'advanced') cache.advanced = props.value;
-        return props.value;
-      }
-      return cache.simple;
+    const remember = (value: TransitionConfig) => {
+      if (value.type === 'easing') cache.easing = value;
+      else cache[isPhysicsSpring(value) ? 'advanced' : 'simple'] = value;
     };
+    remember(props.value);
+    watch(() => props.value, remember);
 
-    const easing = (): EasingConfig => {
-      if (props.value.type === 'easing') {
-        cache.easing = props.value;
-        return props.value;
-      }
-      return cache.easing;
-    };
+    const spring = (): SpringConfig => (props.value.type === 'spring' ? props.value : cache.simple);
+    const easing = (): EasingConfig => (props.value.type === 'easing' ? props.value : cache.easing);
 
-    const handleModeChange = (nextMode: CurveMode) => {
-      DialStore.updateTransitionMode(props.panelId, props.path, nextMode);
-
-      if (nextMode === 'easing') {
-        emit('change', cache.easing);
-      } else if (nextMode === 'simple') {
-        emit('change', cache.simple);
-      } else {
-        emit('change', cache.advanced);
-      }
-    };
+    // The mode follows the value, so switching mode is writing that mode's value.
+    const handleModeChange = (nextMode: CurveMode) => emit('change', cache[nextMode]);
 
     const handleSpringUpdate = (key: keyof SpringConfig, value: number) => {
       const current = spring();
@@ -151,7 +135,7 @@ export const TransitionControl = defineComponent({
       const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring)
         ? h(Slider, {
           label: 'Duration',
-          value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
+          value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? SPRING_DEFAULTS.visualDuration),
           min: props.durationControl?.min ?? 0.1,
           max: props.durationControl?.max ?? (isEasing ? 2 : 1),
           step: props.durationControl?.step ?? 0.05,
@@ -192,7 +176,7 @@ export const TransitionControl = defineComponent({
                 ? [
                   h(Slider, {
                     label: 'Bounce',
-                    value: currentSpring.bounce ?? 0.2,
+                    value: currentSpring.bounce ?? SPRING_DEFAULTS.bounce,
                     min: 0,
                     max: 1,
                     step: 0.05,
@@ -202,7 +186,7 @@ export const TransitionControl = defineComponent({
                 : [
                   h(Slider, {
                     label: 'Stiffness',
-                    value: currentSpring.stiffness ?? 400,
+                    value: currentSpring.stiffness ?? SPRING_DEFAULTS.stiffness,
                     min: 1,
                     max: 1000,
                     step: 10,
@@ -210,7 +194,7 @@ export const TransitionControl = defineComponent({
                   }),
                   h(Slider, {
                     label: 'Damping',
-                    value: currentSpring.damping ?? 17,
+                    value: currentSpring.damping ?? SPRING_DEFAULTS.damping,
                     min: 1,
                     max: 100,
                     step: 1,
@@ -218,7 +202,7 @@ export const TransitionControl = defineComponent({
                   }),
                   h(Slider, {
                     label: 'Mass',
-                    value: currentSpring.mass ?? 1,
+                    value: currentSpring.mass ?? SPRING_DEFAULTS.mass,
                     min: 0.1,
                     max: 10,
                     step: 0.1,

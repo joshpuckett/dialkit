@@ -1,6 +1,8 @@
 import {
   For,
+  Index,
   Show,
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -12,17 +14,12 @@ import { Portal } from 'solid-js/web';
 import { DialStore, formatLabel } from '../../../store/DialStore';
 import type { ControlMeta, DialValue } from '../../../store/DialStore';
 import { TimelineStore } from '../../../store/TimelineStore';
-import type { TimelineClipMeta, TimelineMeta } from '../../../store/TimelineStore';
+import type { TimelineClipMeta, TimelineClipTrackMeta, TimelineMeta } from '../../../store/TimelineStore';
 import { TimelineUiStore } from '../../../store/TimelineUiStore';
 import {
   TIMELINE_MIN_CLIP_DURATION,
-  clampClipMove,
-  clampClipResizeEnd,
-  clampClipResizeStart,
-  clampStepResize,
-  clampTrackDelay,
   computeClipStaticFromValues,
-  formatClock,
+  formatRulerSeconds,
   formatSeconds,
   formatStepLabel,
   normalizeTimelineValuesForCopy,
@@ -30,7 +27,10 @@ import {
 } from '../../../timeline-core';
 import type { TimelineClipLoop, TimelineStepStatic } from '../../../timeline-core';
 import { clamp } from '../../../transition-math';
-import { buildCopyInstruction } from '../../../copy-instruction';
+import { buildCopyInstruction, copyText } from '../../../copy-instruction';
+import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../../../dropdown-position';
+import { startPointerGesture, type StopGesture } from '../../../pointer-gesture';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../../../timeline/adapter';
 import { isDevDefault } from '../../../env';
 import {
   ICON_CHEVRON,
@@ -61,7 +61,16 @@ const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
 const POPOVER_WIDTH = 280;
 const ZOOM_DRAG_DISTANCE = 180;
 const DEFAULT_DOCK_MAX_HEIGHT = 400;
-const MIN_DOCK_MAX_HEIGHT = 120;
+
+function createScrubGesture(id: () => string) {
+  let stop: StopGesture | null = null;
+  onCleanup(() => stop?.(false));
+  return (event: PointerEvent, handle: Element | null, seek: (clientX: number) => void) => {
+    if (stop) return false;
+    stop = startScrubGesture(id(), event, handle, seek, () => { stop = null; });
+    return stop !== null;
+  };
+}
 
 export interface DialTimelineProps {
   theme?: DialTheme;
@@ -94,7 +103,7 @@ function DialTimelineDock(props: DialTimelineProps) {
   const [dockMaxHeight, setDockMaxHeight] = createSignal(DEFAULT_DOCK_MAX_HEIGHT);
   const controllerId = Symbol('dialkit-timeline-visibility');
   let dockRef: HTMLDivElement | undefined;
-  let resizeCleanup: (() => void) | null = null;
+  let stopResize: StopGesture | null = null;
 
   onMount(() => {
     setMounted(true);
@@ -114,32 +123,21 @@ function DialTimelineDock(props: DialTimelineProps) {
     });
   });
 
-  onCleanup(() => resizeCleanup?.());
+  onCleanup(() => stopResize?.(false));
 
   const handleResizePointerDown: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
-    if (!dockRef) return;
+    if (!dockRef || stopResize) return;
     event.preventDefault();
     event.stopPropagation();
-    resizeCleanup?.();
 
     const pointerY = event.clientY;
     const startHeight = dockRef.getBoundingClientRect().height;
-    const move = (next: PointerEvent) => {
-      next.preventDefault();
-      const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-      setDockMaxHeight(clamp(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
-    };
-    const finish = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
-      resizeCleanup = null;
-    };
-
-    window.addEventListener('pointermove', move, { passive: false });
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
-    resizeCleanup = finish;
+    stopResize = startPointerGesture(event, event.currentTarget, {
+      move(next) {
+        setDockMaxHeight(clampDockHeight(startHeight + pointerY - next.clientY));
+      },
+      end() { stopResize = null; },
+    });
   };
 
   return (
@@ -153,6 +151,8 @@ function DialTimelineDock(props: DialTimelineProps) {
           <div
             class="dialkit-timeline-resize-handle"
             onPointerDown={handleResizePointerDown}
+            onKeyDown={(event) => resizeDockFromKey(dockRef, event, (height) => setDockMaxHeight(height))}
+            tabIndex={0}
             role="separator"
             aria-label="Resize timeline height"
             aria-orientation="horizontal"
@@ -245,36 +245,21 @@ function TimelineOverview(props: {
     () => TimelineStore.getTransport(props.id).time,
     (notify) => TimelineStore.subscribe(props.id, notify)
   );
-  let scrub: { wasPlaying: boolean; rect: DOMRect } | null = null;
-
-  const seekFromClientX = (clientX: number) => {
-    if (!scrub || scrub.rect.width <= 0 || props.duration <= 0) return;
-    const next = clamp(((clientX - scrub.rect.left) / scrub.rect.width) * props.duration, 0, props.duration);
-    TimelineStore.seek(props.id, next);
-    props.onNavigate(next);
-  };
-  const finish = () => {
-    if (scrub?.wasPlaying) TimelineStore.play(props.id);
-    scrub = null;
-  };
+  const startScrub = createScrubGesture(() => props.id);
 
   return (
     <div
       class="dialkit-timeline-overview"
       onPointerDown={(event) => {
         event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        scrub = {
-          wasPlaying: TimelineStore.getTransport(props.id).playing,
-          rect: event.currentTarget.getBoundingClientRect(),
-        };
-        TimelineStore.pause(props.id);
-        seekFromClientX(event.clientX);
+        const rect = event.currentTarget.getBoundingClientRect();
+        startScrub(event, event.currentTarget, (clientX) => {
+          if (rect.width <= 0 || props.duration <= 0) return;
+          const next = clamp(((clientX - rect.left) / rect.width) * props.duration, 0, props.duration);
+          TimelineStore.seek(props.id, next);
+          props.onNavigate(next);
+        });
       }}
-      onPointerMove={(event) => scrub && seekFromClientX(event.clientX)}
-      onPointerUp={finish}
-      onPointerCancel={finish}
-      onLostPointerCapture={finish}
       title="Drag to scrub the full timeline"
     >
       <div
@@ -306,27 +291,13 @@ function TimelinePlayheadFlag(props: {
   laneWidth: number;
   ruler: HTMLDivElement | undefined;
   onResetView: () => void;
+  onNavigate: (time: number) => void;
 }) {
   const time = fromStore(
     () => TimelineStore.getTransport(props.id).time,
     (notify) => TimelineStore.subscribe(props.id, notify)
   );
-  let scrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; viewEnd: number } | null = null;
-  let cleanup: (() => void) | null = null;
-
-  const seek = (clientX: number) => {
-    if (!scrub || scrub.rect.width <= 0) return;
-    TimelineStore.seek(
-      props.id,
-      clamp(
-        scrub.viewStart + ((clientX - scrub.rect.left) / scrub.rect.width) * (scrub.viewEnd - scrub.viewStart),
-        scrub.viewStart,
-        scrub.viewEnd
-      )
-    );
-  };
-
-  onCleanup(() => cleanup?.());
+  const startScrub = createScrubGesture(() => props.id);
 
   const x = () => clamp((time() - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
   const flagCenter = () => clamp(
@@ -338,7 +309,7 @@ function TimelinePlayheadFlag(props: {
   const edge = () => flagOffset() > 0.5 ? 'start' : flagOffset() < -0.5 ? 'end' : 'center';
 
   return (
-    <Show when={time() >= props.viewStart && time() <= props.viewEnd && props.laneWidth > 0}>
+    <Show when={isTimeInView(time(), props.viewStart, props.viewEnd, props.pxPerSecond) && props.laneWidth > 0}>
       <div
         class="dialkit-timeline-playhead-control"
         data-edge={edge()}
@@ -351,34 +322,24 @@ function TimelinePlayheadFlag(props: {
           if (!rect) return;
           event.preventDefault();
           event.stopPropagation();
-          cleanup?.();
           const reset = event.shiftKey;
-          scrub = {
-            wasPlaying: TimelineStore.getTransport(props.id).playing,
-            rect,
-            viewStart: reset ? 0 : props.viewStart,
-            viewEnd: reset ? props.duration : props.viewEnd,
-          };
-          if (reset) props.onResetView();
-          TimelineStore.pause(props.id);
-          seek(event.clientX);
-          const move = (next: PointerEvent) => {
-            next.preventDefault();
-            seek(next.clientX);
-          };
-          const finish = () => {
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', finish);
-            window.removeEventListener('pointercancel', finish);
-            if (scrub?.wasPlaying) TimelineStore.play(props.id);
-            scrub = null;
-            cleanup = null;
-          };
-          window.addEventListener('pointermove', move, { passive: false });
-          window.addEventListener('pointerup', finish);
-          window.addEventListener('pointercancel', finish);
-          cleanup = finish;
+          const start = reset ? 0 : props.viewStart;
+          const end = reset ? props.duration : props.viewEnd;
+          // No capture: this flag unmounts whenever the playhead leaves the visible range.
+          const started = startScrub(event, null, (clientX) => {
+            if (rect.width <= 0) return;
+            TimelineStore.seek(props.id, clamp(start + ((clientX - rect.left) / rect.width) * (end - start), start, end));
+          });
+          if (started && reset) props.onResetView();
         }}
+        // Batched: if the view and the time changed apart, the flag could unmount between them and lose focus.
+        onKeyDown={(event) => batch(() => seekFromKey(props.id, event, {
+          start: props.viewStart,
+          end: props.viewEnd,
+          pxPerSecond: props.pxPerSecond,
+          reveal: props.onNavigate,
+        }))}
+        tabIndex={0}
         role="slider"
         aria-label="Timeline current time"
         aria-valuemin={0}
@@ -398,27 +359,18 @@ function TimelinePlayheadFlag(props: {
 type PopoverState = {
   clip: TimelineClipMeta;
   stepKey?: string;
-  anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number };
+  anchor: AnchorRect;
 };
 
-type ZoomDragState = {
-  pointerX: number;
-  rect: DOMRect;
-  zoom: number;
-  viewStart: number;
-  anchorRatio: number;
-  anchorTime: number;
-  moved: boolean;
-};
+// A row's kind and identity live in its key, so <For> keeps the row and its
+// clip bar through value edits; everything that changes reads through accessors.
+type TimelineRow =
+  | { kind: 'group'; key: string; group: string }
+  | { kind: 'clip'; key: string; clip: TimelineClipMeta }
+  | { kind: 'track'; key: string; clip: TimelineClipMeta; track: TimelineClipTrackMeta };
 
 function clampViewStart(start: number, duration: number, visibleDuration: number): number {
   return clamp(start, 0, Math.max(0, duration - visibleDuration));
-}
-
-function formatRulerSeconds(time: number, step: number): string {
-  if (step >= 1 && Number.isInteger(time)) return formatClock(time);
-  const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
-  return `${time.toFixed(decimals)}s`;
 }
 
 function TimelineSection(props: {
@@ -446,6 +398,7 @@ function TimelineSection(props: {
     values();
     return DialStore.getActivePresetId(props.meta.id);
   };
+  let sectionRef: HTMLDivElement | undefined;
   let laneAreaRef: HTMLDivElement | undefined;
   let horizontalScrollRef: HTMLDivElement | undefined;
   const [laneWidth, setLaneWidth] = createSignal(0);
@@ -461,10 +414,10 @@ function TimelineSection(props: {
     onCleanup(() => observer.disconnect());
   });
 
-  const visibleDuration = () => props.meta.duration > 0 ? props.meta.duration / zoom() : props.meta.duration;
-  const safeViewStart = () => clampViewStart(viewStart(), props.meta.duration, visibleDuration());
+  const visibleDuration = createMemo(() => props.meta.duration > 0 ? props.meta.duration / zoom() : props.meta.duration);
+  const safeViewStart = createMemo(() => clampViewStart(viewStart(), props.meta.duration, visibleDuration()));
   const viewEnd = () => safeViewStart() + visibleDuration();
-  const pxPerSecond = () => visibleDuration() > 0 && laneWidth() > 0 ? laneWidth() / visibleDuration() : 0;
+  const pxPerSecond = createMemo(() => visibleDuration() > 0 && laneWidth() > 0 ? laneWidth() / visibleDuration() : 0);
   const maxZoom = () => Math.max(
     MIN_TIMELINE_MAX_ZOOM,
     laneWidth() > 0 && props.meta.duration > 0
@@ -475,6 +428,7 @@ function TimelineSection(props: {
   createEffect(() => setZoom((current) => clamp(current, 1, maxZoom())));
   createEffect(() => setViewStart((current) => clampViewStart(current, props.meta.duration, props.meta.duration / zoom())));
   createEffect(() => {
+    open();
     const scroller = horizontalScrollRef;
     const next = safeViewStart() * pxPerSecond();
     if (!scroller || pxPerSecond() <= 0) return;
@@ -517,121 +471,133 @@ function TimelineSection(props: {
     horizontalScrollRef.scrollLeft += delta;
   };
 
-  let zoomDrag: ZoomDragState | null = null;
-  let rulerScrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; visibleDuration: number } | null = null;
-  let trackScrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; visibleDuration: number } | null = null;
-
-  const seekRuler = (clientX: number) => {
-    if (!rulerScrub || rulerScrub.rect.width <= 0) return;
-    TimelineStore.seek(
-      props.meta.id,
-      clamp(
-        rulerScrub.viewStart + ((clientX - rulerScrub.rect.left) / rulerScrub.rect.width) * rulerScrub.visibleDuration,
-        rulerScrub.viewStart,
-        rulerScrub.viewStart + rulerScrub.visibleDuration
-      )
-    );
-  };
-  const seekTrack = (clientX: number) => {
-    if (!trackScrub || trackScrub.rect.width <= 0) return;
-    TimelineStore.seek(
-      props.meta.id,
-      clamp(
-        trackScrub.viewStart + ((clientX - trackScrub.rect.left) / trackScrub.rect.width) * trackScrub.visibleDuration,
-        trackScrub.viewStart,
-        trackScrub.viewStart + trackScrub.visibleDuration
-      )
-    );
-  };
+  // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
+  // Shift-drag first restores the full 1x range.
+  const startRulerScrub = createScrubGesture(() => props.meta.id);
+  const startTrackScrub = createScrubGesture(() => props.meta.id);
+  let stopZoom: StopGesture | null = null;
+  onCleanup(() => stopZoom?.(false));
 
   const handleRulerPointerDown: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
+    const handle = event.currentTarget;
+    const rect = handle.getBoundingClientRect();
     if (rect.width <= 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+
     if (!event.altKey) {
       const reset = event.shiftKey;
-      rulerScrub = {
-        wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
-        rect,
-        viewStart: reset ? 0 : safeViewStart(),
-        visibleDuration: reset ? props.meta.duration : visibleDuration(),
-      };
-      if (reset) resetView();
-      TimelineStore.pause(props.meta.id);
-      seekRuler(event.clientX);
+      const start = reset ? 0 : safeViewStart();
+      const span = reset ? props.meta.duration : visibleDuration();
+      const started = startRulerScrub(event, handle, (clientX) => {
+        TimelineStore.seek(props.meta.id, clamp(start + ((clientX - rect.left) / rect.width) * span, start, start + span));
+      });
+      if (started && reset) resetView();
       return;
     }
-    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    zoomDrag = {
-      pointerX: event.clientX,
-      rect,
-      zoom: zoom(),
-      viewStart: safeViewStart(),
-      anchorRatio: ratio,
-      anchorTime: safeViewStart() + ratio * visibleDuration(),
-      moved: false,
-    };
-  };
 
-  const handleRulerPointerMove: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
-    if (rulerScrub) {
-      seekRuler(event.clientX);
-      return;
-    }
-    if (!zoomDrag || props.meta.duration <= 0) return;
-    const dx = event.clientX - zoomDrag.pointerX;
-    if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-    zoomDrag.moved = true;
-    const nextZoom = clamp(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom());
-    const nextDuration = props.meta.duration / nextZoom;
-    setZoom(nextZoom);
-    setViewStart(clampViewStart(
-      zoomDrag.anchorTime - zoomDrag.anchorRatio * nextDuration,
-      props.meta.duration,
-      nextDuration
-    ));
-  };
-
-  const finishRuler = () => {
-    if (rulerScrub?.wasPlaying) TimelineStore.play(props.meta.id);
-    rulerScrub = null;
-    zoomDrag = null;
+    if (stopZoom) return;
+    const pointerX = event.clientX;
+    const startZoom = zoom();
+    const startView = safeViewStart();
+    const anchorRatio = clamp((pointerX - rect.left) / rect.width, 0, 1);
+    const anchorTime = startView + anchorRatio * visibleDuration();
+    let moved = false;
+    stopZoom = startPointerGesture(event, handle, {
+      move(next) {
+        if (props.meta.duration <= 0) return;
+        const dx = next.clientX - pointerX;
+        if (!moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+        moved = true;
+        const nextZoom = clamp(startZoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom());
+        const nextDuration = props.meta.duration / nextZoom;
+        setZoom(nextZoom);
+        setViewStart(clampViewStart(anchorTime - anchorRatio * nextDuration, props.meta.duration, nextDuration));
+      },
+      end(cancelled) {
+        stopZoom = null;
+        if (cancelled && moved) {
+          setZoom(startZoom);
+          setViewStart(startView);
+        }
+      },
+    });
   };
 
   const handleTrackPointerDown: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest('.dialkit-timeline-label, button')) return;
+    if (target.closest('.dialkit-timeline-label, .dialkit-timeline-scroll-row, button')) return;
     if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
     const rect = laneAreaRef?.getBoundingClientRect();
     if (!rect) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
     const reset = event.shiftKey;
-    trackScrub = {
-      wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
-      rect,
-      viewStart: reset ? 0 : safeViewStart(),
-      visibleDuration: reset ? props.meta.duration : visibleDuration(),
-    };
+    const start = reset ? 0 : safeViewStart();
+    const span = reset ? props.meta.duration : visibleDuration();
+    const started = startTrackScrub(event, event.currentTarget, (clientX) => {
+      if (rect.width <= 0) return;
+      TimelineStore.seek(props.meta.id, clamp(start + ((clientX - rect.left) / rect.width) * span, start, start + span));
+    });
+    if (!started) return;
     if (reset) resetView();
     setPopover(null);
-    TimelineStore.pause(props.meta.id);
-    seekTrack(event.clientX);
-  };
-  const finishTrack = () => {
-    if (trackScrub?.wasPlaying) TimelineStore.play(props.meta.id);
-    trackScrub = null;
   };
 
-  const handleCopy = () => {
+  let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(copyTimeout));
+
+  const handleCopy = async () => {
     const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(props.meta.id), props.meta.clips);
-    void navigator.clipboard.writeText(buildCopyInstruction('createDialTimeline', props.meta.name, normalized));
+    if (!(await copyText(buildCopyInstruction('createDialTimeline', props.meta.name, normalized)))) return;
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    clearTimeout(copyTimeout);
+    copyTimeout = setTimeout(() => setCopied(false), 1500);
   };
+
+  const popoverClipKey = createMemo(() => popover()?.clip.key);
+  const popoverStepKey = createMemo(() => popover()?.stepKey);
+
+  // The popover closes when its bar is gone: a removed clip, a collapsed row.
+  createEffect(() => {
+    const clipKey = popoverClipKey();
+    const stepKey = popoverStepKey();
+    values();
+    void props.meta.clips;
+    collapsedGroups();
+    expandedTracks();
+    open();
+    if (clipKey && !clipAnchorRect(sectionRef ?? null, clipKey, stepKey)) setPopover(null);
+  });
+
+  // It follows the bar through zoom, panning, and page scroll. Edits made inside
+  // the popover are left out: a bar resizing must not move the slider under the pointer.
+  createEffect(() => {
+    const clipKey = popoverClipKey();
+    const stepKey = popoverStepKey();
+    pxPerSecond();
+    safeViewStart();
+    if (!clipKey) return;
+    const follow = () => {
+      const anchor = clipAnchorRect(sectionRef ?? null, clipKey, stepKey);
+      if (anchor) setPopover((current) => current && { ...current, anchor });
+    };
+    follow();
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    onCleanup(() => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+    });
+  });
+
   const closePopover = () => setPopover(null);
+
+  // Escape and the close button hand focus back to the bar. Other closes leave it where the press put it.
+  const dismissPopover = () => {
+    const current = popover();
+    if (current) returnFocusToClip(sectionRef ?? null, current.clip.key);
+    setPopover(null);
+  };
 
   const openClipPopover = (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => {
     const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
@@ -689,124 +655,164 @@ function TimelineSection(props: {
     return { major, medium, fine, majorStep };
   });
 
-  const rows = createMemo<JSX.Element[]>(() => {
-    const result: JSX.Element[] = [];
+  // Rows: clips in config order, grouped clips under a collapsible header,
+  // props clips expandable into full per-property track rows. Structure only:
+  // this must not read values, so an edit never touches the list.
+  const rows = createMemo(() => {
+    const result: TimelineRow[] = [];
     let lastGroup: string | undefined;
-    const currentValues = values();
     for (const clip of props.meta.clips) {
       if (clip.group !== lastGroup) {
         lastGroup = clip.group;
-        if (clip.group) {
-          const group = clip.group;
-          const collapsed = collapsedGroups().has(group);
-          result.push(
-            <div class="dialkit-timeline-row dialkit-timeline-group-row">
-              <div class="dialkit-timeline-label">
-                <button
-                  class="dialkit-timeline-group-toggle"
-                  data-open={!collapsed}
-                  onClick={() => toggleGroup(group)}
-                  title={collapsed ? 'Expand layer' : 'Collapse layer'}
-                >
-                  <ChevronIcon />
-                </button>
-                <span>{formatLabel(group)}</span>
-              </div>
-              <div class="dialkit-timeline-lane" />
-            </div>
-          );
-        }
+        if (clip.group) result.push({ kind: 'group', key: `group:${clip.group}`, group: clip.group });
       }
       if (clip.group && collapsedGroups().has(clip.group)) continue;
-      const isProps = Boolean(clip.tracks?.length);
-      const tracksOpen = isProps && expandedTracks().has(clip.key);
-      const stat = computeClipStaticFromValues(currentValues, clip, props.meta.duration);
-      const selected = popover()?.clip.key === clip.key;
-      result.push(
-        <div class="dialkit-timeline-row" data-grouped={clip.group ? '' : undefined}>
-          <div class="dialkit-timeline-label">
-            <Show when={isProps}>
-              <button
-                class="dialkit-timeline-group-toggle"
-                data-open={tracksOpen}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggleTracks(clip.key);
-                }}
-                title={tracksOpen ? 'Collapse properties' : 'Expand properties'}
-              >
-                <ChevronIcon />
-              </button>
-            </Show>
-            {clip.label}
-          </div>
-          <div class="dialkit-timeline-lane">
-            <TimelineClip
-              timelineId={props.meta.id}
-              clip={clip}
-              at={stat.at}
-              duration={stat.duration}
-              loop={stat.loop}
-              steps={clip.stepKeys?.length ? stat.tracks[0]?.steps : undefined}
-              fixedDuration={isProps ? true : stat.isPhysics}
-              composite={isProps}
-              pxPerSecond={pxPerSecond()}
-              viewStart={safeViewStart()}
-              timelineDuration={props.meta.duration}
-              selected={selected}
-              selectedStepKey={selected ? popover()?.stepKey : undefined}
-              onClick={handleBarClick}
-              onDrag={closePopover}
-            />
-          </div>
-        </div>
-      );
-      if (!tracksOpen) continue;
-      for (const trackRef of clip.tracks ?? []) {
-        const track = stat.tracks.find((candidate) => candidate.prop === trackRef.prop);
-        if (!track) continue;
-        const trackKey = `${clip.key}.${trackRef.prop}`;
-        const trackMeta: TimelineClipMeta = {
-          key: trackKey,
-          label: `${clip.label} · ${formatLabel(trackRef.prop)}`,
-          color: clip.color,
-          loop: clip.loop,
-          group: clip.group,
-          stepKeys: trackRef.stepKeys,
-        };
-        const trackSelected = popover()?.clip.key === trackKey;
-        result.push(
-          <div class="dialkit-timeline-row dialkit-timeline-track-row" data-grouped={clip.group ? '' : undefined}>
-            <div class="dialkit-timeline-label">{formatLabel(trackRef.prop)}</div>
-            <div class="dialkit-timeline-lane">
-              <TimelineClip
-                timelineId={props.meta.id}
-                clip={trackMeta}
-                at={stat.at + track.delay}
-                duration={track.duration}
-                loop={stat.loop}
-                steps={trackRef.stepKeys?.length ? track.steps : undefined}
-                fixedDuration={!trackRef.stepKeys?.length && track.steps[0]?.isPhysics === true}
-                baseAt={stat.at}
-                delayMode
-                pxPerSecond={pxPerSecond()}
-                viewStart={safeViewStart()}
-                timelineDuration={props.meta.duration}
-                selected={trackSelected}
-                selectedStepKey={trackSelected ? popover()?.stepKey : undefined}
-                onClick={openClipPopover}
-                onDrag={closePopover}
-              />
-            </div>
-          </div>
-        );
+      result.push({ kind: 'clip', key: `clip:${clip.key}`, clip });
+      if (!clip.tracks?.length || !expandedTracks().has(clip.key)) continue;
+      for (const track of clip.tracks) {
+        result.push({ kind: 'track', key: `track:${clip.key}.${track.prop}`, clip, track });
       }
     }
     return result;
   });
+  const rowKeys = createMemo(() => rows().map((row) => row.key));
+  const rowByKey = (key: string) => rows().find((row) => row.key === key)!;
+  const clipStats = createMemo(() => new Map(props.meta.clips.map((clip) => [
+    clip.key,
+    computeClipStaticFromValues(values(), clip, props.meta.duration),
+  ])));
+
+  const renderGroupRow = (group: string) => {
+    const collapsed = () => collapsedGroups().has(group);
+    return (
+      <div class="dialkit-timeline-row dialkit-timeline-group-row">
+        <div class="dialkit-timeline-label">
+          <button
+            class="dialkit-timeline-group-toggle"
+            data-open={!collapsed()}
+            onClick={() => toggleGroup(group)}
+            title={collapsed() ? 'Expand layer' : 'Collapse layer'}
+          >
+            <ChevronIcon />
+          </button>
+          <span>{formatLabel(group)}</span>
+        </div>
+        <div class="dialkit-timeline-lane" />
+      </div>
+    );
+  };
+
+  const renderClipRow = (clip: () => TimelineClipMeta) => {
+    const stat = () => clipStats().get(clip().key)!;
+    const isProps = () => Boolean(clip().tracks?.length);
+    const tracksOpen = () => isProps() && expandedTracks().has(clip().key);
+    const selected = () => popoverClipKey() === clip().key;
+    // Not inline: Solid compiles a conditional JSX prop to a memo created on each
+    // read, and the bar reads these in its press handler, outside any owner.
+    const steps = () => (clip().stepKeys?.length ? stat().tracks[0]?.steps : undefined);
+    const fixedDuration = () => isProps() || stat().isPhysics;
+    const selectedStepKey = () => (selected() ? popoverStepKey() : undefined);
+    return (
+      <div class="dialkit-timeline-row" data-grouped={clip().group ? '' : undefined}>
+        <div class="dialkit-timeline-label">
+          <Show when={isProps()}>
+            <button
+              class="dialkit-timeline-group-toggle"
+              data-open={tracksOpen()}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleTracks(clip().key);
+              }}
+              title={tracksOpen() ? 'Collapse properties' : 'Expand properties'}
+            >
+              <ChevronIcon />
+            </button>
+          </Show>
+          {clip().label}
+        </div>
+        <div class="dialkit-timeline-lane">
+          <TimelineClip
+            timelineId={props.meta.id}
+            clip={clip()}
+            at={stat().at}
+            duration={stat().duration}
+            loop={stat().loop}
+            steps={steps()}
+            fixedDuration={fixedDuration()}
+            composite={isProps()}
+            pxPerSecond={pxPerSecond()}
+            viewStart={safeViewStart()}
+            timelineDuration={props.meta.duration}
+            selected={selected()}
+            selectedStepKey={selectedStepKey()}
+            onClick={handleBarClick}
+            onDrag={closePopover}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Each property is a full clip row of its own; the bar position is the
+  // track's delay (its phase offset from the clip's `at`).
+  const renderTrackRow = (clip: () => TimelineClipMeta, trackRef: () => TimelineClipTrackMeta) => {
+    const stat = () => clipStats().get(clip().key)!;
+    const track = () => stat().tracks.find((candidate) => candidate.prop === trackRef().prop);
+    const trackMeta = createMemo<TimelineClipMeta>(() => ({
+      key: `${clip().key}.${trackRef().prop}`,
+      label: `${clip().label} · ${formatLabel(trackRef().prop)}`,
+      color: clip().color,
+      loop: clip().loop,
+      group: clip().group,
+      stepKeys: trackRef().stepKeys,
+    }));
+    const selected = () => popoverClipKey() === trackMeta().key;
+    const selectedStepKey = () => (selected() ? popoverStepKey() : undefined);
+    return (
+      <Show when={track()}>
+        {(current) => {
+          const steps = () => (trackRef().stepKeys?.length ? current().steps : undefined);
+          const fixedDuration = () => !trackRef().stepKeys?.length && current().steps[0]?.isPhysics === true;
+          return (
+            <div class="dialkit-timeline-row dialkit-timeline-track-row" data-grouped={clip().group ? '' : undefined}>
+              <div class="dialkit-timeline-label">{formatLabel(trackRef().prop)}</div>
+              <div class="dialkit-timeline-lane">
+                <TimelineClip
+                  timelineId={props.meta.id}
+                  clip={trackMeta()}
+                  at={stat().at + current().delay}
+                  duration={current().duration}
+                  loop={stat().loop}
+                  steps={steps()}
+                  fixedDuration={fixedDuration()}
+                  baseAt={stat().at}
+                  delayMode
+                  pxPerSecond={pxPerSecond()}
+                  viewStart={safeViewStart()}
+                  timelineDuration={props.meta.duration}
+                  selected={selected()}
+                  selectedStepKey={selectedStepKey()}
+                  onClick={openClipPopover}
+                  onDrag={closePopover}
+                />
+              </div>
+            </div>
+          );
+        }}
+      </Show>
+    );
+  };
+
+  const renderRow = (key: string) => {
+    const row = rowByKey(key);
+    if (row.kind === 'group') return renderGroupRow(row.group);
+    const clip = () => (rowByKey(key) as Exclude<TimelineRow, { kind: 'group' }>).clip;
+    if (row.kind === 'clip') return renderClipRow(clip);
+    return renderTrackRow(clip, () => (rowByKey(key) as Extract<TimelineRow, { kind: 'track' }>).track);
+  };
 
   return (
-    <div class="dialkit-timeline-section">
+    <div ref={sectionRef} class="dialkit-timeline-section">
       <div class="dialkit-timeline-header" data-open={open() || undefined}>
         <div class="dialkit-timeline-identity">
           <span class="dialkit-timeline-title">{props.meta.name}</span>
@@ -868,10 +874,6 @@ function TimelineSection(props: {
           class="dialkit-timeline-body"
           onWheel={handleTimelineWheel}
           onPointerDown={handleTrackPointerDown}
-          onPointerMove={(event) => trackScrub && seekTrack(event.clientX)}
-          onPointerUp={finishTrack}
-          onPointerCancel={finishTrack}
-          onLostPointerCapture={finishTrack}
         >
           <div class="dialkit-timeline-grid">
             <div class="dialkit-timeline-row dialkit-timeline-ruler-row">
@@ -880,10 +882,6 @@ function TimelineSection(props: {
                 ref={laneAreaRef}
                 class="dialkit-timeline-ruler"
                 onPointerDown={handleRulerPointerDown}
-                onPointerMove={handleRulerPointerMove}
-                onPointerUp={finishRuler}
-                onPointerCancel={finishRuler}
-                onLostPointerCapture={finishRuler}
                 title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
               >
                 <For each={ticks().fine}>{(time) => <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style={{ left: `${(time - safeViewStart()) * pxPerSecond()}px` }} />}</For>
@@ -895,7 +893,7 @@ function TimelineSection(props: {
                 )}</For>
               </div>
             </div>
-            {rows()}
+            <For each={rowKeys()}>{renderRow}</For>
             <Show when={pxPerSecond() > 0}>
               <TimelinePlayheadFlag
                 id={props.meta.id}
@@ -906,6 +904,7 @@ function TimelineSection(props: {
                 laneWidth={laneWidth()}
                 ruler={laneAreaRef}
                 onResetView={resetView}
+                onNavigate={centerViewAt}
               />
             </Show>
           </div>
@@ -933,6 +932,7 @@ function TimelineSection(props: {
             values={values()}
             theme={props.theme}
             onClose={closePopover}
+            onDismiss={dismissPopover}
           />
         )}
       </Show>
@@ -954,37 +954,58 @@ function ClipPopover(props: {
   values: Record<string, DialValue>;
   theme: DialTheme;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
-  let ref: HTMLDivElement | undefined;
+  const [element, setElement] = createSignal<HTMLDivElement>();
   const [naturalHeight, setNaturalHeight] = createSignal(0);
   const [viewport, setViewport] = createSignal(readViewport());
+  const target = createMemo(() => `${props.popover.clip.key}/${props.popover.stepKey ?? ''}`);
+  const measured = createMemo(() => naturalHeight() > 0);
+  let closeButton: HTMLButtonElement | undefined;
 
-  onMount(() => {
-    const measure = () => ref && setNaturalHeight(ref.scrollHeight + 2);
+  // Focus moves in once it has a height: until then it's hidden, and can't take focus.
+  createEffect(() => {
+    target();
+    if (measured()) closeButton?.focus({ preventScroll: true });
+  });
+
+  createEffect(() => {
+    target();
+    const current = element();
+    if (!current) return;
+    const measure = () => setNaturalHeight(current.scrollHeight + 2);
     measure();
     const observer = new ResizeObserver(measure);
-    if (ref) observer.observe(ref.querySelector('.dialkit-timeline-popover-body') ?? ref);
+    observer.observe(current.querySelector('.dialkit-timeline-popover-body') ?? current);
+    onCleanup(() => observer.disconnect());
+  });
+
+  onMount(() => {
     const updateViewport = () => setViewport(readViewport());
     const outside = (event: PointerEvent) => {
-      const target = event.target as HTMLElement;
-      if (ref?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
+      const pressed = event.target as HTMLElement;
+      if (element()?.contains(pressed) || isFloatingControlTarget(pressed)) return;
+      // Clips and labels handle their own toggle or switch.
+      if (pressed.closest?.('.dialkit-timeline-clip') || pressed.closest?.('.dialkit-timeline-label')) return;
       props.onClose();
     };
+    // On the window, because Solid delegates to the document: a control's
+    // stopPropagation can't stop a listener there. It runs after the delegated
+    // handlers, and an Escape they handled is not ours to act on.
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') props.onClose();
+      if (event.key === 'Escape' && !event.defaultPrevented) props.onDismiss();
     };
     window.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('resize', updateViewport);
     window.visualViewport?.addEventListener('scroll', updateViewport);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('keydown', keydown);
+    window.addEventListener('keydown', keydown);
     onCleanup(() => {
-      observer.disconnect();
       window.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('resize', updateViewport);
       window.visualViewport?.removeEventListener('scroll', updateViewport);
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', keydown);
+      window.removeEventListener('keydown', keydown);
     });
   });
 
@@ -1063,7 +1084,7 @@ function ClipPopover(props: {
       <Portal mount={document.body}>
         <div class="dialkit-root" data-theme={props.theme}>
           <div
-            ref={ref}
+            ref={(el) => setElement(el)}
             class="dialkit-timeline-popover"
             data-placement={position().placeAbove ? 'above' : 'below'}
             style={{
@@ -1078,7 +1099,7 @@ function ClipPopover(props: {
           >
             <div class="dialkit-timeline-popover-header">
               <span class="dialkit-timeline-popover-title">{presentation().title}</span>
-              <button class="dialkit-timeline-popover-close" onClick={props.onClose} title="Close editor" aria-label="Close editor">
+              <button ref={closeButton} class="dialkit-timeline-popover-close" onClick={props.onDismiss} title="Close editor" aria-label="Close editor">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M6 6L18 18M18 6L6 18" />
                 </svg>
@@ -1127,17 +1148,6 @@ function getControlAt(panelId: string, path: string): ControlMeta | null {
   return panel ? findControl(panel.controls, path) : null;
 }
 
-type DragState = {
-  mode: 'move' | 'start' | 'end' | 'boundary';
-  boundaryIndex?: number;
-  pointerX: number;
-  at: number;
-  duration: number;
-  stepDurations?: number[];
-  clickEl: HTMLElement | null;
-  moved: boolean;
-};
-
 function TimelineClip(props: {
   timelineId: string;
   clip: TimelineClipMeta;
@@ -1157,94 +1167,44 @@ function TimelineClip(props: {
   onClick: (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => void;
   onDrag: () => void;
 }) {
-  let drag: DragState | null = null;
+  let stop: StopGesture | null = null;
+  let disposed = false;
   const [dragging, setDragging] = createSignal(false);
   const isSteps = () => Boolean(props.steps?.length);
+
+  onCleanup(() => {
+    disposed = true;
+    stop?.(false);
+  });
 
   const handlePointerDown: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
     if (event.shiftKey) return;
     event.stopPropagation();
-    const target = event.target as HTMLElement;
-    let mode: DragState['mode'] = 'move';
-    let boundaryIndex: number | undefined;
-    if (target.dataset.boundary !== undefined) {
-      mode = 'boundary';
-      boundaryIndex = Number(target.dataset.boundary);
-    } else if (!props.fixedDuration) {
-      const edge = target.dataset.edge as 'start' | 'end' | undefined;
-      if (edge) mode = edge;
-    }
-    drag = {
-      mode,
-      boundaryIndex,
-      pointerX: event.clientX,
+    if (stop) return;
+    const clip = props.clip;
+    stop = startClipDrag(event, event.currentTarget, {
+      timelineId: props.timelineId,
+      clipKey: clip.key,
       at: props.at,
       duration: props.duration,
-      stepDurations: props.steps?.map((step) => step.duration),
-      clickEl: target.closest?.('[data-step]'),
-      moved: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handlePointerMove: JSX.EventHandler<HTMLDivElement, PointerEvent> = (event) => {
-    if (!drag || props.pxPerSecond <= 0) return;
-    const dx = event.clientX - drag.pointerX;
-    if (!drag.moved) {
-      if (Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-      drag.moved = true;
-      setDragging(true);
-      props.onDrag();
-    }
-    const dt = dx / props.pxPerSecond;
-    const baseAt = props.baseAt ?? 0;
-    if (drag.mode === 'boundary' && props.steps && drag.stepDurations) {
-      const index = drag.boundaryIndex ?? 0;
-      const others = drag.stepDurations.reduce((sum, duration, stepIndex) => stepIndex === index ? sum : sum + duration, 0);
-      DialStore.updateValue(
-        props.timelineId,
-        `${props.clip.key}.${props.steps[index].key ?? ''}.duration`,
-        clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration)
-      );
-    } else if (drag.mode === 'move') {
-      if (props.delayMode) {
-        DialStore.updateValue(
-          props.timelineId,
-          `${props.clip.key}.delay`,
-          clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, props.timelineDuration)
-        );
-      } else {
-        DialStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
-      }
-    } else if (drag.mode === 'end') {
-      DialStore.updateValue(
-        props.timelineId,
-        `${props.clip.key}.duration`,
-        clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration)
-      );
-    } else if (props.steps && drag.stepDurations) {
-      const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      DialStore.updateValues(props.timelineId, {
-        [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
-        [`${props.clip.key}.${props.steps[0].key ?? ''}.duration`]: next.duration,
-      });
-    } else {
-      const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      DialStore.updateValues(props.timelineId, {
-        [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - baseAt) : next.at,
-        [`${props.clip.key}.duration`]: next.duration,
-      });
-    }
-  };
-
-  const finish = (event?: PointerEvent & { currentTarget: HTMLDivElement }) => {
-    const previous = drag;
-    drag = null;
-    setDragging(false);
-    if (previous && !previous.moved && event) {
-      const anchor = previous.clickEl ?? event.currentTarget;
-      props.onClick(props.clip, anchor.getBoundingClientRect(), previous.clickEl?.dataset.step);
-    }
+      steps: props.steps,
+      fixedDuration: props.fixedDuration,
+      baseAt: props.baseAt,
+      delayMode: props.delayMode,
+      getScale: () => ({ pxPerSecond: props.pxPerSecond, timelineDuration: props.timelineDuration }),
+      onDragStart: () => {
+        setDragging(true);
+        props.onDrag();
+      },
+      onClick: (stepKey, anchor) => {
+        // Ending the press because the bar is going away is not a click.
+        if (!disposed) props.onClick(clip, anchor.getBoundingClientRect(), stepKey);
+      },
+      onEnd: () => {
+        stop = null;
+        setDragging(false);
+      },
+    });
   };
 
   const ghostCycles = createMemo(() => {
@@ -1273,22 +1233,23 @@ function TimelineClip(props: {
 
   return (
     <>
-      <For each={ghostCycles()}>{(cycle) => (
+      <Index each={ghostCycles()}>{(cycle) => (
         <div
           class="dialkit-timeline-clip-ghost"
           data-steps={isSteps() || undefined}
           aria-hidden="true"
           style={{
-            left: `${(cycle.start - props.viewStart) * props.pxPerSecond + 1}px`,
-            width: `${Math.max(1, cycle.duration * props.pxPerSecond - 2)}px`,
+            left: `${(cycle().start - props.viewStart) * props.pxPerSecond + 1}px`,
+            width: `${Math.max(1, cycle().duration * props.pxPerSecond - 2)}px`,
             background: props.clip.color,
           }}
         >
-          <For each={props.steps}>{(step) => <span class="dialkit-timeline-clip-ghost-segment" style={{ width: `${step.duration * props.pxPerSecond}px` }} />}</For>
+          <Index each={props.steps}>{(step) => <span class="dialkit-timeline-clip-ghost-segment" style={{ width: `${step().duration * props.pxPerSecond}px` }} />}</Index>
         </div>
-      )}</For>
+      )}</Index>
       <div
         class="dialkit-timeline-clip"
+        data-clip-key={props.clip.key}
         data-steps={isSteps() || undefined}
         data-composite={props.composite || undefined}
         data-selected={props.selected || undefined}
@@ -1299,10 +1260,10 @@ function TimelineClip(props: {
           background: props.composite ? `${props.clip.color}80` : props.clip.color,
         }}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={(event) => finish(event)}
-        onPointerCancel={() => finish()}
-        onLostPointerCapture={() => finish()}
+        onKeyDown={(event) => pressClipFromKey(event, () => props.onClick(props.clip, event.currentTarget.getBoundingClientRect()))}
+        tabIndex={0}
+        role="button"
+        aria-label={`Edit ${props.clip.label}`}
         title={title()}
       >
         <Show
@@ -1319,28 +1280,28 @@ function TimelineClip(props: {
               </>
             }
           >
-            <For each={props.steps}>{(step) => {
-              const segmentWidth = () => step.duration * props.pxPerSecond;
+            <Index each={props.steps}>{(step) => {
+              const segmentWidth = () => step().duration * props.pxPerSecond;
               return (
                 <div
                   class="dialkit-timeline-clip-segment"
-                  data-step={step.key ?? undefined}
-                  data-selected={props.selectedStepKey === step.key || undefined}
+                  data-step={step().key ?? undefined}
+                  data-selected={props.selectedStepKey === step().key || undefined}
                   style={{ width: `${segmentWidth()}px` }}
                 >
-                  <Show when={segmentWidth() > 52}><span class="dialkit-timeline-clip-duration">{formatSeconds(step.duration)}</span></Show>
+                  <Show when={segmentWidth() > 52}><span class="dialkit-timeline-clip-duration">{formatSeconds(step().duration)}</span></Show>
                 </div>
               );
-            }}</For>
-            <For each={props.steps}>{(step, index) => (
-              <Show when={!step.isPhysics}>
+            }}</Index>
+            <Index each={props.steps}>{(step, index) => (
+              <Show when={!step().isPhysics}>
                 <div
                   class="dialkit-timeline-clip-handle"
-                  data-boundary={index()}
-                  style={{ left: `${boundaries()[index()] * props.pxPerSecond - 4}px` }}
+                  data-boundary={index}
+                  style={{ left: `${boundaries()[index] * props.pxPerSecond - 4}px` }}
                 />
               </Show>
-            )}</For>
+            )}</Index>
             <Show when={!props.steps?.[0]?.isPhysics}><div class="dialkit-timeline-clip-handle" data-edge="start" /></Show>
           </Show>
         </Show>

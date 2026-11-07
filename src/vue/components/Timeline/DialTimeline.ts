@@ -7,6 +7,7 @@ import {
   onMounted,
   onUnmounted,
   ref,
+  shallowRef,
   watch,
   type PropType,
   type VNodeChild,
@@ -18,13 +19,8 @@ import type { TimelineClipMeta, TimelineMeta } from '../../../store/TimelineStor
 import { TimelineUiStore } from '../../../store/TimelineUiStore';
 import {
   TIMELINE_MIN_CLIP_DURATION,
-  clampClipMove,
-  clampClipResizeEnd,
-  clampClipResizeStart,
-  clampStepResize,
-  clampTrackDelay,
   computeClipStaticFromValues,
-  formatClock,
+  formatRulerSeconds,
   formatSeconds,
   formatStepLabel,
   normalizeTimelineValuesForCopy,
@@ -32,7 +28,10 @@ import {
 } from '../../../timeline-core';
 import type { TimelineClipLoop, TimelineStepStatic } from '../../../timeline-core';
 import { clamp } from '../../../transition-math';
-import { buildCopyInstruction } from '../../../copy-instruction';
+import { buildCopyInstruction, copyText } from '../../../copy-instruction';
+import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../../../dropdown-position';
+import { startPointerGesture, type StopGesture } from '../../../pointer-gesture';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../../../timeline/adapter';
 import { isDevDefault } from '../../../env';
 import {
   ICON_CHEVRON,
@@ -62,23 +61,31 @@ const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
 const POPOVER_WIDTH = 280;
 const ZOOM_DRAG_DISTANCE = 180;
 const DEFAULT_DOCK_MAX_HEIGHT = 400;
-const MIN_DOCK_MAX_HEIGHT = 120;
 
-export const DialTimeline = defineComponent({
-  name: 'DialKitTimeline',
+function useScrubGesture(id: () => string) {
+  let stop: StopGesture | null = null;
+  onUnmounted(() => stop?.(false));
+  return (event: PointerEvent, handle: Element | null, seek: (clientX: number) => void) => {
+    if (stop) return false;
+    stop = startScrubGesture(id(), event, handle, seek, () => { stop = null; });
+    return stop !== null;
+  };
+}
+
+const DialTimelineDock = defineComponent({
+  name: 'DialKitTimelineDock',
   props: {
-    theme: { type: String as PropType<DialTheme>, default: 'system' },
-    defaultVisible: { type: Boolean, default: true },
+    theme: { type: String as PropType<DialTheme>, required: true },
+    defaultVisible: { type: Boolean, required: true },
     visible: {
       type: Boolean as PropType<boolean | undefined>,
       default: undefined,
     },
     onVisibilityChange: Function as PropType<(visible: boolean) => void>,
-    defaultOpen: { type: Boolean, default: true },
-    productionEnabled: { type: Boolean, default: isDevDefault },
+    defaultOpen: { type: Boolean, required: true },
   },
   setup(props) {
-    const timelines = ref<TimelineMeta[]>(TimelineStore.getTimelines());
+    const timelines = shallowRef<TimelineMeta[]>(TimelineStore.getTimelines());
     const dockVisible = ref(TimelineUiStore.getVisible());
     const mounted = ref(false);
     const dockMaxHeight = ref(DEFAULT_DOCK_MAX_HEIGHT);
@@ -87,32 +94,22 @@ export const DialTimeline = defineComponent({
     let unsubscribeTimelines: (() => void) | undefined;
     let unsubscribeVisibility: (() => void) | undefined;
     let unregisterController: (() => void) | undefined;
-    let resizeCleanup: (() => void) | null = null;
+    let stopResize: StopGesture | null = null;
 
     const handleResizePointerDown = (event: PointerEvent) => {
-      if (!dockRef.value) return;
+      const dock = dockRef.value;
+      if (!dock || stopResize) return;
       event.preventDefault();
       event.stopPropagation();
-      resizeCleanup?.();
 
       const pointerY = event.clientY;
-      const startHeight = dockRef.value.getBoundingClientRect().height;
-      const move = (next: PointerEvent) => {
-        next.preventDefault();
-        const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-        dockMaxHeight.value = clamp(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax);
-      };
-      const finish = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', finish);
-        window.removeEventListener('pointercancel', finish);
-        resizeCleanup = null;
-      };
-
-      window.addEventListener('pointermove', move, { passive: false });
-      window.addEventListener('pointerup', finish);
-      window.addEventListener('pointercancel', finish);
-      resizeCleanup = finish;
+      const startHeight = dock.getBoundingClientRect().height;
+      stopResize = startPointerGesture(event, event.currentTarget as Element, {
+        move(next) {
+          dockMaxHeight.value = clampDockHeight(startHeight + pointerY - next.clientY);
+        },
+        end() { stopResize = null; },
+      });
     };
 
     onMounted(() => {
@@ -126,6 +123,7 @@ export const DialTimeline = defineComponent({
         onVisibilityChange: props.onVisibilityChange,
       });
       dockVisible.value = TimelineUiStore.getVisible();
+      timelines.value = TimelineStore.getTimelines();
       unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
         timelines.value = TimelineStore.getTimelines();
       });
@@ -141,11 +139,11 @@ export const DialTimeline = defineComponent({
       unregisterController?.();
       unsubscribeTimelines?.();
       unsubscribeVisibility?.();
-      resizeCleanup?.();
+      stopResize?.(false);
     });
 
     return () => {
-      if (!props.productionEnabled || !mounted.value || timelines.value.length === 0) return null;
+      if (!mounted.value || timelines.value.length === 0) return null;
       return h(Teleport, { to: 'body' }, [
         h('div', {
           class: 'dialkit-root dialkit-timeline',
@@ -158,7 +156,9 @@ export const DialTimeline = defineComponent({
             'aria-label': 'Resize timeline height',
             'aria-orientation': 'horizontal',
             title: 'Drag to resize timeline',
+            tabindex: 0,
             onPointerdown: handleResizePointerDown,
+            onKeydown: (event: KeyboardEvent) => resizeDockFromKey(dockRef.value, event, (height) => { dockMaxHeight.value = height; }),
           }),
           h('div', {
             ref: dockRef,
@@ -174,6 +174,34 @@ export const DialTimeline = defineComponent({
         ]),
       ]);
     };
+  },
+});
+
+// The production gate is a wrapper, so when it is off nothing registers or
+// subscribes: a disabled dock must not count as a mounted one.
+export const DialTimeline = defineComponent({
+  name: 'DialKitTimeline',
+  props: {
+    theme: { type: String as PropType<DialTheme>, default: 'system' },
+    defaultVisible: { type: Boolean, default: true },
+    visible: {
+      type: Boolean as PropType<boolean | undefined>,
+      default: undefined,
+    },
+    onVisibilityChange: Function as PropType<(visible: boolean) => void>,
+    defaultOpen: { type: Boolean, default: true },
+    productionEnabled: { type: Boolean, default: isDevDefault },
+  },
+  setup(props) {
+    return () => props.productionEnabled
+      ? h(DialTimelineDock, {
+        theme: props.theme,
+        defaultVisible: props.defaultVisible,
+        visible: props.visible,
+        onVisibilityChange: props.onVisibilityChange,
+        defaultOpen: props.defaultOpen,
+      })
+      : null;
   },
 });
 
@@ -235,7 +263,7 @@ const TimelineOverview = defineComponent({
   },
   setup(props) {
     const time = ref(TimelineStore.getTransport(props.id).time);
-    let scrub: { wasPlaying: boolean; rect: DOMRect } | null = null;
+    const startScrub = useScrubGesture(() => props.id);
     let unsubscribe: (() => void) | undefined;
     onMounted(() => {
       unsubscribe = TimelineStore.subscribe(props.id, () => {
@@ -243,16 +271,6 @@ const TimelineOverview = defineComponent({
       });
     });
     onUnmounted(() => unsubscribe?.());
-    const seek = (clientX: number) => {
-      if (!scrub || scrub.rect.width <= 0 || props.duration <= 0) return;
-      const next = clamp(((clientX - scrub.rect.left) / scrub.rect.width) * props.duration, 0, props.duration);
-      TimelineStore.seek(props.id, next);
-      props.onNavigate(next);
-    };
-    const finish = () => {
-      if (scrub?.wasPlaying) TimelineStore.play(props.id);
-      scrub = null;
-    };
     return () => {
       const viewportWidth = props.duration > 0 ? ((props.viewEnd - props.viewStart) / props.duration) * 100 : 100;
       const playhead = props.duration > 0 ? (time.value / props.duration) * 100 : 0;
@@ -261,18 +279,15 @@ const TimelineOverview = defineComponent({
         title: 'Drag to scrub the full timeline',
         onPointerdown: (event: PointerEvent) => {
           event.preventDefault();
-          (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-          scrub = {
-            wasPlaying: TimelineStore.getTransport(props.id).playing,
-            rect: (event.currentTarget as HTMLElement).getBoundingClientRect(),
-          };
-          TimelineStore.pause(props.id);
-          seek(event.clientX);
+          const overview = event.currentTarget as HTMLElement;
+          const rect = overview.getBoundingClientRect();
+          startScrub(event, overview, (clientX) => {
+            if (rect.width <= 0 || props.duration <= 0) return;
+            const next = clamp(((clientX - rect.left) / rect.width) * props.duration, 0, props.duration);
+            TimelineStore.seek(props.id, next);
+            props.onNavigate(next);
+          });
         },
-        onPointermove: (event: PointerEvent) => scrub && seek(event.clientX),
-        onPointerup: finish,
-        onPointercancel: finish,
-        onLostpointercapture: finish,
       }, [
         h('div', {
           class: 'dialkit-timeline-overview-viewport',
@@ -296,31 +311,20 @@ const TimelinePlayheadFlag = defineComponent({
     laneWidth: { type: Number, required: true },
     ruler: Object as PropType<HTMLDivElement>,
     onResetView: { type: Function as PropType<() => void>, required: true },
+    onNavigate: { type: Function as PropType<(time: number) => void>, required: true },
   },
   setup(props) {
     const time = ref(TimelineStore.getTransport(props.id).time);
+    const startScrub = useScrubGesture(() => props.id);
     let unsubscribe: (() => void) | undefined;
-    let scrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; viewEnd: number } | null = null;
-    let cleanup: (() => void) | null = null;
     onMounted(() => {
       unsubscribe = TimelineStore.subscribe(props.id, () => {
         time.value = TimelineStore.getTransport(props.id).time;
       });
     });
-    onUnmounted(() => {
-      unsubscribe?.();
-      cleanup?.();
-    });
-    const seek = (clientX: number) => {
-      if (!scrub || scrub.rect.width <= 0) return;
-      TimelineStore.seek(props.id, clamp(
-        scrub.viewStart + ((clientX - scrub.rect.left) / scrub.rect.width) * (scrub.viewEnd - scrub.viewStart),
-        scrub.viewStart,
-        scrub.viewEnd
-      ));
-    };
+    onUnmounted(() => unsubscribe?.());
     return () => {
-      if (time.value < props.viewStart || time.value > props.viewEnd || props.laneWidth <= 0) return null;
+      if (!isTimeInView(time.value, props.viewStart, props.viewEnd, props.pxPerSecond) || props.laneWidth <= 0) return null;
       const x = clamp((time.value - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
       const flagCenter = clamp(
         x,
@@ -336,6 +340,13 @@ const TimelinePlayheadFlag = defineComponent({
           left: `calc(var(--dial-timeline-label-w) + ${x}px)`,
           '--dial-timeline-playhead-flag-offset': `${flagOffset}px`,
         },
+        tabindex: 0,
+        onKeydown: (event: KeyboardEvent) => seekFromKey(props.id, event, {
+          start: props.viewStart,
+          end: props.viewEnd,
+          pxPerSecond: props.pxPerSecond,
+          reveal: props.onNavigate,
+        }),
         role: 'slider',
         'aria-label': 'Timeline current time',
         'aria-valuemin': 0,
@@ -347,33 +358,15 @@ const TimelinePlayheadFlag = defineComponent({
           if (!rect) return;
           event.preventDefault();
           event.stopPropagation();
-          cleanup?.();
           const reset = event.shiftKey;
-          scrub = {
-            wasPlaying: TimelineStore.getTransport(props.id).playing,
-            rect,
-            viewStart: reset ? 0 : props.viewStart,
-            viewEnd: reset ? props.duration : props.viewEnd,
-          };
-          if (reset) props.onResetView();
-          TimelineStore.pause(props.id);
-          seek(event.clientX);
-          const move = (next: PointerEvent) => {
-            next.preventDefault();
-            seek(next.clientX);
-          };
-          const finish = () => {
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', finish);
-            window.removeEventListener('pointercancel', finish);
-            if (scrub?.wasPlaying) TimelineStore.play(props.id);
-            scrub = null;
-            cleanup = null;
-          };
-          window.addEventListener('pointermove', move, { passive: false });
-          window.addEventListener('pointerup', finish);
-          window.addEventListener('pointercancel', finish);
-          cleanup = finish;
+          const start = reset ? 0 : props.viewStart;
+          const end = reset ? props.duration : props.viewEnd;
+          // No capture: this flag unmounts whenever the playhead leaves the visible range.
+          const started = startScrub(event, null, (clientX) => {
+            if (rect.width <= 0) return;
+            TimelineStore.seek(props.id, clamp(start + ((clientX - rect.left) / rect.width) * (end - start), start, end));
+          });
+          if (started && reset) props.onResetView();
         },
       }, [
         h('div', { class: 'dialkit-timeline-playhead-stem' }),
@@ -388,25 +381,11 @@ const TimelinePlayheadFlag = defineComponent({
 type PopoverState = {
   clip: TimelineClipMeta;
   stepKey?: string;
-  anchor: { left: number; top: number; right: number; bottom: number; width: number; height: number };
-};
-
-type ZoomDragState = {
-  pointerX: number;
-  zoom: number;
-  anchorRatio: number;
-  anchorTime: number;
-  moved: boolean;
+  anchor: AnchorRect;
 };
 
 function clampViewStart(start: number, duration: number, visibleDuration: number): number {
   return clamp(start, 0, Math.max(0, duration - visibleDuration));
-}
-
-function formatRulerSeconds(time: number, step: number): string {
-  if (step >= 1 && Number.isInteger(time)) return formatClock(time);
-  const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
-  return `${time.toFixed(decimals)}s`;
 }
 
 const TimelineSection = defineComponent({
@@ -419,12 +398,12 @@ const TimelineSection = defineComponent({
   setup(props) {
     const open = ref(props.defaultOpen);
     const copied = ref(false);
-    const popover = ref<PopoverState | null>(null);
+    const popover = shallowRef<PopoverState | null>(null);
     const collapsedGroups = ref(new Set<string>());
     const expandedTracks = ref(new Set<string>());
     const zoom = ref(1);
     const viewStart = ref(0);
-    const values = ref<Record<string, DialValue>>(DialStore.getValues(props.meta.id));
+    const values = shallowRef<Record<string, DialValue>>(DialStore.getValues(props.meta.id));
     const presets = ref(DialStore.getPresets(props.meta.id));
     const activePresetId = ref(DialStore.getActivePresetId(props.meta.id));
     const laneAreaRef = ref<HTMLDivElement | null>(null);
@@ -519,42 +498,124 @@ const TimelineSection = defineComponent({
       scroller.scrollLeft += delta;
     };
 
-    let zoomDrag: ZoomDragState | null = null;
-    let rulerScrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; visibleDuration: number } | null = null;
-    let trackScrub: { wasPlaying: boolean; rect: DOMRect; viewStart: number; visibleDuration: number } | null = null;
-    const seekRuler = (clientX: number) => {
-      if (!rulerScrub || rulerScrub.rect.width <= 0) return;
-      TimelineStore.seek(props.meta.id, clamp(
-        rulerScrub.viewStart + ((clientX - rulerScrub.rect.left) / rulerScrub.rect.width) * rulerScrub.visibleDuration,
-        rulerScrub.viewStart,
-        rulerScrub.viewStart + rulerScrub.visibleDuration
-      ));
-    };
-    const seekTrack = (clientX: number) => {
-      if (!trackScrub || trackScrub.rect.width <= 0) return;
-      TimelineStore.seek(props.meta.id, clamp(
-        trackScrub.viewStart + ((clientX - trackScrub.rect.left) / trackScrub.rect.width) * trackScrub.visibleDuration,
-        trackScrub.viewStart,
-        trackScrub.viewStart + trackScrub.visibleDuration
-      ));
-    };
-    const finishRuler = () => {
-      if (rulerScrub?.wasPlaying) TimelineStore.play(props.meta.id);
-      rulerScrub = null;
-      zoomDrag = null;
-    };
-    const finishTrack = () => {
-      if (trackScrub?.wasPlaying) TimelineStore.play(props.meta.id);
-      trackScrub = null;
+    // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
+    // Shift-drag first restores the full 1x range.
+    const startRulerScrub = useScrubGesture(() => props.meta.id);
+    const startTrackScrub = useScrubGesture(() => props.meta.id);
+    let stopZoom: StopGesture | null = null;
+    onUnmounted(() => stopZoom?.(false));
+
+    const handleRulerPointerDown = (event: PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const ruler = event.currentTarget as HTMLElement;
+      const rect = ruler.getBoundingClientRect();
+      if (rect.width <= 0) return;
+
+      if (!event.altKey) {
+        const reset = event.shiftKey;
+        const start = reset ? 0 : safeViewStart.value;
+        const span = reset ? props.meta.duration : visibleDuration.value;
+        const started = startRulerScrub(event, ruler, (clientX) => {
+          TimelineStore.seek(props.meta.id, clamp(start + ((clientX - rect.left) / rect.width) * span, start, start + span));
+        });
+        if (started && reset) resetView();
+        return;
+      }
+
+      if (stopZoom) return;
+      const pointerX = event.clientX;
+      const startZoom = zoom.value;
+      const startView = safeViewStart.value;
+      const anchorRatio = clamp((pointerX - rect.left) / rect.width, 0, 1);
+      const anchorTime = startView + anchorRatio * visibleDuration.value;
+      let moved = false;
+      stopZoom = startPointerGesture(event, ruler, {
+        move(next) {
+          if (props.meta.duration <= 0) return;
+          const dx = next.clientX - pointerX;
+          if (!moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+          moved = true;
+          const nextZoom = clamp(startZoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom.value);
+          const duration = props.meta.duration / nextZoom;
+          zoom.value = nextZoom;
+          viewStart.value = clampViewStart(anchorTime - anchorRatio * duration, props.meta.duration, duration);
+        },
+        end(cancelled) {
+          stopZoom = null;
+          if (cancelled && moved) {
+            zoom.value = startZoom;
+            viewStart.value = startView;
+          }
+        },
+      });
     };
 
-    const handleCopy = () => {
-      const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(props.meta.id), props.meta.clips);
-      void navigator.clipboard.writeText(buildCopyInstruction('useDialTimeline', props.meta.name, normalized));
-      copied.value = true;
-      window.setTimeout(() => { copied.value = false; }, 1500);
+    const handleTrackPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('.dialkit-timeline-label, .dialkit-timeline-scroll-row, button')) return;
+      if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
+      const rect = laneAreaRef.value?.getBoundingClientRect();
+      if (!rect) return;
+      event.preventDefault();
+      const reset = event.shiftKey;
+      const start = reset ? 0 : safeViewStart.value;
+      const span = reset ? props.meta.duration : visibleDuration.value;
+      const started = startTrackScrub(event, event.currentTarget as Element, (clientX) => {
+        if (rect.width <= 0) return;
+        TimelineStore.seek(props.meta.id, clamp(start + ((clientX - rect.left) / rect.width) * span, start, start + span));
+      });
+      if (!started) return;
+      if (reset) resetView();
+      popover.value = null;
     };
+
+    let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+    onUnmounted(() => clearTimeout(copyTimeout));
+
+    const handleCopy = async () => {
+      const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(props.meta.id), props.meta.clips);
+      if (!(await copyText(buildCopyInstruction('useDialTimeline', props.meta.name, normalized)))) return;
+      copied.value = true;
+      clearTimeout(copyTimeout);
+      copyTimeout = setTimeout(() => { copied.value = false; }, 1500);
+    };
+
+    // The popover closes when its bar is gone: a removed clip, a collapsed row.
+    const sectionRef = ref<HTMLDivElement | null>(null);
+    const popoverClipKey = computed(() => popover.value?.clip.key);
+    const popoverStepKey = computed(() => popover.value?.stepKey);
+    watch([collapsedGroups, expandedTracks, () => props.meta.clips, open, popoverClipKey, popoverStepKey, values], () => {
+      if (popoverClipKey.value && !clipAnchorRect(sectionRef.value, popoverClipKey.value, popoverStepKey.value)) {
+        popover.value = null;
+      }
+    }, { flush: 'post' });
+
+    // It follows the bar through zoom, panning, and page scroll. Edits made inside
+    // the popover are left out: a bar resizing must not move the slider under the pointer.
+    const followAnchor = () => {
+      if (!popover.value) return;
+      const anchor = clipAnchorRect(sectionRef.value, popover.value.clip.key, popover.value.stepKey);
+      if (anchor) popover.value = { ...popover.value, anchor };
+    };
+    watch([popoverClipKey, popoverStepKey, pxPerSecond, safeViewStart], (_, __, onCleanup) => {
+      if (!popoverClipKey.value) return;
+      followAnchor();
+      window.addEventListener('scroll', followAnchor, true);
+      window.addEventListener('resize', followAnchor);
+      onCleanup(() => {
+        window.removeEventListener('scroll', followAnchor, true);
+        window.removeEventListener('resize', followAnchor);
+      });
+    }, { flush: 'post' });
+
     const closePopover = () => { popover.value = null; };
+
+    // Escape and the close button hand focus back to the bar. Other closes leave it where the press put it.
+    const dismissPopover = () => {
+      if (popover.value) returnFocusToClip(sectionRef.value, popover.value.clip.key);
+      popover.value = null;
+    };
     const openClipPopover = (clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) => {
       const target = stepKey ? `${clip.key}.${stepKey}` : clip.key;
       if (getClipControls(props.meta.id, target, stepKey ? undefined : clipPopoverExclusions(clip)).length === 0) return;
@@ -700,7 +761,7 @@ const TimelineSection = defineComponent({
       return rows;
     };
 
-    return () => h('div', { class: 'dialkit-timeline-section' }, [
+    return () => h('div', { ref: sectionRef, class: 'dialkit-timeline-section' }, [
       h('div', { class: 'dialkit-timeline-header', 'data-open': open.value || undefined }, [
         h('div', { class: 'dialkit-timeline-identity' }, [
           h('span', { class: 'dialkit-timeline-title' }, props.meta.name),
@@ -741,30 +802,7 @@ const TimelineSection = defineComponent({
       open.value ? h('div', {
         class: 'dialkit-timeline-body',
         onWheel: handleTimelineWheel,
-        onPointerdown: (event: PointerEvent) => {
-          const target = event.target as HTMLElement;
-          if (target.closest('.dialkit-timeline-label, button')) return;
-          if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
-          const rect = laneAreaRef.value?.getBoundingClientRect();
-          if (!rect) return;
-          event.preventDefault();
-          (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-          const reset = event.shiftKey;
-          trackScrub = {
-            wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
-            rect,
-            viewStart: reset ? 0 : safeViewStart.value,
-            visibleDuration: reset ? props.meta.duration : visibleDuration.value,
-          };
-          if (reset) resetView();
-          popover.value = null;
-          TimelineStore.pause(props.meta.id);
-          seekTrack(event.clientX);
-        },
-        onPointermove: (event: PointerEvent) => trackScrub && seekTrack(event.clientX),
-        onPointerup: finishTrack,
-        onPointercancel: finishTrack,
-        onLostpointercapture: finishTrack,
+        onPointerdown: handleTrackPointerDown,
       }, [h('div', { class: 'dialkit-timeline-grid' }, [
         h('div', { class: 'dialkit-timeline-row dialkit-timeline-ruler-row' }, [
           h('div', { class: 'dialkit-timeline-label' }),
@@ -772,51 +810,7 @@ const TimelineSection = defineComponent({
             ref: laneAreaRef,
             class: 'dialkit-timeline-ruler',
             title: 'Drag to seek · Option-drag to zoom · Shift-drag to reset zoom',
-            onPointerdown: (event: PointerEvent) => {
-              event.preventDefault();
-              event.stopPropagation();
-              const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-              if (rect.width <= 0) return;
-              (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-              if (!event.altKey) {
-                const reset = event.shiftKey;
-                rulerScrub = {
-                  wasPlaying: TimelineStore.getTransport(props.meta.id).playing,
-                  rect,
-                  viewStart: reset ? 0 : safeViewStart.value,
-                  visibleDuration: reset ? props.meta.duration : visibleDuration.value,
-                };
-                if (reset) resetView();
-                TimelineStore.pause(props.meta.id);
-                seekRuler(event.clientX);
-                return;
-              }
-              const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-              zoomDrag = {
-                pointerX: event.clientX,
-                zoom: zoom.value,
-                anchorRatio: ratio,
-                anchorTime: safeViewStart.value + ratio * visibleDuration.value,
-                moved: false,
-              };
-            },
-            onPointermove: (event: PointerEvent) => {
-              if (rulerScrub) {
-                seekRuler(event.clientX);
-                return;
-              }
-              if (!zoomDrag || props.meta.duration <= 0) return;
-              const dx = event.clientX - zoomDrag.pointerX;
-              if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-              zoomDrag.moved = true;
-              const nextZoom = clamp(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom.value);
-              const duration = props.meta.duration / nextZoom;
-              zoom.value = nextZoom;
-              viewStart.value = clampViewStart(zoomDrag.anchorTime - zoomDrag.anchorRatio * duration, props.meta.duration, duration);
-            },
-            onPointerup: finishRuler,
-            onPointercancel: finishRuler,
-            onLostpointercapture: finishRuler,
+            onPointerdown: handleRulerPointerDown,
           }, [
             ...ticks.value.fine.map((time) => h('div', { key: `fine:${time}`, class: 'dialkit-timeline-tick dialkit-timeline-tick-fine', style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
             ...ticks.value.medium.map((time) => h('div', { key: `medium:${time}`, class: 'dialkit-timeline-tick dialkit-timeline-tick-medium', style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
@@ -835,6 +829,7 @@ const TimelineSection = defineComponent({
           laneWidth: laneWidth.value,
           ruler: laneAreaRef.value ?? undefined,
           onResetView: resetView,
+          onNavigate: centerViewAt,
         }) : null,
       ]), zoom.value > 1 ? h('div', { class: 'dialkit-timeline-scroll-row' }, [
         h('div', { class: 'dialkit-timeline-label' }),
@@ -851,6 +846,7 @@ const TimelineSection = defineComponent({
         values: values.value,
         theme: props.theme,
         onClose: closePopover,
+        onDismiss: dismissPopover,
       }) : null,
     ]);
   },
@@ -869,9 +865,11 @@ const ClipPopover = defineComponent({
     values: { type: Object as PropType<Record<string, DialValue>>, required: true },
     theme: { type: String as PropType<DialTheme>, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
+    onDismiss: { type: Function as PropType<() => void>, required: true },
   },
   setup(props) {
     const element = ref<HTMLDivElement | null>(null);
+    const closeButton = ref<HTMLButtonElement | null>(null);
     const naturalHeight = ref(0);
     const viewport = ref(readViewport());
     let observer: ResizeObserver | undefined;
@@ -881,16 +879,28 @@ const ClipPopover = defineComponent({
     const updateViewport = () => { viewport.value = readViewport(); };
     const outside = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
-      if (element.value?.contains(target) || target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
+      if (element.value?.contains(target) || isFloatingControlTarget(target)) return;
+      // Let clip clicks handle their own toggle/switch
+      if (target.closest?.('.dialkit-timeline-clip') || target.closest?.('.dialkit-timeline-label')) return;
       props.onClose();
     };
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') props.onClose();
+      if (event.key === 'Escape') props.onDismiss();
     };
-    onMounted(() => {
+    const observe = () => {
+      observer?.disconnect();
+      if (!element.value) return;
       measure();
       observer = new ResizeObserver(measure);
-      if (element.value) observer.observe(element.value.querySelector('.dialkit-timeline-popover-body') ?? element.value);
+      observer.observe(element.value.querySelector('.dialkit-timeline-popover-body') ?? element.value);
+    };
+    watch([() => props.popover.clip.key, () => props.popover.stepKey], observe, { flush: 'post' });
+    // Focus moves in once it has a height: until then it's hidden, and can't take focus.
+    watch([() => props.popover.clip.key, () => props.popover.stepKey, () => naturalHeight.value > 0], () => {
+      if (naturalHeight.value > 0) closeButton.value?.focus({ preventScroll: true });
+    }, { flush: 'post' });
+    onMounted(() => {
+      observe();
       window.addEventListener('resize', updateViewport);
       window.visualViewport?.addEventListener('resize', updateViewport);
       window.visualViewport?.addEventListener('scroll', updateViewport);
@@ -961,7 +971,7 @@ const ClipPopover = defineComponent({
         }, [
           h('div', { class: 'dialkit-timeline-popover-header' }, [
             h('span', { class: 'dialkit-timeline-popover-title' }, title),
-            h('button', { class: 'dialkit-timeline-popover-close', title: 'Close editor', 'aria-label': 'Close editor', onClick: props.onClose }, [
+            h('button', { ref: closeButton, class: 'dialkit-timeline-popover-close', title: 'Close editor', 'aria-label': 'Close editor', onClick: props.onDismiss }, [
               h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round' }, [h('path', { d: 'M6 6L18 18M18 6L6 18' })]),
             ]),
           ]),
@@ -1005,17 +1015,6 @@ function getControlAt(panelId: string, path: string): ControlMeta | null {
   return panel ? findControl(panel.controls, path) : null;
 }
 
-type DragState = {
-  mode: 'move' | 'start' | 'end' | 'boundary';
-  boundaryIndex?: number;
-  pointerX: number;
-  at: number;
-  duration: number;
-  stepDurations?: number[];
-  clickEl: HTMLElement | null;
-  moved: boolean;
-};
-
 const TimelineClip = defineComponent({
   props: {
     timelineId: { type: String, required: true },
@@ -1038,16 +1037,35 @@ const TimelineClip = defineComponent({
   },
   setup(props) {
     const dragging = ref(false);
-    let drag: DragState | null = null;
-    const finish = (event?: PointerEvent) => {
-      const previous = drag;
-      drag = null;
-      dragging.value = false;
-      if (previous && !previous.moved && event) {
-        const anchor = previous.clickEl ?? event.currentTarget as HTMLElement;
-        props.onClick(props.clip, anchor.getBoundingClientRect(), previous.clickEl?.dataset.step);
-      }
+    let stop: StopGesture | null = null;
+    onUnmounted(() => stop?.(false));
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.shiftKey) return;
+      event.stopPropagation();
+      if (stop) return;
+      stop = startClipDrag(event, event.currentTarget as HTMLElement, {
+        timelineId: props.timelineId,
+        clipKey: props.clip.key,
+        at: props.at,
+        duration: props.duration,
+        steps: props.steps,
+        fixedDuration: props.fixedDuration,
+        baseAt: props.baseAt,
+        delayMode: props.delayMode,
+        getScale: () => ({ pxPerSecond: props.pxPerSecond, timelineDuration: props.timelineDuration }),
+        onDragStart: () => {
+          dragging.value = true;
+          props.onDrag();
+        },
+        onClick: (stepKey, anchor) => props.onClick(props.clip, anchor.getBoundingClientRect(), stepKey),
+        onEnd: () => {
+          stop = null;
+          dragging.value = false;
+        },
+      });
     };
+
     return () => {
       const width = Math.max(props.duration * props.pxPerSecond, 14);
       const isSteps = Boolean(props.steps?.length);
@@ -1100,74 +1118,20 @@ const TimelineClip = defineComponent({
         ? `${props.clip.label} — composite of its property tracks${looping ? ' · repeats through timeline' : ''} · click to expand`
         : `${props.clip.label} — ${formatSeconds(props.at)} for ${durationText}${props.fixedDuration ? ' (duration set by spring physics)' : ''}${looping ? ' · repeats through timeline' : ''}${props.delayMode ? ' · drag to phase-shift' : ''}`;
       return [...ghosts, h('div', {
+        key: 'bar',
         class: 'dialkit-timeline-clip',
+        'data-clip-key': props.clip.key,
         'data-steps': isSteps || undefined,
         'data-composite': props.composite || undefined,
         'data-selected': props.selected || undefined,
         'data-dragging': dragging.value || undefined,
         style: { left: `${(props.at - props.viewStart) * props.pxPerSecond}px`, width: `${width}px`, background: props.composite ? `${props.clip.color}80` : props.clip.color },
         title,
-        onPointerdown: (event: PointerEvent) => {
-          if (event.shiftKey) return;
-          event.stopPropagation();
-          const target = event.target as HTMLElement;
-          let mode: DragState['mode'] = 'move';
-          let boundaryIndex: number | undefined;
-          if (target.dataset.boundary !== undefined) {
-            mode = 'boundary';
-            boundaryIndex = Number(target.dataset.boundary);
-          } else if (!props.fixedDuration) {
-            const edge = target.dataset.edge as 'start' | 'end' | undefined;
-            if (edge) mode = edge;
-          }
-          drag = {
-            mode,
-            boundaryIndex,
-            pointerX: event.clientX,
-            at: props.at,
-            duration: props.duration,
-            stepDurations: props.steps?.map((step) => step.duration),
-            clickEl: target.closest?.('[data-step]'),
-            moved: false,
-          };
-          (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-        },
-        onPointermove: (event: PointerEvent) => {
-          if (!drag || props.pxPerSecond <= 0) return;
-          const dx = event.clientX - drag.pointerX;
-          if (!drag.moved) {
-            if (Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-            drag.moved = true;
-            dragging.value = true;
-            props.onDrag();
-          }
-          const dt = dx / props.pxPerSecond;
-          if (drag.mode === 'boundary' && props.steps && drag.stepDurations) {
-            const index = drag.boundaryIndex ?? 0;
-            const others = drag.stepDurations.reduce((sum, duration, stepIndex) => stepIndex === index ? sum : sum + duration, 0);
-            DialStore.updateValue(props.timelineId, `${props.clip.key}.${props.steps[index].key ?? ''}.duration`, clampStepResize(drag.stepDurations[index] + dt, drag.at, others, props.timelineDuration));
-          } else if (drag.mode === 'move') {
-            if (props.delayMode) DialStore.updateValue(props.timelineId, `${props.clip.key}.delay`, clampTrackDelay(drag.at + dt - props.baseAt, props.baseAt, drag.duration, props.timelineDuration));
-            else DialStore.updateValue(props.timelineId, `${props.clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, props.timelineDuration));
-          } else if (drag.mode === 'end') {
-            DialStore.updateValue(props.timelineId, `${props.clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, props.timelineDuration));
-          } else if (props.steps && drag.stepDurations) {
-            const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(props.baseAt, 0)), drag.at, drag.stepDurations[0]);
-            DialStore.updateValues(props.timelineId, {
-              [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - props.baseAt) : next.at,
-              [`${props.clip.key}.${props.steps[0].key ?? ''}.duration`]: next.duration,
-            });
-          } else {
-            const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(props.baseAt, 0)), drag.at, drag.duration);
-            DialStore.updateValues(props.timelineId, {
-              [props.delayMode ? `${props.clip.key}.delay` : `${props.clip.key}.at`]: props.delayMode ? Math.max(0, next.at - props.baseAt) : next.at,
-              [`${props.clip.key}.duration`]: next.duration,
-            });
-          }
-        },
-        onPointerup: finish,
-        onPointercancel: () => finish(),
-        onLostpointercapture: () => finish(),
+        tabindex: 0,
+        role: 'button',
+        'aria-label': `Edit ${props.clip.label}`,
+        onPointerdown: handlePointerDown,
+        onKeydown: (event: KeyboardEvent) => pressClipFromKey(event, () => props.onClick(props.clip, (event.currentTarget as HTMLElement).getBoundingClientRect())),
       }, children), looping ? h('span', { class: 'dialkit-timeline-loop-infinity', 'aria-hidden': 'true', title: 'Repeats indefinitely' }, '∞') : null];
     };
   },

@@ -1,8 +1,9 @@
 import { handleSliderKey } from '../control-keyboard';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/DialStore';
 import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
+import { startPointerGesture, type StopGesture } from '../pointer-gesture';
 
 interface SliderProps {
   label: string;
@@ -47,14 +48,20 @@ export function Slider({
   const [inputValue, setInputValue] = useState('');
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Click-vs-drag detection refs
-  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
-  const isClickRef = useRef(true);
+  const gestureRef = useRef<StopGesture | null>(null);
   const animRef = useRef<ReturnType<typeof animate> | null>(null);
+  const springTargetRef = useRef<number | null>(null);
   const wrapperRectRef = useRef<DOMRect | null>(null);
   const scaleRef = useRef(1);
+  // A gesture's handlers outlive the render that started them.
+  const latest = useRef({ onChange, min, max, step });
+  latest.current = { onChange, min, max, step };
 
-  const percentage = ((value - min) / (max - min)) * 100;
+  const percentFromValue = (v: number) => {
+    const range = latest.current.max - latest.current.min;
+    return range > 0 ? ((v - latest.current.min) / range) * 100 : 0;
+  };
+  const percentage = percentFromValue(value);
   const isActive = isInteracting || isHovered;
 
   // Motion values for imperative animation
@@ -75,180 +82,130 @@ export function Slider({
     (stretch) => (stretch < 0 ? stretch : 0)
   );
 
-  // Sync from props when not interacting (skip if spring animation is active)
+  // Sync from props when not interacting. A click's spring keeps running only
+  // while the value is still the one it is heading to; a value that arrives from
+  // anywhere else (a version switch, a shortcut) takes over at once.
   useEffect(() => {
-    if (!isInteracting && !animRef.current) {
-      fillPercent.jump(percentage);
+    if (isInteracting) return;
+    if (animRef.current) {
+      if (springTargetRef.current === percentage) return;
+      animRef.current.stop();
+      animRef.current = null;
     }
+    fillPercent.jump(percentage);
   }, [percentage, isInteracting, fillPercent]);
 
-  const positionToValue = useCallback(
-    (clientX: number) => {
-      const rect = wrapperRectRef.current;
-      if (!rect) return value;
-      const screenX = clientX - rect.left;
-      const sceneX = screenX / scaleRef.current;
-      const nativeWidth = wrapperRef.current ? wrapperRef.current.offsetWidth : rect.width;
-      const percent = Math.max(0, Math.min(1, sceneX / nativeWidth));
-      const rawValue = min + percent * (max - min);
-      return Math.max(min, Math.min(max, rawValue));
-    },
-    [min, max, value]
-  );
+  const positionToValue = (clientX: number) => {
+    const { min, max } = latest.current;
+    const rect = wrapperRectRef.current;
+    if (!rect) return value;
+    const screenX = clientX - rect.left;
+    const sceneX = screenX / scaleRef.current;
+    const nativeWidth = wrapperRef.current ? wrapperRef.current.offsetWidth : rect.width;
+    const percent = Math.max(0, Math.min(1, sceneX / nativeWidth));
+    return Math.max(min, Math.min(max, min + percent * (max - min)));
+  };
 
-  const percentFromValue = useCallback(
-    (v: number) => ((v - min) / (max - min)) * 100,
-    [min, max]
-  );
+  const computeRubberStretch = (clientX: number, sign: number) => {
+    const rect = wrapperRectRef.current;
+    if (!rect) return 0;
+    const distancePast = sign < 0 ? rect.left - clientX : clientX - rect.right;
+    const overflow = Math.max(0, distancePast - DEAD_ZONE);
+    return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1.0));
+  };
 
-  const computeRubberStretch = useCallback(
-    (clientX: number, sign: number) => {
-      const rect = wrapperRectRef.current;
-      if (!rect) return 0;
-      const distancePast =
-        sign < 0 ? rect.left - clientX : clientX - rect.right;
-      const overflow = Math.max(0, distancePast - DEAD_ZONE);
-      return (
-        sign *
-        MAX_STRETCH *
-        Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1.0))
-      );
-    },
-    []
-  );
+  const stopSpring = () => {
+    animRef.current?.stop();
+    animRef.current = null;
+  };
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (showInput || e.button !== 0) return;
-      e.preventDefault();
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      pointerDownPos.current = { x: e.clientX, y: e.clientY };
-      isClickRef.current = true;
-      setIsInteracting(true);
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (showInput || gestureRef.current) return;
+    const startValue = value;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isClick = true;
 
-      // Capture wrapper rect at pointer down for stable reference
-      if (wrapperRef.current) {
-        wrapperRectRef.current = wrapperRef.current.getBoundingClientRect();
-        const nativeWidth = wrapperRef.current.offsetWidth;
-        scaleRef.current = wrapperRectRef.current.width / nativeWidth;
-      }
-    },
-    [showInput]
-  );
+    gestureRef.current = startPointerGesture(e.nativeEvent, e.currentTarget, {
+      move(next) {
+        const distance = Math.hypot(next.clientX - startX, next.clientY - startY);
+        if (isClick && distance > CLICK_THRESHOLD) {
+          isClick = false;
+          setIsDragging(true);
+        }
+        if (isClick) return;
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isInteracting || !pointerDownPos.current) return;
-
-      const dx = e.clientX - pointerDownPos.current.x;
-      const dy = e.clientY - pointerDownPos.current.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (isClickRef.current && distance > CLICK_THRESHOLD) {
-        isClickRef.current = false;
-        setIsDragging(true);
-      }
-
-      if (!isClickRef.current) {
-        // Drag mode — instant update
+        // Drag mode: instant update
         const rect = wrapperRectRef.current;
         if (rect) {
-          if (e.clientX < rect.left) {
-            rubberStretchPx.jump(computeRubberStretch(e.clientX, -1));
-          } else if (e.clientX > rect.right) {
-            rubberStretchPx.jump(computeRubberStretch(e.clientX, 1));
-          } else {
-            rubberStretchPx.jump(0);
+          if (next.clientX < rect.left) rubberStretchPx.jump(computeRubberStretch(next.clientX, -1));
+          else if (next.clientX > rect.right) rubberStretchPx.jump(computeRubberStretch(next.clientX, 1));
+          else rubberStretchPx.jump(0);
+        }
+        const { min, max, step, onChange } = latest.current;
+        const newValue = positionToValue(next.clientX);
+        stopSpring();
+        fillPercent.jump(percentFromValue(newValue));
+        onChange(roundValue(newValue, step, min, max));
+      },
+      end(cancelled, last) {
+        gestureRef.current = null;
+        const { min, max, step, onChange } = latest.current;
+        if (cancelled) {
+          rubberStretchPx.jump(0);
+          if (!isClick) onChange(startValue);
+        } else {
+          if (isClick && last) {
+            // When steps are coarse (≤10 positions), click snaps to the nearest step.
+            // Otherwise, the original decile-magnetic behavior is preserved
+            const rawValue = positionToValue(last.clientX);
+            const discreteSteps = (max - min) / step;
+            const snappedValue = discreteSteps <= 10
+              ? Math.max(min, Math.min(max, min + Math.round((rawValue - min) / step) * step))
+              : snapToDecile(rawValue, min, max);
+            const committed = roundValue(snappedValue, step, min, max);
+
+            stopSpring();
+            springTargetRef.current = percentFromValue(committed);
+            animRef.current = animate(fillPercent, springTargetRef.current, {
+              type: 'spring',
+              stiffness: 300,
+              damping: 25,
+              mass: 0.8,
+              onComplete: () => { animRef.current = null; },
+            });
+            onChange(committed);
+          }
+
+          // Spring rubber band back
+          if (rubberStretchPx.get() !== 0) {
+            animate(rubberStretchPx, 0, {
+              type: 'spring',
+              visualDuration: 0.35,
+              bounce: 0.15,
+            });
           }
         }
 
-        const newValue = positionToValue(e.clientX);
-        const newPct = percentFromValue(newValue);
-        if (animRef.current) {
-          animRef.current.stop();
-          animRef.current = null;
-        }
-        fillPercent.jump(newPct);
-        onChange(roundValue(newValue, step, min, max));
-      }
-    },
-    [
-      isInteracting,
-      positionToValue,
-      percentFromValue,
-      onChange,
-      fillPercent,
-      rubberStretchPx,
-      computeRubberStretch,
-      min,
-      max,
-      step,
-    ]
-  );
+        setIsInteracting(false);
+        setIsDragging(false);
+      },
+    });
+    if (!gestureRef.current) return;
 
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isInteracting) return;
-
-      if (isClickRef.current) {
-        // When steps are coarse (≤10 positions), click snaps to the nearest step.
-        // Otherwise, the original decile-magnetic behavior is preserved
-        const rawValue = positionToValue(e.clientX);
-        const discreteSteps = (max - min) / step;
-        const snappedValue = discreteSteps <= 10
-          ? Math.max(min, Math.min(max, min + Math.round((rawValue - min) / step) * step))
-          : snapToDecile(rawValue, min, max);
-
-        const newPct = percentFromValue(snappedValue);
-
-        if (animRef.current) {
-          animRef.current.stop();
-        }
-        animRef.current = animate(fillPercent, newPct, {
-          type: 'spring',
-          stiffness: 300,
-          damping: 25,
-          mass: 0.8,
-          onComplete: () => { animRef.current = null; },
-        });
-        onChange(roundValue(snappedValue, step, min, max));
-      }
-
-      // Spring rubber band back
-      if (rubberStretchPx.get() !== 0) {
-        animate(rubberStretchPx, 0, {
-          type: 'spring',
-          visualDuration: 0.35,
-          bounce: 0.15,
-        });
-      }
-
-      setIsInteracting(false);
-      setIsDragging(false);
-      pointerDownPos.current = null;
-    },
-    [
-      isInteracting,
-      positionToValue,
-      percentFromValue,
-      onChange,
-      min,
-      max,
-      step,
-      fillPercent,
-      rubberStretchPx,
-    ]
-  );
-
-  const handlePointerCancel = () => {
-    if (!pointerDownPos.current) return;
-    rubberStretchPx.jump(0);
-    setIsInteracting(false);
-    setIsDragging(false);
-    pointerDownPos.current = null;
+    e.preventDefault();
+    setIsInteracting(true);
+    // Capture wrapper rect at pointer down for stable reference
+    if (wrapperRef.current) {
+      wrapperRectRef.current = wrapperRef.current.getBoundingClientRect();
+      scaleRef.current = wrapperRectRef.current.width / wrapperRef.current.offsetWidth;
+    }
   };
 
-  useEffect(() => () => { animRef.current?.stop(); }, []);
+  useEffect(() => () => {
+    animRef.current?.stop();
+    gestureRef.current?.(false);
+  }, []);
 
   // Handle value hover delay for editable state
   useEffect(() => {
@@ -387,17 +344,13 @@ export function Slider({
         aria-valuenow={value}
         aria-valuetext={`${displayValue}${unit ? ` ${unit}` : ''}`}
         onKeyDown={(e) => handleSliderKey(e, value, min, max, step, (next) => {
-          animRef.current?.stop(); animRef.current = null;
+          stopSpring();
           fillPercent.jump(percentFromValue(next)); onChange(next);
         }, () => {
           editingEnded.current = false;
           setInputValue(value.toFixed(decimalsForStep(step, min, max))); setShowInput(true);
         })}
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onLostPointerCapture={handlePointerCancel}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{ width: rubberBandWidth, x: rubberBandX }}

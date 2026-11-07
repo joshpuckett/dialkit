@@ -170,7 +170,7 @@ Use `useDialKitController` in React and Vue, or `createDialKitController` in Sol
 | `setOpen(open)` | Open or close this panel; opening also reveals its containing root |
 | `getOpen()` | Read open state; `undefined` means the root default has not been initialized |
 
-Programmatic edits update the active preset, or the base values when V1 is selected. `setValues` does not trigger actions. Update an XY pad as a pair: `setValue("position", { x: 0.5, y: -0.25 })`.
+Programmatic edits update the active preset, or the base values when V1 is selected. Values follow the same rules as the controls: sliders clamp to their range and snap to their step, and a value of the wrong type is ignored with a console warning. Configs are plain data, and a change is detected when a new config object serializes differently, so pass a new object rather than mutating one in place. `setValues` does not trigger actions. Update an XY pad as a pair: `setValue("position", { x: 0.5, y: -0.25 })`.
 
 ### Vanilla lifecycle
 
@@ -180,16 +180,16 @@ Vanilla controllers additionally expose:
 | --- | --- |
 | `id` | The registered panel ID |
 | `subscribe(callback, immediate?)` | Receive snapshots; calls immediately by default and returns an unsubscribe function |
-| `updateConfig(config)` | Reconcile new definitions while retaining compatible edits |
+| `updateConfig(config, options?)` | Reconcile new definitions while retaining compatible edits; pass options to change them too |
 | `destroy()` | Release this registration and its subscriptions; safe to call twice |
 
 Snapshots are plain objects. Read them again after updates or use a subscription. Destroying a root removes the UI; destroy its controllers separately to release their registrations.
 
 ## Persistence
 
-Pass a stable `id` to reconnect to a panel across mounts. Multiple registrations with the same ID share values. Keep their configs consistent.
+Pass a stable `id` to reconnect to a panel across mounts. Multiple registrations with the same ID share values. Keep their configs consistent; the most recent one is used, and a difference logs a warning.
 
-`persist: true` saves values, presets, and the active preset to `localStorage` under `dialkit:${id}`. Use the object form to customize storage:
+`persist: true` saves values, presets, and the active preset to `localStorage` under `dialkit:${id}`. Without an `id` it saves under `dialkit:${name}` and warns, because generated IDs change with your component tree. Data that DialKit 2.1 saved for a panel without an `id` moves to the new key the first time the panel loads. Saves from another tab appear live. Use the object form to customize storage:
 
 ```tsx
 const values = useDialKit("Card", { radius: [24, 0, 64] }, {
@@ -204,9 +204,9 @@ const values = useDialKit("Card", { radius: [24, 0, 64] }, {
 
 `storage` defaults to `"localStorage"`; `presets` defaults to `true`. With `presets: false`, only values are persisted. Open state is retained in memory for stable IDs but is never written to storage.
 
-**Save version** saves and selects a new version. Selecting **V1** restores the editable base values. Hover a thumbnail to delete it. **Copy** places the values and a configuration-update instruction on the clipboard. With `versions="menu"` on the root, the toolbar shows the classic version menu instead.
+**Save version** saves and selects a new version. Edits made since selecting the current version go with the new one, and the current version keeps what it had; if you switch away instead, it keeps the edits. Selecting **V1** restores the editable base values. Hover a thumbnail to delete it; deleting the selected version returns to V1. Version names are unique, so a name already in use gets a number added. **Copy** places the values and a configuration-update instruction on the clipboard. With `versions="menu"` on the root, the toolbar shows the classic version menu instead.
 
-For custom preset interfaces, use `DialStore.savePreset`, `loadPreset`, `deletePreset`, `renamePreset`, `getPresets`, `getActivePresetId`, and `clearActivePreset`. `renamePreset(id, null, name)` renames V1.
+For custom preset interfaces, use `DialStore.savePreset`, `loadPreset`, `deletePreset`, `renamePreset`, `getPresets`, `getActivePresetId`, and `clearActivePreset`. `renamePreset(id, null, name)` renames V1. `hasEdits(id)` says whether the visible values differ from what the selected version holds, and `keepEdits(id)` makes them part of it.
 
 ### Version thumbnails
 
@@ -243,6 +243,9 @@ DialStore.getPanelOpen("card");
 | Color picker | Tab moves between controls; arrows adjust the focused control; Escape closes |
 | Image picker | Arrows move through images; Enter/Space selects; Escape closes |
 | Bézier handles | Arrows move by 0.01; Shift + Arrow by 0.1; Escape cancels a drag |
+| Timeline playhead | Left/Right moves by 1 ms; Shift + Left/Right by 0.1 s; Home/End goes to the start/end. A zoomed view follows it |
+| Timeline clip | Enter or Space opens its editor, or expands a clip with property tracks; Escape closes the editor and returns focus to the clip |
+| Timeline resize handle | Up/Down resizes the dock by 20 px, up to the height of its content |
 
 Menus return focus to their trigger on selection or Escape. Tab and Shift + Tab resume the owning panel's tab order.
 
@@ -267,7 +270,7 @@ const shortcuts = {
 
 For sliders, hold the key and scroll, drag horizontally, or move the pointer according to `interaction`. `scroll-only` needs no key. Arrow keys also adjust a slider while its assigned key is held. Toggles flip on the assigned key press.
 
-`normal` uses the slider's step. `fine` uses 1% of its range; `coarse` uses 10%. Shortcut badges show the assigned key and interaction. Shortcuts are disabled while an input, button, or keyboard-operated control has focus.
+`normal` uses the slider's step. `fine` uses 1% of its range and `coarse` uses 10%, never less than the step. Shortcut badges show the assigned key and interaction. A shortcut fires only with exactly its declared modifier, so Ctrl+K doesn't trigger a plain `k` shortcut. Shortcuts are disabled while typing in a field, and a focused button or keyboard-operated control keeps the keys it acts on (Enter, Space, Tab, Escape, arrows, Home, End, Page Up, Page Down). If two controls use the same key and modifier, the first registered wins and a warning is logged.
 
 ## Custom layouts
 

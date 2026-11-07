@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatEase, parseEase } from '../../easing-geometry';
-  import { DialStore } from 'dialkit/store';
+  import { SPRING_DEFAULTS, isPhysicsSpring, transitionModeOf } from 'dialkit/store';
   import type { EasingConfig, SpringConfig, TransitionConfig } from 'dialkit/store';
   import Folder from './Folder.svelte';
   import Slider from './Slider.svelte';
@@ -18,7 +18,7 @@
     step?: number;
   };
 
-  let { panelId, path, label, value, onChange, hideDuration = false, durationControl } = $props<{
+  let { label, value, onChange, hideDuration = false, durationControl } = $props<{
     panelId: string;
     path: string;
     label: string;
@@ -28,16 +28,10 @@
     durationControl?: TransitionDurationControl;
   }>();
 
-  let mode = $state<CurveMode>(DialStore.getTransitionMode(panelId, path));
+  // The mode describes the value, so it can't disagree with the value it is read from.
+  const mode = $derived<CurveMode>(transitionModeOf(value));
   let editingEase = $state(false);
   let easeDraft = $state('');
-
-  $effect(() => {
-    const unsub = DialStore.subscribe(panelId, () => {
-      mode = DialStore.getTransitionMode(panelId, path);
-    });
-    return unsub;
-  });
 
   const isEasing = $derived(mode === 'easing');
   const isSimpleSpring = $derived(mode === 'simple');
@@ -61,27 +55,16 @@
   );
 
   // Keep cache updated with current edits
-  $effect(() => {
-    if (isEasing && value.type === 'easing') {
-      cache.easing = value;
-    } else if (isSimpleSpring && value.type === 'spring') {
-      cache.simple = value;
-    } else if (mode === 'advanced' && value.type === 'spring') {
-      cache.advanced = value;
-    }
+  $effect.pre(() => {
+    const current: TransitionConfig = value;
+    if (current.type === 'easing') cache.easing = current;
+    else if (isPhysicsSpring(current)) cache.advanced = current;
+    else cache.simple = current;
   });
 
+  // The mode follows the value, so switching mode is writing that mode's value.
   const handleModeChange = (nextMode: string) => {
-    const typed = nextMode as CurveMode;
-    DialStore.updateTransitionMode(panelId, path, typed);
-
-    if (typed === 'easing') {
-      onChange(cache.easing);
-    } else if (typed === 'simple') {
-      onChange(cache.simple);
-    } else {
-      onChange(cache.advanced);
-    }
+    onChange(cache[nextMode as CurveMode]);
   };
 
   const handleSpringUpdate = (key: keyof SpringConfig, val: number) => {
@@ -150,7 +133,7 @@
     {:else if isSimpleSpring}
       <Slider
         label="Bounce"
-        value={spring.bounce ?? 0.2}
+        value={spring.bounce ?? SPRING_DEFAULTS.bounce}
         onChange={(v) => handleSpringUpdate('bounce', v)}
         min={0}
         max={1}
@@ -159,7 +142,7 @@
     {:else}
       <Slider
         label="Stiffness"
-        value={spring.stiffness ?? 400}
+        value={spring.stiffness ?? SPRING_DEFAULTS.stiffness}
         onChange={(v) => handleSpringUpdate('stiffness', v)}
         min={1}
         max={1000}
@@ -167,7 +150,7 @@
       />
       <Slider
         label="Damping"
-        value={spring.damping ?? 17}
+        value={spring.damping ?? SPRING_DEFAULTS.damping}
         onChange={(v) => handleSpringUpdate('damping', v)}
         min={1}
         max={100}
@@ -175,7 +158,7 @@
       />
       <Slider
         label="Mass"
-        value={spring.mass ?? 1}
+        value={spring.mass ?? SPRING_DEFAULTS.mass}
         onChange={(v) => handleSpringUpdate('mass', v)}
         min={0.1}
         max={10}
@@ -186,7 +169,7 @@
     {#if !hideDuration && (isEasing || isSimpleSpring)}
       <Slider
         label="Duration"
-        value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)}
+        value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? SPRING_DEFAULTS.visualDuration)}
         onChange={durationControl?.onChange ?? ((next) => {
           if (isEasing) onChange({ ...easing, duration: next });
           else handleSpringUpdate('visualDuration', next);

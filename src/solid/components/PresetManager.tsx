@@ -7,6 +7,7 @@ import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../../icons';
 import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
 import { DialStore } from '../../store/DialStore';
 import type { Preset } from '../../store/DialStore';
+import { deleteVersion } from '../../versions/controller';
 import { createDropdownDismiss, createDropdownPresence, type AnimationHandle } from '../primitives';
 
 interface PresetManagerProps {
@@ -86,7 +87,7 @@ export function PresetManager(props: PresetManagerProps) {
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.deletePreset(props.panelId, presetId);
+    deleteVersion(props.panelId, presetId);
   };
 
   return (

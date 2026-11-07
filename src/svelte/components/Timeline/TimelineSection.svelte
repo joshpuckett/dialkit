@@ -4,11 +4,13 @@
   import type { DialValue } from 'dialkit/store';
   import {
     TimelineStore,
-    buildCopyInstruction,
     clamp,
     computeClipStaticFromValues,
-    formatClock,
+    formatRulerSeconds,
+    isTimeInView,
     normalizeTimelineValuesForCopy,
+    seekFromKey,
+    startScrubGesture,
   } from 'dialkit/timeline';
   import type {
     TimelineClipMeta,
@@ -25,6 +27,9 @@
     ICON_PLAY,
     ICON_REPLAY,
   } from '../../../icons';
+  import { buildCopyInstruction, copyText } from '../../../copy-instruction';
+  import { clipAnchorRect, returnFocusToClip } from '../../../dropdown-position';
+  import { startPointerGesture, type StopGesture } from '../../../pointer-gesture';
   import { findControl } from '../../../shortcut-utils';
   import PresetManager from '../PresetManager.svelte';
   import type { DialTheme } from '../DialRoot.svelte';
@@ -45,23 +50,6 @@
   const PLAYHEAD_FLAG_WIDTH = 52;
   const PLAYHEAD_FLAG_EDGE_OVERHANG = 1;
   const ZOOM_DRAG_DISTANCE = 180;
-
-  type ZoomDragState = {
-    pointerX: number;
-    rect: DOMRect;
-    zoom: number;
-    viewStart: number;
-    anchorRatio: number;
-    anchorTime: number;
-    moved: boolean;
-  };
-
-  type ScrubState = {
-    wasPlaying: boolean;
-    rect: DOMRect;
-    viewStart: number;
-    visibleDuration: number;
-  };
 
   type GroupRow = {
     kind: 'group';
@@ -96,32 +84,49 @@
     dockVisible: boolean;
   }>();
 
+  const id = $derived(meta.id);
   let open = $state(untrack(() => defaultOpen));
   let copied = $state(false);
-  let popover = $state<PopoverState | null>(null);
+  let popover = $state.raw<PopoverState | null>(null);
   let collapsedGroups = $state(new Set<string>());
   let expandedTracks = $state(new Set<string>());
   let zoom = $state(1);
   let viewStart = $state(0);
-  let values = $state<Record<string, DialValue>>(DialStore.getValues(untrack(() => meta.id)));
+  let values = $state.raw<Record<string, DialValue>>(DialStore.getValues(untrack(() => meta.id)));
   let transport = $state<TimelineTransport>(TimelineStore.getTransport(untrack(() => meta.id)));
   let laneArea = $state<HTMLDivElement>();
   let horizontalScrollElement = $state<HTMLDivElement>();
+  let section = $state<HTMLDivElement>();
   let laneWidth = $state(0);
+  let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  let zoomDrag: ZoomDragState | null = null;
-  let rulerScrub: ScrubState | null = null;
-  let trackScrub: ScrubState | null = null;
-  let overviewScrub: { wasPlaying: boolean; rect: DOMRect } | null = null;
-  let playheadScrub: ScrubState | null = null;
+  // One gesture per surface, each stopped with stop(false) on unmount.
+  function createScrub() {
+    let stop: StopGesture | null = null;
+    return {
+      start(event: PointerEvent, handle: Element | null, seek: (clientX: number) => void) {
+        if (stop) return false;
+        stop = startScrubGesture(id, event, handle, seek, () => { stop = null; });
+        return stop !== null;
+      },
+      stop() {
+        stop?.(false);
+      },
+    };
+  }
+  const playheadScrub = createScrub();
+  const overviewScrub = createScrub();
+  const rulerScrub = createScrub();
+  const trackScrub = createScrub();
+  let stopZoom: StopGesture | null = null;
 
   const presets = $derived.by(() => {
     values;
-    return DialStore.getPresets(meta.id);
+    return DialStore.getPresets(id);
   });
   const activePresetId = $derived.by(() => {
     values;
-    return DialStore.getActivePresetId(meta.id);
+    return DialStore.getActivePresetId(id);
   });
   const visibleDuration = $derived(meta.duration > 0 ? meta.duration / zoom : meta.duration);
   const safeViewStart = $derived(clampViewStart(viewStart, meta.duration, visibleDuration));
@@ -135,7 +140,7 @@
   ));
   const playheadX = $derived(clamp((transport.time - safeViewStart) * pxPerSecond, 0, laneWidth));
   const playheadVisible = $derived(
-    transport.time >= safeViewStart && transport.time <= viewEnd && laneWidth > 0
+    isTimeInView(transport.time, safeViewStart, viewEnd, pxPerSecond) && laneWidth > 0
   );
   const playheadFlagCenter = $derived(clamp(
     playheadX,
@@ -230,18 +235,33 @@
   });
 
   $effect(() => {
-    values = DialStore.getValues(meta.id);
-    transport = TimelineStore.getTransport(meta.id);
-    const unsubscribeValues = DialStore.subscribe(meta.id, () => {
-      values = DialStore.getValues(meta.id);
+    const current = id;
+    values = DialStore.getValues(current);
+    transport = TimelineStore.getTransport(current);
+    const unsubscribeValues = DialStore.subscribe(current, () => {
+      values = DialStore.getValues(current);
     });
-    const unsubscribeTransport = TimelineStore.subscribe(meta.id, () => {
-      transport = TimelineStore.getTransport(meta.id);
+    const unsubscribeTransport = TimelineStore.subscribe(current, () => {
+      transport = TimelineStore.getTransport(current);
     });
     return () => {
       unsubscribeValues();
       unsubscribeTransport();
     };
+  });
+
+  $effect(() => () => {
+    playheadScrub.stop();
+    overviewScrub.stop();
+    rulerScrub.stop();
+    trackScrub.stop();
+    stopZoom?.(false);
+    clearTimeout(copyTimeout);
+  });
+
+  // The overview unmounts when the section opens.
+  $effect(() => {
+    if (open) overviewScrub.stop();
   });
 
   $effect(() => {
@@ -274,6 +294,40 @@
     if (!dockVisible) popover = null;
   });
 
+  const popoverClipKey = $derived(popover?.clip.key);
+  const popoverStepKey = $derived(popover?.stepKey);
+
+  // The popover closes when its bar is gone: a removed clip, a collapsed row.
+  $effect(() => {
+    collapsedGroups;
+    expandedTracks;
+    meta.clips;
+    open;
+    values;
+    if (popoverClipKey && !clipAnchorRect(section ?? null, popoverClipKey, popoverStepKey)) popover = null;
+  });
+
+  // It follows the bar through zoom, panning, and page scroll. Edits made inside
+  // the popover are left out: a bar resizing must not move the slider under the pointer.
+  $effect(() => {
+    const clipKey = popoverClipKey;
+    const stepKey = popoverStepKey;
+    pxPerSecond;
+    safeViewStart;
+    if (!clipKey) return;
+    const follow = () => untrack(() => {
+      const anchor = clipAnchorRect(section ?? null, clipKey, stepKey);
+      if (anchor && popover) popover = { ...popover, anchor };
+    });
+    follow();
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
+    return () => {
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
+    };
+  });
+
   function centerViewAt(time: number) {
     if (zoom <= 1 || meta.duration <= 0) return;
     const duration = meta.duration / zoom;
@@ -287,7 +341,7 @@
 
   function handleReplay() {
     viewStart = 0;
-    TimelineStore.replay(meta.id);
+    TimelineStore.replay(id);
   }
 
   function handleHorizontalScroll(event: Event) {
@@ -311,124 +365,84 @@
     horizontalScrollElement.scrollLeft += delta;
   }
 
-  function seek(scrub: ScrubState | null, clientX: number) {
-    if (!scrub || scrub.rect.width <= 0) return;
-    TimelineStore.seek(meta.id, clamp(
-      scrub.viewStart + ((clientX - scrub.rect.left) / scrub.rect.width) * scrub.visibleDuration,
-      scrub.viewStart,
-      scrub.viewStart + scrub.visibleDuration
-    ));
-  }
-
+  // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
+  // Shift-drag first restores the full 1x range.
   function handleRulerPointerDown(event: PointerEvent) {
     event.preventDefault();
     event.stopPropagation();
-    const target = event.currentTarget as HTMLDivElement;
-    const rect = target.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    target.setPointerCapture(event.pointerId);
+    const handle = event.currentTarget as HTMLDivElement;
+    const rect = handle.getBoundingClientRect();
+    const contentWidth = rect.width;
+    if (contentWidth <= 0) return;
+
     if (!event.altKey) {
-      const reset = event.shiftKey;
-      rulerScrub = {
-        wasPlaying: TimelineStore.getTransport(meta.id).playing,
-        rect,
-        viewStart: reset ? 0 : safeViewStart,
-        visibleDuration: reset ? meta.duration : visibleDuration,
-      };
-      if (reset) resetView();
-      TimelineStore.pause(meta.id);
-      seek(rulerScrub, event.clientX);
+      const shouldReset = event.shiftKey;
+      const start = shouldReset ? 0 : safeViewStart;
+      const span = shouldReset ? meta.duration : visibleDuration;
+      const started = rulerScrub.start(event, handle, (clientX) => {
+        TimelineStore.seek(id, clamp(start + ((clientX - rect.left) / contentWidth) * span, start, start + span));
+      });
+      if (started && shouldReset) resetView();
       return;
     }
-    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    zoomDrag = {
-      pointerX: event.clientX,
-      rect,
-      zoom,
-      viewStart: safeViewStart,
-      anchorRatio: ratio,
-      anchorTime: safeViewStart + ratio * visibleDuration,
-      moved: false,
-    };
-  }
 
-  function handleRulerPointerMove(event: PointerEvent) {
-    if (rulerScrub) {
-      seek(rulerScrub, event.clientX);
-      return;
-    }
-    if (!zoomDrag || meta.duration <= 0) return;
-    const dx = event.clientX - zoomDrag.pointerX;
-    if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-    zoomDrag.moved = true;
-    const nextZoom = clamp(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
-    const nextDuration = meta.duration / nextZoom;
-    zoom = nextZoom;
-    viewStart = clampViewStart(
-      zoomDrag.anchorTime - zoomDrag.anchorRatio * nextDuration,
-      meta.duration,
-      nextDuration
-    );
-  }
-
-  function finishRuler() {
-    if (rulerScrub?.wasPlaying) TimelineStore.play(meta.id);
-    rulerScrub = null;
-    zoomDrag = null;
+    if (stopZoom) return;
+    const pointerX = event.clientX;
+    const startZoom = zoom;
+    const startView = safeViewStart;
+    const anchorRatio = clamp((pointerX - rect.left) / contentWidth, 0, 1);
+    const anchorTime = safeViewStart + anchorRatio * visibleDuration;
+    let moved = false;
+    stopZoom = startPointerGesture(event, handle, {
+      move(next) {
+        if (meta.duration <= 0) return;
+        const dx = next.clientX - pointerX;
+        if (!moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
+        moved = true;
+        const nextZoom = clamp(startZoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
+        const nextVisibleDuration = meta.duration / nextZoom;
+        zoom = nextZoom;
+        viewStart = clampViewStart(anchorTime - anchorRatio * nextVisibleDuration, meta.duration, nextVisibleDuration);
+      },
+      end(cancelled) {
+        stopZoom = null;
+        if (cancelled && moved) {
+          zoom = startZoom;
+          viewStart = startView;
+        }
+      },
+    });
   }
 
   function handleTrackPointerDown(event: PointerEvent) {
     const target = event.target as HTMLElement;
-    if (target.closest('.dialkit-timeline-label, button')) return;
+    if (target.closest('.dialkit-timeline-label, .dialkit-timeline-scroll-row, button')) return;
     if (!event.shiftKey && target.closest('.dialkit-timeline-clip')) return;
     const rect = laneArea?.getBoundingClientRect();
     if (!rect) return;
     event.preventDefault();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    const reset = event.shiftKey;
-    trackScrub = {
-      wasPlaying: TimelineStore.getTransport(meta.id).playing,
-      rect,
-      viewStart: reset ? 0 : safeViewStart,
-      visibleDuration: reset ? meta.duration : visibleDuration,
-    };
-    if (reset) resetView();
+    const shouldReset = event.shiftKey;
+    const start = shouldReset ? 0 : safeViewStart;
+    const span = shouldReset ? meta.duration : visibleDuration;
+    const started = trackScrub.start(event, event.currentTarget as Element, (clientX) => {
+      if (rect.width <= 0) return;
+      TimelineStore.seek(id, clamp(start + ((clientX - rect.left) / rect.width) * span, start, start + span));
+    });
+    if (!started) return;
+    if (shouldReset) resetView();
     popover = null;
-    TimelineStore.pause(meta.id);
-    seek(trackScrub, event.clientX);
-  }
-
-  function finishTrack() {
-    if (trackScrub?.wasPlaying) TimelineStore.play(meta.id);
-    trackScrub = null;
   }
 
   function handleOverviewPointerDown(event: PointerEvent) {
     event.preventDefault();
-    const target = event.currentTarget as HTMLElement;
-    target.setPointerCapture(event.pointerId);
-    overviewScrub = {
-      wasPlaying: TimelineStore.getTransport(meta.id).playing,
-      rect: target.getBoundingClientRect(),
-    };
-    TimelineStore.pause(meta.id);
-    seekOverview(event.clientX);
-  }
-
-  function seekOverview(clientX: number) {
-    if (!overviewScrub || overviewScrub.rect.width <= 0 || meta.duration <= 0) return;
-    const next = clamp(
-      ((clientX - overviewScrub.rect.left) / overviewScrub.rect.width) * meta.duration,
-      0,
-      meta.duration
-    );
-    TimelineStore.seek(meta.id, next);
-    centerViewAt(next);
-  }
-
-  function finishOverview() {
-    if (overviewScrub?.wasPlaying) TimelineStore.play(meta.id);
-    overviewScrub = null;
+    const handle = event.currentTarget as HTMLElement;
+    const rect = handle.getBoundingClientRect();
+    overviewScrub.start(event, handle, (clientX) => {
+      if (rect.width <= 0 || meta.duration <= 0) return;
+      const next = clamp(((clientX - rect.left) / rect.width) * meta.duration, 0, meta.duration);
+      TimelineStore.seek(id, next);
+      centerViewAt(next);
+    });
   }
 
   function handlePlayheadPointerDown(event: PointerEvent) {
@@ -436,29 +450,23 @@
     if (!rect) return;
     event.preventDefault();
     event.stopPropagation();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    const reset = event.shiftKey;
-    playheadScrub = {
-      wasPlaying: TimelineStore.getTransport(meta.id).playing,
-      rect,
-      viewStart: reset ? 0 : safeViewStart,
-      visibleDuration: reset ? meta.duration : visibleDuration,
-    };
-    if (reset) resetView();
-    TimelineStore.pause(meta.id);
-    seek(playheadScrub, event.clientX);
+    const shouldReset = event.shiftKey;
+    const start = shouldReset ? 0 : safeViewStart;
+    const end = shouldReset ? meta.duration : viewEnd;
+    // No capture: this flag unmounts whenever the playhead leaves the visible range.
+    const started = playheadScrub.start(event, null, (clientX) => {
+      if (rect.width <= 0) return;
+      TimelineStore.seek(id, clamp(start + ((clientX - rect.left) / rect.width) * (end - start), start, end));
+    });
+    if (started && shouldReset) resetView();
   }
 
-  function finishPlayhead() {
-    if (playheadScrub?.wasPlaying) TimelineStore.play(meta.id);
-    playheadScrub = null;
-  }
-
-  function handleCopy() {
-    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(meta.id), meta.clips);
-    void navigator.clipboard.writeText(buildCopyInstruction('createDialTimeline', meta.name, normalized));
+  async function handleCopy() {
+    const normalized = normalizeTimelineValuesForCopy(DialStore.getValues(id), meta.clips);
+    if (!(await copyText(buildCopyInstruction('createDialTimeline', meta.name, normalized)))) return;
     copied = true;
-    window.setTimeout(() => { copied = false; }, 1500);
+    clearTimeout(copyTimeout);
+    copyTimeout = setTimeout(() => { copied = false; }, 1500);
   }
 
   function toggleSet(current: Set<string>, key: string): Set<string> {
@@ -481,13 +489,19 @@
   }
 
   function getClipControls(path: string, exclusions?: Set<string>) {
-    const panel = DialStore.getPanel(meta.id);
+    const panel = DialStore.getPanel(id);
     const folder = panel ? findControl(panel.controls, path) : null;
     if (!folder?.children) return [];
     return folder.children.filter((control) => {
       const key = control.path.slice(path.length + 1);
       return key !== 'at' && key !== 'duration' && !exclusions?.has(key);
     });
+  }
+
+  // Escape and the close button hand focus back to the bar. Other closes leave it where the press put it.
+  function dismissPopover() {
+    if (popover) returnFocusToClip(section ?? null, popover.clip.key);
+    popover = null;
   }
 
   function openClipPopover(clip: TimelineClipMeta, rect: DOMRect, stepKey?: string) {
@@ -514,38 +528,23 @@
     else openClipPopover(clip, rect, stepKey);
   }
 
-  function formatRulerSeconds(time: number, step: number): string {
-    if (step >= 1 && Number.isInteger(time)) return formatClock(time);
-    const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
-    return `${time.toFixed(decimals)}s`;
-  }
-
   function clampViewStart(start: number, duration: number, shownDuration: number): number {
     return clamp(start, 0, Math.max(0, duration - shownDuration));
   }
 </script>
 
-<div class="dialkit-timeline-section">
+<div bind:this={section} class="dialkit-timeline-section">
   <div class="dialkit-timeline-header" data-open={open || undefined}>
     <div class="dialkit-timeline-identity">
       <span class="dialkit-timeline-title">{meta.name}</span>
     </div>
 
     {#if !open}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="dialkit-timeline-overview"
         onpointerdown={handleOverviewPointerDown}
-        onpointermove={(event) => overviewScrub && seekOverview(event.clientX)}
-        onpointerup={finishOverview}
-        onpointercancel={finishOverview}
-        onlostpointercapture={finishOverview}
         title="Drag to scrub the full timeline"
-        role="slider"
-        tabindex="0"
-        aria-label="Timeline overview"
-        aria-valuemin={0}
-        aria-valuemax={meta.duration}
-        aria-valuenow={transport.time}
       >
         <div
           class="dialkit-timeline-overview-viewport"
@@ -561,7 +560,7 @@
     <div class="dialkit-timeline-actions">
       <button
         class="dialkit-toolbar-add"
-        onclick={() => transport.playing ? TimelineStore.pause(meta.id) : TimelineStore.play(meta.id)}
+        onclick={() => transport.playing ? TimelineStore.pause(id) : TimelineStore.play(id)}
         title={transport.playing ? 'Pause' : 'Play'}
         aria-label={transport.playing ? 'Pause' : 'Play'}
       >
@@ -582,7 +581,7 @@
           {#each ICON_REPLAY as path}<path d={path} fill="currentColor" />{/each}
         </svg>
       </button>
-      <PresetManager panelId={meta.id} {presets} {activePresetId} />
+      <PresetManager panelId={id} {presets} {activePresetId} />
       <button
         class="dialkit-toolbar-add dialkit-toolbar-primary"
         onclick={handleCopy}
@@ -621,30 +620,17 @@
       class="dialkit-timeline-body"
       onwheel={handleTimelineWheel}
       onpointerdown={handleTrackPointerDown}
-      onpointermove={(event) => trackScrub && seek(trackScrub, event.clientX)}
-      onpointerup={finishTrack}
-      onpointercancel={finishTrack}
-      onlostpointercapture={finishTrack}
       role="presentation"
     >
       <div class="dialkit-timeline-grid">
         <div class="dialkit-timeline-row dialkit-timeline-ruler-row">
           <div class="dialkit-timeline-label"></div>
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             bind:this={laneArea}
             class="dialkit-timeline-ruler"
             onpointerdown={handleRulerPointerDown}
-            onpointermove={handleRulerPointerMove}
-            onpointerup={finishRuler}
-            onpointercancel={finishRuler}
-            onlostpointercapture={finishRuler}
             title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
-            role="slider"
-            tabindex="0"
-            aria-label="Timeline ruler"
-            aria-valuemin={safeViewStart}
-            aria-valuemax={viewEnd}
-            aria-valuenow={transport.time}
           >
             {#each ticks.fine as time}
               <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
@@ -700,7 +686,7 @@
               </div>
               <div class="dialkit-timeline-lane">
                 <TimelineClip
-                  timelineId={meta.id}
+                  timelineId={id}
                   clip={row.clip}
                   at={row.stat.at}
                   duration={row.stat.duration}
@@ -723,7 +709,7 @@
               <div class="dialkit-timeline-label">{formatLabel(row.track.prop ?? '')}</div>
               <div class="dialkit-timeline-lane">
                 <TimelineClip
-                  timelineId={meta.id}
+                  timelineId={id}
                   clip={row.clip}
                   at={row.stat.at + row.track.delay}
                   duration={row.track.duration}
@@ -751,12 +737,9 @@
             data-edge={playheadEdge}
             style={`left:calc(var(--dial-timeline-label-w) + ${playheadX}px);--dial-timeline-playhead-flag-offset:${playheadFlagOffset}px;`}
             onpointerdown={handlePlayheadPointerDown}
-            onpointermove={(event) => playheadScrub && seek(playheadScrub, event.clientX)}
-            onpointerup={finishPlayhead}
-            onpointercancel={finishPlayhead}
-            onlostpointercapture={finishPlayhead}
-            role="slider"
+            onkeydown={(event) => seekFromKey(id, event, { start: safeViewStart, end: viewEnd, pxPerSecond, reveal: centerViewAt })}
             tabindex="0"
+            role="slider"
             aria-label="Timeline current time"
             aria-valuemin={0}
             aria-valuemax={meta.duration}
@@ -787,6 +770,6 @@
   {/if}
 
   {#if popover}
-    <ClipPopover panelId={meta.id} {popover} {values} {theme} onClose={() => { popover = null; }} />
+    <ClipPopover panelId={id} {popover} {values} {theme} onClose={() => { popover = null; }} onDismiss={dismissPopover} />
   {/if}
 </div>

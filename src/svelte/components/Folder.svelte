@@ -1,5 +1,6 @@
 <script lang="ts">
   import { activateOnKey } from '../../control-keyboard';
+  import { COLLAPSED_PANEL_SIZE, PANEL_WIDTH } from '../../panel-drag';
 
   import { createPanelSectionTransition, measurePanelHeight, observePanelHeader } from '../../panel-size';
 
@@ -61,9 +62,9 @@
   });
 
   const chevronRotation = new Spring(initiallyOpen ? 180 : 0, { stiffness: 0.2, damping: 0.6 });
-  const panelWidth = new Spring(initiallyOpen ? 280 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelHeight = new Spring(initiallyOpen ? 220 : 42, { stiffness: 0.2, damping: 0.62 });
-  const panelRadius = new Spring(initiallyOpen ? 14 : 21, { stiffness: 0.2, damping: 0.62 });
+  const panelWidth = new Spring(initiallyOpen ? PANEL_WIDTH : COLLAPSED_PANEL_SIZE, { stiffness: 0.2, damping: 0.62 });
+  const panelHeight = new Spring(initiallyOpen ? 220 : COLLAPSED_PANEL_SIZE, { stiffness: 0.2, damping: 0.62 });
+  const panelRadius = new Spring(initiallyOpen ? 14 : COLLAPSED_PANEL_SIZE / 2, { stiffness: 0.2, damping: 0.62 });
   const panelScale = new Spring(1, { stiffness: 0.25, damping: 0.7 });
 
   $effect(() => {
@@ -97,16 +98,16 @@
   $effect(() => {
     if (!isRoot) return;
 
-    const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? 42;
-    const nextHeight = isOpen ? Math.min(measured + panelHeightOffset, windowHeight - 32) : 42;
+    const measured = contentHeight ?? panelRef?.getBoundingClientRect().height ?? COLLAPSED_PANEL_SIZE;
+    const nextHeight = isOpen ? Math.min(measured + panelHeightOffset, windowHeight - 32) : COLLAPSED_PANEL_SIZE;
     const springOptions = !hasInitializedRootSize && isOpen ? { instant: true } : undefined;
 
-    panelWidth.set(isOpen ? 280 : 42, springOptions);
+    panelWidth.set(isOpen ? PANEL_WIDTH : COLLAPSED_PANEL_SIZE, springOptions);
     // Child folders already animate their height; the open shell should follow
     // that size directly instead of trailing it with a second spring.
-    const followContent = isOpen && untrack(() => panelWidth.current === 280);
+    const followContent = isOpen && untrack(() => panelWidth.current === PANEL_WIDTH);
     panelHeight.set(nextHeight, followContent ? { instant: true } : springOptions);
-    panelRadius.set(isOpen ? 14 : 21, springOptions);
+    panelRadius.set(isOpen ? 14 : COLLAPSED_PANEL_SIZE / 2, springOptions);
 
     if (isOpen || !initiallyOpen) {
       hasInitializedRootSize = true;
@@ -133,7 +134,7 @@
 
   const panelHeightStyle = $derived(!hasInitializedRootSize && isOpen ? 'auto' : `${panelHeight.current}px`);
   const panelStyle = $derived(
-    `width:${panelWidth.current}px;height:${panelHeightStyle};max-height:${Math.max(windowHeight - 32, 42)}px;border-radius:${panelRadius.current}px;` +
+    `width:${panelWidth.current}px;height:${panelHeightStyle};max-height:${Math.max(windowHeight - 32, COLLAPSED_PANEL_SIZE)}px;border-radius:${panelRadius.current}px;` +
       `box-shadow:${isOpen ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)'};` +
       `cursor:${isOpen ? '' : 'pointer'};overflow:${isOpen ? 'hidden auto' : 'hidden'};` +
       `transform:scale(${panelScale.current});`

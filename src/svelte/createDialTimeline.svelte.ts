@@ -24,8 +24,17 @@ export function createDialTimeline<T extends TimelineConfig>(
   options?: CreateDialTimelineOptions
 ): DialTimelineValues<T> {
   const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${++timelineInstance}`;
-  const parsed = $derived(parseTimelineConfig(config));
+  // Not derived from the name: renaming a timeline must not discard its tuned values.
+  const panelId = options?.id ?? `dialkit-timeline-${++timelineInstance}`;
+  // 2.1's generated id, so data it saved for a timeline without an id still loads.
+  const legacyId = `${name}-${timelineInstance}`;
+  const serializedConfig = $derived(JSON.stringify(config));
+  const serializedPersist = $derived(JSON.stringify(options?.persist));
+  // Reparsed only when the config's content changes, which keeps `clips` stable.
+  const parsed = $derived.by(() => {
+    void serializedConfig;
+    return untrack(() => parseTimelineConfig(config));
+  });
   let flatValues = $state(DialStore.getValues(panelId));
   let transport = $state(TimelineStore.getTransport(panelId));
   const staticTimeline = $derived(computeStaticTimeline(parsed, flatValues));
@@ -42,42 +51,54 @@ export function createDialTimeline<T extends TimelineConfig>(
     resolveTimelineLoop(options?.loop).start,
     actions
   ));
+  const panelOptions = () => ({
+    retainOnUnmount: hasStableId,
+    legacyId,
+    persist: options?.persist,
+    kind: 'timeline' as const,
+  });
 
+  // Registered once per id. Everything later goes through the updates below,
+  // because registering again would reset the playhead.
   $effect(() => {
-    const currentParsed = parsed;
-    const persist = options?.persist;
-    const loop = options?.loop;
-    const autoplay = options?.autoplay ?? true;
-    // Store notifications must not become dependencies of this registration.
-    return untrack(() => {
-      DialStore.registerPanel(panelId, name, currentParsed.dialConfig, undefined, {
-        retainOnUnmount: hasStableId,
-        persist,
-        kind: 'timeline',
-      });
+    untrack(() => {
+      DialStore.registerPanel(panelId, name, parsed.dialConfig, undefined, panelOptions());
       const initialValues = DialStore.getValues(panelId);
       flatValues = initialValues;
-      const initialStatic = computeStaticTimeline(currentParsed, initialValues);
+      const initialStatic = computeStaticTimeline(parsed, initialValues);
       TimelineStore.register(
-        buildTimelineMeta(panelId, name, initialStatic.duration, currentParsed, loop),
-        { autoplay }
+        buildTimelineMeta(panelId, name, initialStatic.duration, parsed, options?.loop),
+        { autoplay: options?.autoplay ?? true }
       );
       transport = TimelineStore.getTransport(panelId);
-
-      const unsubscribeValues = DialStore.subscribe(panelId, () => {
-        flatValues = DialStore.getValues(panelId);
-      });
-      const unsubscribeTransport = TimelineStore.subscribe(panelId, () => {
-        transport = TimelineStore.getTransport(panelId);
-      });
-
-      return () => {
-        unsubscribeValues();
-        unsubscribeTransport();
-        TimelineStore.unregister(panelId);
-        DialStore.unregisterPanel(panelId);
-      };
     });
+
+    const unsubscribeValues = DialStore.subscribe(panelId, () => {
+      flatValues = DialStore.getValues(panelId);
+    });
+    const unsubscribeTransport = TimelineStore.subscribe(panelId, () => {
+      transport = TimelineStore.getTransport(panelId);
+    });
+
+    return () => {
+      unsubscribeValues();
+      unsubscribeTransport();
+      TimelineStore.unregister(panelId);
+      DialStore.unregisterPanel(panelId);
+    };
+  });
+
+  // The first run only records the dependencies: the effect above has just
+  // registered this same state.
+  let registered = false;
+  $effect(() => {
+    const { dialConfig } = parsed;
+    void serializedPersist;
+    if (!registered) {
+      registered = true;
+      return;
+    }
+    untrack(() => DialStore.updatePanel(panelId, name, dialConfig, undefined, panelOptions()));
   });
 
   $effect(() => {

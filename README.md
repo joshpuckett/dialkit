@@ -202,7 +202,7 @@ Read `dial.values` in React, Svelte, and vanilla; `dial.values()` in Solid; or `
 
 ### Versions and persistence
 
-**Save version** captures your page, flies the capture into the panel as a thumbnail, and selects the new version. Edits update the selected version automatically; **V1** holds the editable base values. Click a thumbnail to switch versions, double-click its name to rename it, or hover it to delete. The grid button zooms the page out to every version; pick one to zoom back into it. **Copy** puts the current values and an instruction for applying them to your config on the clipboard.
+**Save version** captures your page, flies the capture into the panel as a thumbnail, and selects the new version. Any edits you've made go with the new version, and the version you were on keeps what it had. Otherwise edits stay with the selected version when you switch away; **V1** holds the editable base values. Click a thumbnail to switch versions, double-click its name to rename it, or hover it to delete. The grid button zooms the page out to every version; pick one to zoom back into it. **Copy** puts the current values and an instruction for applying them to your config on the clipboard.
 
 Captures are made in the browser with no dependencies and never leave it. WebGL canvases are supported; web fonts render with system fallbacks. For the classic version menu instead, set `versions="menu"` on the root (`createDialRoot({ versions: "menu" })` in vanilla). Timelines always use the menu. Behavior is the same across React, Solid, Svelte, Vue, and vanilla JavaScript.
 
@@ -322,7 +322,7 @@ Individual controls and `DialStore` are also exported for custom layouts. Vanill
 - Keep each PR focused on one feature or fix.
 - Add dependencies only when necessary, and explain why.
 
-Run `npm test`, `npm run typecheck`, and `npm run build` before submitting changes.
+Run `npm run typecheck` and `npm run build` before submitting changes.
 
 Created by [Josh Puckett](https://joshpuckett.me), author of [Interface Craft](https://interfacecraft.dev/).
 

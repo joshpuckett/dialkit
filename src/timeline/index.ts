@@ -1,9 +1,16 @@
 export {
   buildTimelineMeta,
   buildTimelineValues,
+  clampDockHeight,
+  isTimeInView,
+  pressClipFromKey,
+  resizeDockFromKey,
   resolveTimelineLoop,
+  seekFromKey,
+  startClipDrag,
+  startScrubGesture,
 } from './adapter';
-export type { DialTimelineOptions, TimelineActions } from './adapter';
+export type { ClipDragOptions, DialTimelineOptions, TimelineActions } from './adapter';
 
 export {
   clampClipMove,
@@ -16,6 +23,7 @@ export {
   computeStaticClips,
   computeStaticTimeline,
   formatClock,
+  formatRulerSeconds,
   formatSeconds,
   formatStepLabel,
   normalizeTimelineValuesForCopy,
@@ -57,6 +65,6 @@ export type {
   TimelineTransport,
 } from '../store/TimelineStore';
 export { TimelineUiStore } from '../store/TimelineUiStore';
-export { clamp } from '../transition-math';
+export { clamp, springParams, springProgress } from '../transition-math';
 export { buildCopyInstruction } from '../copy-instruction';
 export { isDevDefault } from '../env';

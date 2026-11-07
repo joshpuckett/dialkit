@@ -1,60 +1,25 @@
 <script lang="ts">
+  import { SPRING_DEFAULTS } from 'dialkit/store';
   import type { SpringConfig } from 'dialkit/store';
+  import { springParams, springProgress } from 'dialkit/timeline';
 
   let { spring, isSimpleMode } = $props<{ spring: SpringConfig; isSimpleMode: boolean }>();
-
-  function generateSpringCurve(
-    stiffness: number,
-    damping: number,
-    mass: number,
-    duration: number
-  ): [number, number][] {
-    const points: [number, number][] = [];
-    const steps = 100;
-    const dt = duration / steps;
-
-    let position = 0;
-    let velocity = 0;
-    const target = 1;
-
-    for (let i = 0; i <= steps; i++) {
-      const time = i * dt;
-      points.push([time, position]);
-
-      const springForce = -stiffness * (position - target);
-      const dampingForce = -damping * velocity;
-      const acceleration = (springForce + dampingForce) / mass;
-
-      velocity += acceleration * dt;
-      position += velocity * dt;
-    }
-
-    return points;
-  }
 
   const width = 256;
   const height = 140;
 
   const pathData = $derived.by(() => {
-    let stiffness: number;
-    let damping: number;
-    let mass: number;
-
-    if (isSimpleMode) {
-      const visualDuration = spring.visualDuration ?? 0.3;
-      const bounce = spring.bounce ?? 0.2;
-      mass = 1;
-      stiffness = Math.pow((2 * Math.PI) / visualDuration, 2);
-      const dampingRatio = 1 - bounce;
-      damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-    } else {
-      stiffness = spring.stiffness ?? 400;
-      damping = spring.damping ?? 17;
-      mass = spring.mass ?? 1;
-    }
+    const params = isSimpleMode
+      ? springParams({ type: 'spring', visualDuration: spring.visualDuration, bounce: spring.bounce })
+      : springParams({ type: 'spring', stiffness: spring.stiffness ?? SPRING_DEFAULTS.stiffness, damping: spring.damping, mass: spring.mass });
 
     const duration = 2;
-    const points = generateSpringCurve(stiffness, damping, mass, duration);
+    const steps = 100;
+    const points: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const time = (i / steps) * duration;
+      points.push([time, springProgress(time, params)]);
+    }
     const values = points.map(([, v]) => v);
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);

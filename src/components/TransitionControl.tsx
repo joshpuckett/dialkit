@@ -1,5 +1,5 @@
 import { formatEase, parseEase } from '../easing-geometry';
-import { SpringConfig, EasingConfig, TransitionConfig, DialStore } from '../store/DialStore';
+import { SpringConfig, EasingConfig, TransitionConfig, DialStore, isPhysicsSpring, SPRING_DEFAULTS } from '../store/DialStore';
 import { Folder } from './Folder';
 import { Slider } from './Slider';
 import { SegmentedControl } from './SegmentedControl';
@@ -56,8 +56,8 @@ export function TransitionControl({
     advanced: SpringConfig;
   }>({
     easing: value.type === 'easing' ? value : { type: 'easing', duration: 0.3, ease: [1, -0.4, 0.5, 1] },
-    simple: value.type === 'spring' && value.visualDuration !== undefined ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
-    advanced: value.type === 'spring' && value.stiffness !== undefined ? value : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
+    simple: value.type === 'spring' && !isPhysicsSpring(value) ? value : { type: 'spring', visualDuration: 0.3, bounce: 0.2 },
+    advanced: value.type === 'spring' && isPhysicsSpring(value) ? value : { type: 'spring', stiffness: 200, damping: 25, mass: 1 },
   });
 
   // Keep cache up to date with current edits
@@ -72,17 +72,8 @@ export function TransitionControl({
   const spring: SpringConfig = value.type === 'spring' ? value : cache.current.simple;
   const easing: EasingConfig = value.type === 'easing' ? value : cache.current.easing;
 
-  const handleModeChange = (newMode: CurveMode) => {
-    DialStore.updateTransitionMode(panelId, path, newMode);
-
-    if (newMode === 'easing') {
-      onChange(cache.current.easing);
-    } else if (newMode === 'simple') {
-      onChange(cache.current.simple);
-    } else {
-      onChange(cache.current.advanced);
-    }
-  };
+  // The mode follows the value, so switching mode is writing that mode's value.
+  const handleModeChange = (newMode: CurveMode) => onChange(cache.current[newMode]);
 
   const handleSpringUpdate = (key: keyof SpringConfig, val: number) => {
     if (isSimpleSpring) {
@@ -97,7 +88,7 @@ export function TransitionControl({
   const durationSlider = !hideDuration && (isEasing || isSimpleSpring) ? (
     <Slider
       label="Duration"
-      value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? 0.3)}
+      value={durationControl?.value ?? (isEasing ? easing.duration : spring.visualDuration ?? SPRING_DEFAULTS.visualDuration)}
       onChange={durationControl?.onChange ?? ((next) => {
         if (isEasing) onChange({ ...easing, duration: next });
         else handleSpringUpdate('visualDuration', next);
@@ -136,12 +127,12 @@ export function TransitionControl({
             <EaseTextInput ease={easing.ease} onChange={(newEase) => onChange({ ...easing, ease: newEase })} />
           </>
         ) : isSimpleSpring ? (
-          <Slider label="Bounce" value={spring.bounce ?? 0.2} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
+          <Slider label="Bounce" value={spring.bounce ?? SPRING_DEFAULTS.bounce} onChange={(v) => handleSpringUpdate('bounce', v)} min={0} max={1} step={0.05} />
         ) : (
           <>
-            <Slider label="Stiffness" value={spring.stiffness ?? 400} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
-            <Slider label="Damping" value={spring.damping ?? 17} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
-            <Slider label="Mass" value={spring.mass ?? 1} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
+            <Slider label="Stiffness" value={spring.stiffness ?? SPRING_DEFAULTS.stiffness} onChange={(v) => handleSpringUpdate('stiffness', v)} min={1} max={1000} step={10} />
+            <Slider label="Damping" value={spring.damping ?? SPRING_DEFAULTS.damping} onChange={(v) => handleSpringUpdate('damping', v)} min={1} max={100} step={1} />
+            <Slider label="Mass" value={spring.mass ?? SPRING_DEFAULTS.mass} onChange={(v) => handleSpringUpdate('mass', v)} min={0.1} max={10} step={0.1} />
           </>
         )}
         {durationSlider}

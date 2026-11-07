@@ -1,10 +1,11 @@
 <script lang="ts">
   import { handleSliderKey } from '../../control-keyboard';
 
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { Spring } from 'svelte/motion';
   import type { ShortcutConfig } from 'dialkit/store';
   import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../../shortcut-utils';
+  import { startPointerGesture, type StopGesture } from '../../pointer-gesture';
 
   let {
     label,
@@ -51,19 +52,21 @@
   let showInput = $state(false);
   let inputValue = $state('');
 
-  const fillPercent = new Spring(((value - min) / (max - min)) * 100, { stiffness: 0.25, damping: 0.7 });
+  const percentFromValue = (nextValue: number) => {
+    const range = max - min;
+    return range > 0 ? ((nextValue - min) / range) * 100 : 0;
+  };
+
+  const fillPercent = new Spring(untrack(() => percentFromValue(value)), { stiffness: 0.25, damping: 0.7 });
   const rubberStretchPx = new Spring(0, { stiffness: 0.2, damping: 0.65 });
   const handleOpacityMv = new Spring(0, { stiffness: 0.3, damping: 0.75 });
   const handleScaleXMv = new Spring(0.25, { stiffness: 0.2, damping: 0.6 });
   const handleScaleYMv = new Spring(1, { stiffness: 0.2, damping: 0.6 });
 
-  let pointerDownPos: { x: number; y: number } | null = null;
-  let isClickFlag = true;
+  let stopGesture: StopGesture | null = null;
   let wrapperRect: DOMRect | null = null;
   let scaleVal = 1;
   let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  const percentFromValue = (nextValue: number) => ((nextValue - min) / (max - min)) * 100;
 
   const positionToValue = (clientX: number) => {
     if (!wrapperRect || !wrapperRef) return value;
@@ -82,12 +85,19 @@
     return sign * MAX_STRETCH * Math.sqrt(Math.min(overflow / MAX_CURSOR_RANGE, 1));
   };
 
+  // Sync from props when not interacting. A click's spring keeps running only
+  // while the value is still the one it is heading to; a value that arrives from
+  // anywhere else (a version switch, a shortcut) takes over at once.
   $effect(() => {
-    value;
-    if (!isInteracting) {
-      fillPercent.set(((value - min) / (max - min)) * 100, { instant: true });
-    }
+    const next = percentage;
+    if (isInteracting) return;
+    untrack(() => {
+      if (fillPercent.current !== fillPercent.target && fillPercent.target === next) return;
+      fillPercent.set(next, { instant: true });
+    });
   });
+
+  $effect(() => () => stopGesture?.(false));
 
   $effect(() => {
     if (hoverTimeout) {
@@ -120,7 +130,7 @@
     }
   });
 
-  const percentage = $derived(((value - min) / (max - min)) * 100);
+  const percentage = $derived(percentFromValue(value));
   const isActive = $derived(isInteracting || isHovered);
 
   const leftThreshold = $derived.by(() => {
@@ -171,78 +181,70 @@
   });
 
   const handlePointerDown = (e: PointerEvent) => {
-    if (showInput) return;
+    if (showInput || stopGesture) return;
+    const startValue = value;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isClick = true;
+
+    stopGesture = startPointerGesture(e, e.currentTarget as HTMLElement, {
+      move(next) {
+        const distance = Math.hypot(next.clientX - startX, next.clientY - startY);
+        if (isClick && distance > CLICK_THRESHOLD) {
+          isClick = false;
+          isDragging = true;
+        }
+        if (isClick) return;
+
+        if (wrapperRect) {
+          if (next.clientX < wrapperRect.left) {
+            rubberStretchPx.set(computeRubberStretch(next.clientX, -1), { instant: true });
+          } else if (next.clientX > wrapperRect.right) {
+            rubberStretchPx.set(computeRubberStretch(next.clientX, 1), { instant: true });
+          } else {
+            rubberStretchPx.set(0, { instant: true });
+          }
+        }
+
+        const newValue = positionToValue(next.clientX);
+        fillPercent.set(percentFromValue(newValue), { instant: true });
+        onChange(roundValue(newValue, step, min, max));
+      },
+      end(cancelled, last) {
+        stopGesture = null;
+        if (cancelled) {
+          rubberStretchPx.set(0, { instant: true });
+          if (!isClick) onChange(startValue);
+        } else {
+          if (isClick && last) {
+            const rawValue = positionToValue(last.clientX);
+            const steps = (max - min) / step;
+            const snappedValue = steps <= 10
+              ? Math.max(min, Math.min(max, min + Math.round((rawValue - min) / step) * step))
+              : snapToDecile(rawValue, min, max);
+            const committed = roundValue(snappedValue, step, min, max);
+
+            fillPercent.set(percentFromValue(committed));
+            onChange(committed);
+          }
+
+          if (rubberStretchPx.current !== 0) {
+            rubberStretchPx.set(0);
+          }
+        }
+
+        isInteracting = false;
+        isDragging = false;
+      },
+    });
+    if (!stopGesture) return;
+
     e.preventDefault();
-
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    pointerDownPos = { x: e.clientX, y: e.clientY };
-    isClickFlag = true;
     isInteracting = true;
-
     if (wrapperRef) {
       wrapperRect = wrapperRef.getBoundingClientRect();
       scaleVal = wrapperRect.width / wrapperRef.offsetWidth;
     }
-  };
-
-  const handlePointerMove = (e: PointerEvent) => {
-    if (!isInteracting || !pointerDownPos) return;
-
-    const dx = e.clientX - pointerDownPos.x;
-    const dy = e.clientY - pointerDownPos.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (isClickFlag && distance > CLICK_THRESHOLD) {
-      isClickFlag = false;
-      isDragging = true;
-    }
-
-    if (!isClickFlag) {
-      if (wrapperRect) {
-        if (e.clientX < wrapperRect.left) {
-          rubberStretchPx.set(computeRubberStretch(e.clientX, -1), { instant: true });
-        } else if (e.clientX > wrapperRect.right) {
-          rubberStretchPx.set(computeRubberStretch(e.clientX, 1), { instant: true });
-        } else {
-          rubberStretchPx.set(0, { instant: true });
-        }
-      }
-
-      const newValue = positionToValue(e.clientX);
-      fillPercent.set(percentFromValue(newValue), { instant: true });
-      onChange(roundValue(newValue, step, min, max));
-    }
-  };
-
-  const handlePointerUp = (e: PointerEvent) => {
-    if (!isInteracting) return;
-
-    if (isClickFlag) {
-      const rawValue = positionToValue(e.clientX);
-      const steps = (max - min) / step;
-      const snappedValue = steps <= 10
-        ? Math.max(min, Math.min(max, min + Math.round((rawValue - min) / step) * step))
-        : snapToDecile(rawValue, min, max);
-
-      fillPercent.set(percentFromValue(snappedValue));
-      onChange(roundValue(snappedValue, step, min, max));
-    }
-
-    if (rubberStretchPx.current !== 0) {
-      rubberStretchPx.set(0);
-    }
-
-    isInteracting = false;
-    isDragging = false;
-    pointerDownPos = null;
-  };
-
-  const handlePointerCancel = () => {
-    if (!isInteracting) return;
-    isInteracting = false;
-    isDragging = false;
-    rubberStretchPx.set(0, { instant: true });
-    pointerDownPos = null;
   };
 
   const handleInputSubmit = () => {
@@ -294,9 +296,6 @@
     })}
     style={trackStyle}
     onpointerdown={handlePointerDown}
-    onpointermove={handlePointerMove}
-    onpointerup={handlePointerUp}
-    onpointercancel={handlePointerCancel}
     onmouseenter={() => (isHovered = true)}
     onmouseleave={() => (isHovered = false)}
   >

@@ -94,3 +94,36 @@ export function observeDropdownPosition(trigger: HTMLElement, update: () => void
 export function getDialKitPortalRoot(trigger: HTMLElement | null | undefined): HTMLElement | null {
   return (trigger?.closest('.dialkit-root') as HTMLElement | null) ?? null;
 }
+
+/** Pickers portal out of the popover that opened them, so containment alone can't
+ * tell whether a press landed inside that popover. */
+export function isFloatingControlTarget(target: EventTarget | null): boolean {
+  return target instanceof Element &&
+    target.closest('.dialkit-color-popover, .dialkit-image-popover, .dialkit-select-dropdown') !== null;
+}
+
+export type AnchorRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+
+function clipBar(section: Element | null, clipKey: string): HTMLElement | null {
+  if (!section) return null;
+  for (const bar of Array.from(section.querySelectorAll<HTMLElement>('[data-clip-key]'))) {
+    if (bar.dataset.clipKey === clipKey) return bar;
+  }
+  return null;
+}
+
+/** Where a clip bar (or one leg of it) is now, or null when it is no longer on screen. */
+export function clipAnchorRect(section: Element | null, clipKey: string, stepKey?: string): AnchorRect | null {
+  const bar = clipBar(section, clipKey);
+  if (!bar) return null;
+  const anchor = (stepKey && bar.querySelector(`[data-step="${stepKey}"]`)) || bar;
+  const { left, top, right, bottom, width, height } = anchor.getBoundingClientRect();
+  return { left, top, right, bottom, width, height };
+}
+
+/** Hands focus back to the bar of a dismissed editor, unless focus has already moved on. */
+export function returnFocusToClip(section: Element | null, clipKey: string): void {
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest('.dialkit-timeline-popover')) return;
+  clipBar(section, clipKey)?.focus({ preventScroll: true });
+}

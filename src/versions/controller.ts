@@ -48,14 +48,13 @@ export type ThumbnailWatcher = {
 /**
  * Track which thumbnails are out of date. Editing a version only marks its
  * thumbnail stale; the gallery flushes before leaving the version or opening
- * the grid, so the page isn't captured on every change. A version shown
- * without a thumbnail gets one once there are versions to compare.
+ * the grid, so the page isn't captured on every change. A version without a
+ * thumbnail gets one as soon as the page settles on it, before any edits, so
+ * saving those edits as a new version leaves it with its own picture.
  */
 export function watchVersionThumbnails(panelId: string): ThumbnailWatcher {
   const activeKey = () => versionKey(DialStore.getActivePresetId(panelId));
   const valuesOf = () => JSON.stringify(DialStore.getValues(panelId));
-  // Thumbnails only show once there's more than one version.
-  const comparing = () => DialStore.getPresets(panelId).length > 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastValues = valuesOf();
   let lastKey = activeKey();
@@ -80,13 +79,15 @@ export function watchVersionThumbnails(panelId: string): ThumbnailWatcher {
     await capturing;
     const key = activeKey();
     if (!ThumbnailStore.get(panelId, key) || ThumbnailStore.isStale(panelId, key)) await capture();
+    // The thumbnail now shows these edits, so the version has to hold them too.
+    DialStore.keepEdits(panelId);
   };
 
   // Wait for the page to settle on the version (transitions, layout) first.
   const captureMissingSoon = () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      if (stopped || !comparing() || ThumbnailStore.get(panelId, activeKey())) return;
+      if (stopped || ThumbnailStore.get(panelId, activeKey()) || DialStore.hasEdits(panelId)) return;
       if (document.querySelector('.dialkit-version-overlay, .dialkit-appshot')) { captureMissingSoon(); return; }
       void capture();
     }, SETTLE_DELAY_MS);
@@ -109,7 +110,13 @@ export function watchVersionThumbnails(panelId: string): ThumbnailWatcher {
 
   return {
     flush,
-    stop: () => { stopped = true; clearTimeout(timer); unsubscribe(); },
+    stop: () => {
+      stopped = true;
+      clearTimeout(timer);
+      unsubscribe();
+      const gone = !DialStore.getPanel(panelId) && Object.keys(DialStore.getValues(panelId)).length === 0;
+      if (gone) ThumbnailStore.forget(panelId);
+    },
   };
 }
 
@@ -125,10 +132,10 @@ export function openVersionsOverview(panelId: string, theme?: 'light' | 'dark' |
     theme,
     onSelect: (next) => selectVersion(panelId, next),
     onRename: (next, name) => renameVersion(panelId, next, name),
-    onClose: () => { stop(); onClose?.(); },
+    onClose: () => { stopThumbnails(); stopVersions(); onClose?.(); },
   });
-  const stop = ThumbnailStore.subscribe(() => {
-    handle.update(listVersions(panelId), versionKey(DialStore.getActivePresetId(panelId)));
-  });
+  const refresh = () => handle.update(listVersions(panelId), versionKey(DialStore.getActivePresetId(panelId)));
+  const stopThumbnails = ThumbnailStore.subscribe(refresh);
+  const stopVersions = DialStore.subscribe(panelId, refresh);
   return handle;
 }

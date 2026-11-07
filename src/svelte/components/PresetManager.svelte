@@ -8,6 +8,7 @@
   import type { Preset } from 'dialkit/store';
   import { dropdownTransition } from './transitions';
   import { getDialKitPortalRoot, getDropdownPosition } from '../../dropdown-position';
+  import { deleteVersion } from '../../version-gallery';
   import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../../icons';
 
   let { panelId, presets, activePresetId } = $props<{
@@ -83,7 +84,7 @@
 
   const handleDelete = (e: MouseEvent, presetId: string) => {
     e.stopPropagation();
-    DialStore.deletePreset(panelId, presetId);
+    deleteVersion(panelId, presetId);
   };
 </script>
 

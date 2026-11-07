@@ -1,4 +1,5 @@
 import { activateOnKey } from '../../control-keyboard';
+import { COLLAPSED_PANEL_SIZE, PANEL_WIDTH } from '../../panel-drag';
 import { measurePanelHeight, observePanelHeader } from '../../panel-size';
 import { createSignal, createEffect, on, onCleanup, untrack, Show, JSX } from 'solid-js';
 import { isServer } from 'solid-js/web';
@@ -135,9 +136,9 @@ export function RootPanel(props: RootPanelProps) {
   // transitions trigger the morph.
   createEffect(on(isOpen, (open, prevOpen) => {
     const target = {
-      width: open ? 280 : 42,
-      height: open ? measuredOpenHeight() : 42,
-      borderRadius: open ? 14 : 21,
+      width: open ? PANEL_WIDTH : COLLAPSED_PANEL_SIZE,
+      height: open ? measuredOpenHeight() : COLLAPSED_PANEL_SIZE,
+      borderRadius: open ? 14 : COLLAPSED_PANEL_SIZE / 2,
       boxShadow: open ? 'var(--dial-shadow)' : 'var(--dial-shadow-collapsed)',
     };
 
@@ -170,7 +171,7 @@ export function RootPanel(props: RootPanelProps) {
       // the morph so its stale collapsed-height target cannot overwrite it.
       morphAnim.stop();
       morphAnim = animate(panelRef, {
-        width: 280,
+        width: PANEL_WIDTH,
         height: nextHeight,
         borderRadius: 14,
         boxShadow: 'var(--dial-shadow)',

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { buildCopyInstruction } from '../../copy-instruction';
+  import { buildCopyInstruction, copyText } from '../../copy-instruction';
   import { Spring } from 'svelte/motion';
   import type { Snippet } from 'svelte';
   import { DialStore } from 'dialkit/store';
@@ -22,11 +22,12 @@
     theme?: 'light' | 'dark' | 'system';
   }>();
 
+  const panelId = $derived(panel.id);
   let copied = $state(false);
   // The store owns open/collapsed state so it can be driven programmatically.
   let storeOpen = $state<boolean | undefined>(DialStore.getPanelOpen(panel.id));
   const isOpen = $derived(storeOpen ?? defaultOpen);
-  let values = $state<Record<string, DialValue>>(DialStore.getValues(panel.id));
+  let values = $state.raw<Record<string, DialValue>>(DialStore.getValues(panel.id));
   let presets = $state<Preset[]>(DialStore.getPresets(panel.id));
   let activePresetId = $state<string | null>(DialStore.getActivePresetId(panel.id));
 
@@ -39,19 +40,22 @@
   let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
-    const unsub = DialStore.subscribe(panel.id, () => {
-      values = DialStore.getValues(panel.id);
-      presets = DialStore.getPresets(panel.id);
-      activePresetId = DialStore.getActivePresetId(panel.id);
-      storeOpen = DialStore.getPanelOpen(panel.id);
-    });
-    DialStore.initPanelOpen(panel.id, defaultOpen);
-
-    return () => {
-      unsub();
-      if (copyTimeout) clearTimeout(copyTimeout);
+    const id = panelId;
+    const sync = () => {
+      values = DialStore.getValues(id);
+      presets = DialStore.getPresets(id);
+      activePresetId = DialStore.getActivePresetId(id);
+      storeOpen = DialStore.getPanelOpen(id);
     };
+    sync();
+    return DialStore.subscribe(id, sync);
   });
+
+  $effect(() => {
+    DialStore.initPanelOpen(panelId, defaultOpen);
+  });
+
+  $effect(() => () => clearTimeout(copyTimeout));
 
   $effect(() => {
     if (copied) {
@@ -69,13 +73,10 @@
   });
 
   const handleCopy = async () => {
-    const instruction = buildCopyInstruction('createDialKit', panel.name, values);
-
-    try { await navigator.clipboard.writeText(instruction); }
-    catch { return; }
+    if (!(await copyText(buildCopyInstruction('createDialKit', panel.name, values)))) return;
     copied = true;
 
-    if (copyTimeout) clearTimeout(copyTimeout);
+    clearTimeout(copyTimeout);
     copyTimeout = setTimeout(() => {
       copied = false;
     }, 1500);

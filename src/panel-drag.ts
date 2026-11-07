@@ -8,6 +8,7 @@ export type PanelDragStart = {
   pointerY: number;
   elX: number;
   elY: number;
+  width?: number;
 };
 
 export type PanelDragOriginX = 'left' | 'right';
@@ -15,7 +16,9 @@ export type PanelDragOriginY = 'top' | 'bottom';
 export type PanelCorner = `${PanelDragOriginY}-${PanelDragOriginX}`;
 
 const PANEL_DRAG_THRESHOLD = 8;
-const COLLAPSED_PANEL_SIZE = 42;
+const PANEL_VIEWPORT_MARGIN = 8;
+export const COLLAPSED_PANEL_SIZE = 42;
+export const PANEL_WIDTH = 280;
 
 const DRAG_EXCLUSION_SELECTOR = [
   '.dialkit-panel-icon',
@@ -54,13 +57,31 @@ export function getPanelDragStart(pointerX: number, pointerY: number, panel: HTM
     pointerY,
     elX: rect.left,
     elY: rect.top,
+    width: rect.width,
   };
 }
 
 export function getPanelDragOffset(start: PanelDragStart, pointerX: number, pointerY: number): PanelDragOffset {
-  return {
+  return clampPanelOffset({
     x: start.elX + pointerX - start.pointerX,
     y: start.elY + pointerY - start.pointerY,
+  }, start.width);
+}
+
+/** A dragged panel keeps enough on screen to grab again, including after a resize. */
+export function clampPanelOffset(
+  offset: PanelDragOffset,
+  width = COLLAPSED_PANEL_SIZE,
+  viewportWidth = typeof window !== 'undefined' ? window.innerWidth : undefined,
+  viewportHeight = typeof window !== 'undefined' ? window.innerHeight : undefined
+): PanelDragOffset {
+  if (!viewportWidth || !viewportHeight) return offset;
+  const minX = PANEL_VIEWPORT_MARGIN - Math.max(0, width - COLLAPSED_PANEL_SIZE);
+  const maxX = viewportWidth - COLLAPSED_PANEL_SIZE - PANEL_VIEWPORT_MARGIN;
+  const maxY = viewportHeight - COLLAPSED_PANEL_SIZE - PANEL_VIEWPORT_MARGIN;
+  return {
+    x: Math.max(minX, Math.min(maxX, offset.x)),
+    y: Math.max(PANEL_VIEWPORT_MARGIN, Math.min(maxY, offset.y)),
   };
 }
 

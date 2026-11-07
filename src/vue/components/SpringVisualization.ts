@@ -1,34 +1,7 @@
 import { defineComponent, h, computed, type PropType } from 'vue';
+import { SPRING_DEFAULTS } from '../../store/DialStore';
 import type { SpringConfig } from '../../store/DialStore';
-
-function generateSpringCurve(
-  stiffness: number,
-  damping: number,
-  mass: number,
-  duration: number
-): [number, number][] {
-  const points: [number, number][] = [];
-  const steps = 100;
-  const dt = duration / steps;
-
-  let position = 0;
-  let velocity = 0;
-  const target = 1;
-
-  for (let i = 0; i <= steps; i += 1) {
-    const time = i * dt;
-    points.push([time, position]);
-
-    const springForce = -stiffness * (position - target);
-    const dampingForce = -damping * velocity;
-    const acceleration = (springForce + dampingForce) / mass;
-
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-
-  return points;
-}
+import { springParams, springProgress } from '../../transition-math';
 
 export const SpringVisualization = defineComponent({
   name: 'DialKitSpringVisualization',
@@ -47,25 +20,20 @@ export const SpringVisualization = defineComponent({
     const height = 140;
 
     const pathData = computed(() => {
-      let stiffness: number;
-      let damping: number;
-      let mass: number;
-
-      if (props.isSimpleMode) {
-        const visualDuration = props.spring.visualDuration ?? 0.3;
-        const bounce = props.spring.bounce ?? 0.2;
-        mass = 1;
-        stiffness = ((2 * Math.PI) / visualDuration) ** 2;
-        const dampingRatio = 1 - bounce;
-        damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-      } else {
-        stiffness = props.spring.stiffness ?? 400;
-        damping = props.spring.damping ?? 17;
-        mass = props.spring.mass ?? 1;
-      }
+      // Same param mapping and closed-form curve as timeline scrubbing, so the
+      // preview shows exactly the physics that plays.
+      const params = props.isSimpleMode
+        ? springParams({ type: 'spring', visualDuration: props.spring.visualDuration, bounce: props.spring.bounce })
+        : springParams({ type: 'spring', stiffness: props.spring.stiffness ?? SPRING_DEFAULTS.stiffness, damping: props.spring.damping, mass: props.spring.mass });
 
       const duration = 2;
-      const points = generateSpringCurve(stiffness, damping, mass, duration);
+      const steps = 100;
+      const points: [number, number][] = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const time = (i / steps) * duration;
+        points.push([time, springProgress(time, params)]);
+      }
+
       const values = points.map(([, value]) => value);
       const minValue = Math.min(...values);
       const maxValue = Math.max(...values);

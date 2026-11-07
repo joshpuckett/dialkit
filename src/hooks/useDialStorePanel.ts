@@ -33,7 +33,10 @@ export function useDialStorePanel(
 ): { panelId: string; flatValues: Record<string, DialValue>; serializedConfig: string } {
   const instanceId = useId();
   const hasStableId = options.id !== undefined;
-  const panelId = options.id ?? `${name}-${instanceId}`;
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const panelId = options.id ?? `dialkit-${instanceId}`;
+  // 2.1's generated id, so data it saved for a panel without an id still loads.
+  const legacyId = `${name}-${instanceId}`;
 
   const configRef = useRef(config);
   configRef.current = config;
@@ -48,12 +51,14 @@ export function useDialStorePanel(
   useEffect(() => {
     DialStore.registerPanel(panelId, name, configRef.current, optionsRef.current.shortcuts, {
       retainOnUnmount: hasStableId,
+      legacyId,
       persist: optionsRef.current.persist,
       defaultCollapsed: optionsRef.current.defaultCollapsed,
       kind: optionsRef.current.kind,
     });
     return () => DialStore.unregisterPanel(panelId);
-  }, [hasStableId, panelId, name]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasStableId, panelId]);
 
   // Push structure changes without re-registering
   const mountedRef = useRef(false);
@@ -64,6 +69,7 @@ export function useDialStorePanel(
     }
     DialStore.updatePanel(panelId, name, configRef.current, optionsRef.current.shortcuts, {
       retainOnUnmount: hasStableId,
+      legacyId,
       persist: optionsRef.current.persist,
       defaultCollapsed: optionsRef.current.defaultCollapsed,
       kind: optionsRef.current.kind,

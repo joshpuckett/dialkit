@@ -4,6 +4,7 @@ import { openDropdownOnKey } from '../control-keyboard';
 import { getDialKitPortalRoot, getDropdownPosition, observeDropdownPosition } from '../dropdown-position';
 import { findControl, formatToggleShortcut } from '../shortcut-utils';
 import { ICON_CHEVRON, ICON_TRASH, ICON_PLUS, ICON_CHECK } from '../icons';
+import { deleteVersion } from '../versions/controller';
 import { element, icon, type Mounted } from './dom';
 export function popupMenu(trigger: HTMLButtonElement, className: string, kind: 'select' | 'presets' | 'help', populate: (popup: HTMLElement) => void) {
   let popup: HTMLDivElement | undefined;
@@ -150,7 +151,7 @@ export function mountPresetManager(host: HTMLElement, initial: PresetManagerProp
         del.title = `Delete ${preset.name}`;
         del.setAttribute('aria-label', del.title);
         del.append(icon(ICON_TRASH));
-        del.addEventListener('click', (event) => { event.stopPropagation(); DialStore.deletePreset(props.panelId, preset.id!); });
+        del.addEventListener('click', (event) => { event.stopPropagation(); deleteVersion(props.panelId, preset.id!); });
         item.append(del);
       }
       return item;

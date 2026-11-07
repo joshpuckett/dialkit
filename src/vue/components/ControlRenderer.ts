@@ -1,6 +1,6 @@
 import { Fragment, defineComponent, h, type PropType } from 'vue';
 import { DialStore } from '../../store/DialStore';
-import type { ControlMeta, DialValue, SpringConfig, TransitionConfig } from '../../store/DialStore';
+import type { ControlMeta, DialValue, TransitionConfig } from '../../store/DialStore';
 import { ColorControl } from './ColorControl';
 import { ImageControl } from './ImageControl';
 import { DialPad } from './DialPad';
@@ -9,7 +9,6 @@ import { Folder } from './Folder';
 import { SelectControl } from './SelectControl';
 import { ShortcutKey } from './ShortcutListener';
 import { Slider } from './Slider';
-import { SpringControl } from './SpringControl';
 import { TextControl } from './TextControl';
 import { Toggle } from './Toggle';
 import { TransitionControl, type TransitionDurationControl } from './TransitionControl';
@@ -48,15 +47,6 @@ export const ControlRenderer = defineComponent({
             shortcut: control.shortcut,
             shortcutActive: shortcut?.activePanelId.value === props.panelId && shortcut.activePath.value === control.path,
             onChange: (next: boolean) => DialStore.updateValue(props.panelId, control.path, next),
-          });
-        case 'spring':
-          return h(SpringControl, {
-            key: control.path,
-            panelId: props.panelId,
-            path: control.path,
-            label: control.label,
-            spring: value as SpringConfig,
-            onChange: (next: SpringConfig) => DialStore.updateValue(props.panelId, control.path, next),
           });
         case 'transition':
           return h(TransitionControl, {

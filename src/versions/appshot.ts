@@ -7,6 +7,7 @@
 // swell, shadow padding, corner radii, and a fading shadow.
 
 import { DialStore } from '../store/DialStore';
+import { callListeners, pageSingleton } from '../store/shared';
 import { GALLERY_SPRING } from './spring';
 import { captureViewport, ThumbnailStore, versionKey } from './thumbnails';
 
@@ -193,7 +194,7 @@ class ArrivalStoreImpl {
   set(panelId: string, arrival: Arrival | null): void {
     if (arrival) this.arrivals.set(panelId, arrival);
     else this.arrivals.delete(panelId);
-    this.listeners.forEach((fn) => fn());
+    callListeners(this.listeners);
   }
 
   subscribe(fn: () => void): () => void {
@@ -202,27 +203,44 @@ class ArrivalStoreImpl {
   }
 }
 
-export const ArrivalStore = new ArrivalStoreImpl();
+export const ArrivalStore = /* @__PURE__ */ pageSingleton('ArrivalStore', () => new ArrivalStoreImpl());
 
 /**
  * Save the current values as a new version, flying a capture of the page into
  * its thumbnail. `resolveSlot` returns the new thumbnail once it has rendered.
+ * Resolves null when the panel went away during the capture: nothing is saved.
  */
 export async function saveVersionWithAppshot(
   panelId: string,
   resolveSlot: (key: string) => Promise<HTMLElement | null>,
-): Promise<string> {
+): Promise<string | null> {
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const previousKey = versionKey(DialStore.getActivePresetId(panelId));
+  const capturedValues = JSON.stringify(DialStore.getValues(panelId));
   const appshot = reduceMotion ? null : startAppshot();
   const capture = await captureViewport();
-  const id = DialStore.saveNewPreset(panelId);
+  if (!DialStore.getPanel(panelId)) {
+    appshot?.cancel();
+    return null;
+  }
+  const edited = DialStore.hasEdits(panelId);
+  let id: string;
+  try {
+    id = DialStore.saveNewPreset(panelId);
+  } catch (error) {
+    appshot?.cancel();
+    throw error;
+  }
   // Same tick as the save, so the new card never renders before its flight.
   if (appshot && capture) ArrivalStore.set(panelId, { key: id, stage: 'pending' });
   if (capture) {
+    // Edits made during the capture are saved but aren't in the picture.
+    const matches = JSON.stringify(DialStore.getValues(panelId)) === capturedValues;
     ThumbnailStore.set(panelId, id, capture.thumbnail);
-    // The new version starts identical to the one it was saved from.
-    if (!ThumbnailStore.get(panelId, previousKey) || ThumbnailStore.isStale(panelId, previousKey)) {
+    if (!matches) ThumbnailStore.markStale(panelId, id);
+    // Without edits the two versions are identical, so this picture fits both.
+    // With edits, the previous version keeps its own picture.
+    if (matches && !edited && (!ThumbnailStore.get(panelId, previousKey) || ThumbnailStore.isStale(panelId, previousKey))) {
       ThumbnailStore.set(panelId, previousKey, capture.thumbnail);
     }
   }

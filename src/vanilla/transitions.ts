@@ -1,4 +1,4 @@
-import { DialStore, type SpringConfig, type EasingConfig, type TransitionConfig } from '../store/DialStore';
+import { DialStore, SPRING_DEFAULTS, transitionModeOf, type SpringConfig, type EasingConfig, type TransitionConfig } from '../store/DialStore';
 import { mountEasingVisualization } from '../easing-control';
 import { formatEase, parseEase } from '../easing-geometry';
 import { springParams, springProgress } from '../transition-math';
@@ -18,7 +18,7 @@ export function mountSpringVisualization(host: HTMLElement, initial: SpringVisua
   root.append(path);
   host.append(root);
   function update({ spring, isSimpleMode }: SpringVisualizationProps) {
-    const params = springParams(isSimpleMode ? { type: 'spring', visualDuration: spring.visualDuration ?? 0.3, bounce: spring.bounce ?? 0.2 } : { type: 'spring', stiffness: spring.stiffness ?? 400, damping: spring.damping ?? 17, mass: spring.mass ?? 1 });
+    const params = springParams(isSimpleMode ? { type: 'spring', visualDuration: spring.visualDuration, bounce: spring.bounce } : { type: 'spring', stiffness: spring.stiffness ?? SPRING_DEFAULTS.stiffness, damping: spring.damping, mass: spring.mass });
     const values = Array.from({ length: 101 }, (_, i) => springProgress(i / 50, params));
     const min = Math.min(...values), range = Math.max(...values) - min || 1;
     path.setAttribute('d', values.map((v, i) => `${i ? 'L' : 'M'} ${i * 2.56} ${140 - ((v - min) / range * 84 + 28)}`).join(' '));
@@ -69,11 +69,12 @@ export function mountTransitionControl(host: HTMLElement, initial: TransitionCon
   };
   const currentMode = (): Mode => springOnly ? DialStore.getSpringMode(props.panelId, props.path) : DialStore.getTransitionMode(props.panelId, props.path);
   function render() {
-    const nextMode = currentMode();
-    if (nextMode === 'easing' && props.value.type === 'easing')
+    // A slot only ever holds a value of its own kind, whatever the mode says.
+    if (props.value.type === 'easing')
       cache.easing = props.value;
-    if (nextMode !== 'easing' && props.value.type === 'spring')
-      cache[nextMode] = props.value;
+    else
+      cache[transitionModeOf(props.value) as 'simple' | 'advanced'] = props.value;
+    const nextMode = currentMode();
     if (mode !== nextMode) {
       mode = nextMode;
       rebuild();
@@ -103,15 +104,7 @@ export function mountTransitionControl(host: HTMLElement, initial: TransitionCon
     typeRow.append(element('span', 'dialkit-labeled-control-label', 'Type'));
     body.append(typeRow);
     const segment = mountSegmentedControl<Mode>(typeRow, {
-      options: [...(springOnly ? [] : [{ value: 'easing' as const, label: 'Easing' }]), { value: 'simple', label: 'Time' }, { value: 'advanced', label: 'Physics' }], value: mode, onChange(next) {
-        const value = { ...cache[next] } as TransitionConfig;
-        // Store notifications are synchronous; retain the target before changing modes.
-        if (springOnly)
-          DialStore.updateSpringMode(props.panelId, props.path, next as 'simple' | 'advanced');
-        else
-          DialStore.updateTransitionMode(props.panelId, props.path, next);
-        props.onChange(value);
-      }
+      options: [...(springOnly ? [] : [{ value: 'easing' as const, label: 'Easing' }]), { value: 'simple', label: 'Time' }, { value: 'advanced', label: 'Physics' }], value: mode, onChange: next => change(cache[next])
     });
     controls.push(segment);
     function slider(label: string, key: string, fallback: number, min: number, max: number, step: number, duration = false) {
@@ -170,16 +163,16 @@ export function mountTransitionControl(host: HTMLElement, initial: TransitionCon
     }
     else if (mode === 'simple') {
       if (springOnly && !props.hideDuration)
-        slider('Duration', 'visualDuration', 0.3, 0.1, 1, 0.05, true);
-      slider('Bounce', 'bounce', 0.2, 0, 1, 0.05);
+        slider('Duration', 'visualDuration', SPRING_DEFAULTS.visualDuration, 0.1, 1, 0.05, true);
+      slider('Bounce', 'bounce', SPRING_DEFAULTS.bounce, 0, 1, 0.05);
     }
     else {
-      slider('Stiffness', 'stiffness', 400, 1, 1000, 10);
-      slider('Damping', 'damping', 17, 1, 100, 1);
-      slider('Mass', 'mass', 1, 0.1, 10, 0.1);
+      slider('Stiffness', 'stiffness', SPRING_DEFAULTS.stiffness, 1, 1000, 10);
+      slider('Damping', 'damping', SPRING_DEFAULTS.damping, 1, 100, 1);
+      slider('Mass', 'mass', SPRING_DEFAULTS.mass, 0.1, 10, 0.1);
     }
     if (!springOnly && !props.hideDuration && mode !== 'advanced')
-      slider('Duration', mode === 'easing' ? 'duration' : 'visualDuration', 0.3, 0.1, mode === 'easing' ? 2 : 1, 0.05, true);
+      slider('Duration', mode === 'easing' ? 'duration' : 'visualDuration', SPRING_DEFAULTS.visualDuration, 0.1, mode === 'easing' ? 2 : 1, 0.05, true);
     refresh = () => updates.forEach(update => update());
   }
   render();

@@ -13,11 +13,12 @@
 // clip holds one step-list per property track (each with its own cycle and
 // phase offset). Untouched properties hold their prior value through a step.
 
-import { formatLabel, inferStep, isHexColor, resolveDialValues } from './store/DialStore';
+import { cloneDialValue, formatLabel, inferStep, isHexColor, resolveDialValues } from './store/DialStore';
 import type { DialConfig, DialValue, ResolvedValues, TransitionConfig } from './store/DialStore';
 import {
   clamp,
   cubicBezierProgress,
+  DEFAULT_CLIP_BOUNCE,
   isPhysicsSpring,
   isTransitionConfig,
   resolveClipTransition,
@@ -244,7 +245,7 @@ export type DialTimelineValues<T extends TimelineConfig> = {
 export const CLIP_VALUE_STEP = 0.01;
 export const TIMELINE_MIN_CLIP_DURATION = 0.05;
 const DEFAULT_STEP_DURATION = 0.3;
-const DEFAULT_CLIP_TRANSITION: TransitionConfig = { type: 'spring', bounce: 0.2 };
+const DEFAULT_CLIP_TRANSITION: TransitionConfig = { type: 'spring', bounce: DEFAULT_CLIP_BOUNCE };
 const RESERVED_KEYS = new Set(['time', 'playing', 'duration', 'play', 'pause', 'replay', 'seek']);
 
 // ── Config parsing ──
@@ -368,7 +369,7 @@ function normalizeStoredTransition(transition: TransitionConfig, clipDuration: n
   if (isPhysicsSpring(transition)) {
     return transition;
   }
-  return { type: 'spring', bounce: transition.bounce ?? 0.2 };
+  return { type: 'spring', bounce: transition.bounce ?? DEFAULT_CLIP_BOUNCE };
 }
 
 type ClipParseEntry = {
@@ -447,6 +448,10 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
 
   const dialConfig: DialConfig = {};
   const clips: TimelineClipMeta[] = [];
+  // A timing dial spans the window, and also anything authored past it: such
+  // content grows the timeline instead of being clamped back into it.
+  const timingDial = (value: number): [number, number, number, number] =>
+    [value, 0, Math.max(duration, value), CLIP_VALUE_STEP];
 
   entries.forEach(({ path, childKey, group, clip }, index) => {
     // These combinations are untypeable (optional-never fields) but reachable
@@ -475,12 +480,12 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
     const clipAt = nonNegativeFinite(clip.at);
 
     const clipDial: DialConfig = {
-      at: [clipAt, 0, duration, CLIP_VALUE_STEP],
+      at: timingDial(clipAt),
     };
     // Sequence and props clips derive their length from their parts — no
     // duration dial.
     if (!hasSteps && !hasProps) {
-      clipDial.duration = [total, 0, duration, CLIP_VALUE_STEP];
+      clipDial.duration = timingDial(total);
     }
 
     // Every animating single-curve clip gets an editable curve; the bar
@@ -504,10 +509,10 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
         const trackCurve = track.transition ?? defaultCurve;
         const hasTrackSteps = Boolean(track.steps?.length);
         const trackDial: DialConfig = {
-          delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP],
+          delay: timingDial(nonNegativeFinite(track.delay)),
         };
         if (!hasTrackSteps) {
-          trackDial.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
+          trackDial.duration = timingDial(trackDuration);
           trackDial.transition = normalizeStoredTransition(trackCurve, trackDuration);
         }
         const fromValue = track.from ?? (hasTrackSteps ? undefined : track.to);
@@ -531,7 +536,7 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
             trackStepKeys!.push(stepKey);
             const stepDuration = defaultStepDuration(step, trackCurve);
             const stepDial: DialConfig = {
-              duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+              duration: timingDial(stepDuration),
               transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration),
             };
             if (step.to !== undefined) {
@@ -567,7 +572,7 @@ export function parseTimelineConfig(config: TimelineConfig): ParsedTimeline {
         stepKeys!.push(stepKey);
         const stepDuration = defaultStepDuration(step, defaultCurve);
         const stepDial: DialConfig = {
-          duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+          duration: timingDial(stepDuration),
           transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration),
         };
         const stepTo = definedValues(step.to);
@@ -1259,17 +1264,9 @@ function unflattenClipValues(
       const existing = node[segments[i]];
       node = (isPlainObject(existing) ? existing : (node[segments[i]] = {})) as Record<string, unknown>;
     }
-    node[segments[segments.length - 1]] = cloneTimelineValue(value);
+    node[segments[segments.length - 1]] = cloneDialValue(value);
   }
   return result;
-}
-
-function cloneTimelineValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(cloneTimelineValue);
-  if (!isPlainObject(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, nested]) => [key, cloneTimelineValue(nested)])
-  );
 }
 
 /** Dragging a track bar edits the property's phase offset. */
@@ -1288,7 +1285,7 @@ export function clampClipMove(at: number, duration: number, timelineDuration: nu
 }
 
 export function clampClipResizeEnd(duration: number, at: number, timelineDuration: number): number {
-  return clamp(round2(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+  return clamp(round2(duration), TIMELINE_MIN_CLIP_DURATION, Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at));
 }
 
 export function clampClipResizeStart(
@@ -1296,8 +1293,8 @@ export function clampClipResizeStart(
   at: number,
   duration: number
 ): { at: number; duration: number } {
-  const clampedAt = clamp(round2(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
-  return { at: clampedAt, duration: round2(at + duration - clampedAt) };
+  const clampedAt = clamp(round2(newAt), 0, Math.max(0, at + duration - TIMELINE_MIN_CLIP_DURATION));
+  return { at: clampedAt, duration: Math.max(TIMELINE_MIN_CLIP_DURATION, round2(at + duration - clampedAt)) };
 }
 
 /** Resizing one leg of a sequence: the other legs keep their length, the
@@ -1319,13 +1316,6 @@ export function normalizeTimelineValuesForCopy(
   clips: TimelineClipMeta[]
 ): Record<string, DialValue> {
   const normalized: Record<string, DialValue> = { ...values };
-
-  // Transition mode is editor UI state, not part of a DialKit config. It is
-  // stored beside values so mode switches survive presets, but must never be
-  // included in the tune → copy → remove payload.
-  for (const path of Object.keys(normalized)) {
-    if (path.endsWith('.__mode')) delete normalized[path];
-  }
 
   const normalizeTransitionAt = (transitionPath: string, durationPath: string) => {
     const raw = normalized[transitionPath];
@@ -1383,6 +1373,12 @@ export function formatClock(time: number, tenths = false): string {
     ? seconds.toFixed(1).padStart(4, '0')
     : String(Math.floor(seconds)).padStart(2, '0');
   return `${String(minutes).padStart(2, '0')}:${secondsText}`;
+}
+
+export function formatRulerSeconds(time: number, step: number): string {
+  if (step >= 1 && Number.isInteger(time)) return formatClock(time);
+  const decimals = Math.min(3, Math.max(1, Math.ceil(-Math.log10(step))));
+  return `${time.toFixed(decimals)}s`;
 }
 
 export function formatSeconds(value: number): string {

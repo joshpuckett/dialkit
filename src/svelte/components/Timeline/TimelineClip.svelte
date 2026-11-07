@@ -1,27 +1,7 @@
 <script lang="ts">
-  import { DialStore } from 'dialkit/store';
-  import {
-    clampClipMove,
-    clampClipResizeEnd,
-    clampClipResizeStart,
-    clampStepResize,
-    clampTrackDelay,
-    formatSeconds,
-  } from 'dialkit/timeline';
+  import { formatSeconds, pressClipFromKey, startClipDrag } from 'dialkit/timeline';
   import type { TimelineClipLoop, TimelineClipMeta, TimelineStepStatic } from 'dialkit/timeline';
-
-  const DRAG_THRESHOLD_PX = 3;
-
-  type DragState = {
-    mode: 'move' | 'start' | 'end' | 'boundary';
-    boundaryIndex?: number;
-    pointerX: number;
-    at: number;
-    duration: number;
-    stepDurations?: number[];
-    clickEl: HTMLElement | null;
-    moved: boolean;
-  };
+  import type { StopGesture } from '../../../pointer-gesture';
 
   let {
     timelineId,
@@ -61,7 +41,7 @@
     onDrag: () => void;
   }>();
 
-  let drag: DragState | null = null;
+  let stopDrag: StopGesture | null = null;
   let dragging = $state(false);
   const isSteps = $derived(Boolean(steps?.length));
   const width = $derived(Math.max(duration * pxPerSecond, 14));
@@ -88,81 +68,32 @@
     ? `${clip.label} — composite of its property tracks${looping ? ' · repeats through timeline' : ''} · click to expand`
     : `${clip.label} — ${formatSeconds(at)} for ${durationText}${fixedDuration ? ' (duration set by spring physics)' : ''}${looping ? ' · repeats through timeline' : ''}${delayMode ? ' · drag to phase-shift' : ''}`);
 
+  $effect(() => () => stopDrag?.(false));
+
   function handlePointerDown(event: PointerEvent) {
     if (event.shiftKey) return;
     event.stopPropagation();
-    const target = event.target as HTMLElement;
-    let mode: DragState['mode'] = 'move';
-    let boundaryIndex: number | undefined;
-    if (target.dataset.boundary !== undefined) {
-      mode = 'boundary';
-      boundaryIndex = Number(target.dataset.boundary);
-    } else if (!fixedDuration) {
-      const edge = target.dataset.edge as 'start' | 'end' | undefined;
-      if (edge) mode = edge;
-    }
-    drag = {
-      mode,
-      boundaryIndex,
-      pointerX: event.clientX,
+    if (stopDrag) return;
+    stopDrag = startClipDrag(event, event.currentTarget as HTMLElement, {
+      timelineId,
+      clipKey: clip.key,
       at,
       duration,
-      stepDurations: steps?.map((step: TimelineStepStatic) => step.duration),
-      clickEl: target.closest?.('[data-step]') as HTMLElement | null,
-      moved: false,
-    };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  }
-
-  function handlePointerMove(event: PointerEvent) {
-    if (!drag || pxPerSecond <= 0) return;
-    const dx = event.clientX - drag.pointerX;
-    if (!drag.moved) {
-      if (Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
-      drag.moved = true;
-      dragging = true;
-      onDrag();
-    }
-    const dt = dx / pxPerSecond;
-    if (drag.mode === 'boundary' && steps && drag.stepDurations) {
-      const index = drag.boundaryIndex ?? 0;
-      const others = drag.stepDurations.reduce((sum, value, stepIndex) => stepIndex === index ? sum : sum + value, 0);
-      DialStore.updateValue(
-        timelineId,
-        `${clip.key}.${steps[index].key ?? ''}.duration`,
-        clampStepResize(drag.stepDurations[index] + dt, drag.at, others, timelineDuration)
-      );
-    } else if (drag.mode === 'move') {
-      if (delayMode) {
-        DialStore.updateValue(timelineId, `${clip.key}.delay`, clampTrackDelay(drag.at + dt - baseAt, baseAt, drag.duration, timelineDuration));
-      } else {
-        DialStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(drag.at + dt, drag.duration, timelineDuration));
-      }
-    } else if (drag.mode === 'end') {
-      DialStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(drag.duration + dt, drag.at, timelineDuration));
-    } else if (steps && drag.stepDurations) {
-      const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.stepDurations[0]);
-      DialStore.updateValues(timelineId, {
-        [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
-        [`${clip.key}.${steps[0].key ?? ''}.duration`]: next.duration,
-      });
-    } else {
-      const next = clampClipResizeStart(Math.max(drag.at + dt, Math.max(baseAt, 0)), drag.at, drag.duration);
-      DialStore.updateValues(timelineId, {
-        [delayMode ? `${clip.key}.delay` : `${clip.key}.at`]: delayMode ? Math.max(0, next.at - baseAt) : next.at,
-        [`${clip.key}.duration`]: next.duration,
-      });
-    }
-  }
-
-  function finish(event?: PointerEvent) {
-    const previous = drag;
-    drag = null;
-    dragging = false;
-    if (previous && !previous.moved && event) {
-      const anchor = previous.clickEl ?? event.currentTarget as HTMLElement;
-      onClick(clip, anchor.getBoundingClientRect(), previous.clickEl?.dataset.step);
-    }
+      steps,
+      fixedDuration,
+      baseAt,
+      delayMode,
+      getScale: () => ({ pxPerSecond, timelineDuration }),
+      onDragStart: () => {
+        dragging = true;
+        onDrag();
+      },
+      onClick: (stepKey, anchor) => onClick(clip, anchor.getBoundingClientRect(), stepKey),
+      onEnd: () => {
+        stopDrag = null;
+        dragging = false;
+      },
+    });
   }
 </script>
 
@@ -183,6 +114,7 @@
 
 <div
   class="dialkit-timeline-clip"
+  data-clip-key={clip.key}
   data-steps={isSteps || undefined}
   data-composite={composite || undefined}
   data-selected={selected || undefined}
@@ -191,14 +123,11 @@
   style:width={`${width}px`}
   style:background={composite ? `${clip.color}80` : clip.color}
   onpointerdown={handlePointerDown}
-  onpointermove={handlePointerMove}
-  onpointerup={finish}
-  onpointercancel={() => finish()}
-  onlostpointercapture={() => finish()}
-  title={barTitle}
-  role="button"
+  onkeydown={(event) => pressClipFromKey(event, () => onClick(clip, event.currentTarget.getBoundingClientRect()))}
   tabindex="0"
-  aria-label={barTitle}
+  role="button"
+  aria-label={`Edit ${clip.label}`}
+  title={barTitle}
 >
   {#if composite}
     {#if width > 56}<span class="dialkit-timeline-clip-duration">{durationText}</span>{/if}

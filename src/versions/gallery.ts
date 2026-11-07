@@ -55,6 +55,10 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
     if (copy) copy.disabled = disabled;
   };
 
+  // These states exclude each other: each would otherwise act on a version list
+  // or a live page that the one in progress is about to change.
+  const busy = () => !!overview || opening || saving;
+
   const render = () => {
     const { panelId } = props;
     const versions = listVersions(panelId);
@@ -68,7 +72,7 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
     root.toggleAttribute('data-overview', !!overview);
     syncCopy(!!overview);
     // The grid only shows the versions it opened with, so saving waits for it to close.
-    save.disabled = !!overview || opening;
+    save.disabled = busy();
     toggle.setAttribute('aria-label', `All versions (${versions.length})`);
     toggle.title = `All versions (${versions.length})`;
     // Thumbnails appear once there's something to compare.
@@ -121,7 +125,7 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
     if (key !== versionKey(null)) {
       const remove = element('button', 'dialkit-version-thumb-delete');
       remove.append(icon(ICON_CLOSE));
-      remove.addEventListener('click', () => deleteVersion(props.panelId, key));
+      remove.addEventListener('click', () => { if (!busy()) deleteVersion(props.panelId, key); });
       node.append(remove);
     }
     thumbs.set(key, node);
@@ -159,6 +163,7 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
   // that capture runs, the latest pick wins.
   const switchTo = async (key: string) => {
     if (switchingTo !== null) { switchingTo = key; return; }
+    if (saving || opening) return;
     if (key === versionKey(DialStore.getActivePresetId(props.panelId))) return;
     switchingTo = key;
     await watcher.flush();
@@ -168,8 +173,9 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
   };
 
   save.addEventListener('click', async () => {
-    if (saving || overview || opening) return;
+    if (busy()) return;
     saving = true;
+    render();
     try {
       await saveVersionWithAppshot(props.panelId, async (key) => {
         // Let the new card lay out before measuring it.
@@ -180,6 +186,7 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
       });
     } finally {
       saving = false;
+      if (!destroyed) render();
     }
   });
 
@@ -188,7 +195,7 @@ export function mountVersionGallery(host: HTMLElement, initial: VersionGalleryPr
       overview.dismiss();
       return;
     }
-    if (opening) return;
+    if (opening || saving) return;
     // The grid zooms out of the live page, so the active card must match it.
     opening = true;
     render();

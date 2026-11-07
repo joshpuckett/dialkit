@@ -1,7 +1,7 @@
-import { onMount, onCleanup, createUniqueId, type Accessor } from 'solid-js';
+import { createEffect, onCleanup, createUniqueId, untrack, type Accessor } from 'solid-js';
 import { isServer } from 'solid-js/web';
 import { createStore, reconcile } from 'solid-js/store';
-import { DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
+import { cloneDialValue, DialStore, flattenDialValueUpdates, resolveDialValues } from '../store/DialStore';
 import type {
   DialConfig,
   DialKitPersistOptions,
@@ -30,7 +30,7 @@ export interface DialKitController<T extends DialConfig> {
 }
 
 export function createDialKit<T extends DialConfig>(
-  name: string,
+  name: string | Accessor<string>,
   config: T,
   options?: CreateDialOptions
 ): Accessor<ResolvedValues<T>> {
@@ -38,45 +38,62 @@ export function createDialKit<T extends DialConfig>(
 }
 
 export function createDialKitController<T extends DialConfig>(
-  name: string,
+  name: string | Accessor<string>,
   config: T,
   options?: CreateDialOptions
 ): DialKitController<T> {
   const id = createUniqueId();
   const hasStableId = options?.id !== undefined;
-  const panelId = options?.id ?? `${name}-${id}`;
+  // Not derived from the name: renaming a panel must not discard its tuned values.
+  const panelId = options?.id ?? `dialkit-${id}`;
+
+  // reconcile mutates what the Solid store holds, so the store only ever gets
+  // copies, never objects shared with the config or DialStore.
+  const readValues = () => cloneDialValue(resolveDialValues(config, DialStore.getValues(panelId)));
 
   // Resolved values live in a store so consumers reading `values().someKey`
   // subscribe to that key alone; reconcile diffs each snapshot from the
   // external DialStore instead of replacing the whole object.
-  const [values, setValues] = createStore(
-    resolveDialValues(config, DialStore.getValues(panelId))
-  );
+  const [values, setValues] = createStore(readValues());
 
   if (!isServer) {
-    // Subscribe at setup so the notify fired by registerPanel (in onMount)
-    // syncs persisted/preset values into the store without a manual copy.
-    const unsubValues = DialStore.subscribe(panelId, () => {
-      setValues(reconcile(resolveDialValues(config, DialStore.getValues(panelId))));
-    });
-    onCleanup(unsubValues);
+    // Subscribe at setup so the notify fired by registerPanel syncs
+    // persisted/preset values into the store without a manual copy.
+    onCleanup(DialStore.subscribe(panelId, () => {
+      setValues(reconcile(untrack(readValues)));
+    }));
+    onCleanup(DialStore.subscribeActions(panelId, (action) => {
+      options?.onAction?.(action);
+    }));
   }
 
-  onMount(() => {
-    DialStore.registerPanel(panelId, name, config, options?.shortcuts, {
-      retainOnUnmount: hasStableId,
-      persist: options?.persist,
-      defaultCollapsed: options?.defaultCollapsed,
+  // Registration and updates share one effect, so the first run registers
+  // whatever the config is by then and nothing can reach updatePanel before it.
+  let registered = false;
+  let signature: string | undefined;
+  createEffect(() => {
+    const currentName = typeof name === 'function' ? name() : name;
+    const next = JSON.stringify([currentName, config, options?.shortcuts, options?.persist]);
+    if (next === signature) return;
+    signature = next;
+    untrack(() => {
+      const panelOptions = {
+        retainOnUnmount: hasStableId,
+        // 2.1's generated id, so data it saved for a panel without an id still loads.
+        legacyId: `${currentName}-${id}`,
+        persist: options?.persist,
+        defaultCollapsed: options?.defaultCollapsed,
+      };
+      if (registered) {
+        DialStore.updatePanel(panelId, currentName, config, options?.shortcuts, panelOptions);
+      } else {
+        registered = true;
+        DialStore.registerPanel(panelId, currentName, config, options?.shortcuts, panelOptions);
+      }
     });
-
-    const unsubActions = options?.onAction
-      ? DialStore.subscribeActions(panelId, options.onAction)
-      : undefined;
-
-    onCleanup(() => {
-      unsubActions?.();
-      DialStore.unregisterPanel(panelId);
-    });
+  });
+  onCleanup(() => {
+    if (registered) DialStore.unregisterPanel(panelId);
   });
 
   return {

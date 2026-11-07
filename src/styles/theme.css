@@ -2281,6 +2281,8 @@
   background: var(--dial-surface-subtle);
   border-radius: 8px;
   overflow: hidden;
+  /* Can't scroll: tabbing to a bar outside a zoomed view must not pull its row out of line with the ruler. */
+  overflow: clip;
 }
 
 .dialkit-timeline-clip {
@@ -2629,7 +2631,7 @@
 .dialkit-root :where(button, input, textarea, [tabindex]):focus {
   outline: none;
 }
-.dialkit-root :where(button, [role="slider"], [role="button"], .dialkit-color-plane, .dialkit-pad-surface):focus-visible {
+.dialkit-root :where(button, [role="slider"], [role="button"], [role="separator"], .dialkit-color-plane, .dialkit-pad-surface):focus-visible {
   outline: 2px solid var(--dial-focus-ring);
   outline-offset: -2px;
 }
@@ -2874,6 +2876,10 @@ span.dialkit-version-thumb-label {
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s ease;
+}
+
+.dialkit-versions[data-overview] .dialkit-version-thumb-delete {
+  display: none;
 }
 
 .dialkit-version-thumb-delete svg {
