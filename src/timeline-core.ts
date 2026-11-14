@@ -1279,6 +1279,42 @@ export function clampTrackDelay(
   return clamp(round2(delay), 0, Math.max(0, round2(timelineDuration - at - trackDuration)));
 }
 
+/** Pixels of wheel travel that zoom the timeline by a factor of e. */
+export const TIMELINE_WHEEL_ZOOM_DISTANCE = 240;
+const WHEEL_LINE_HEIGHT_PX = 16;
+
+export type TimelineView = { zoom: number; viewStart: number };
+
+/** Cmd+scroll on macOS; Ctrl+scroll elsewhere and for trackpad pinches. */
+export function isTimelineWheelZoom(event: Pick<WheelEvent, 'metaKey' | 'ctrlKey'>): boolean {
+  return event.metaKey || event.ctrlKey;
+}
+
+/**
+ * Zooms around the time under the pointer. Scrolling down zooms in. Returns
+ * null when the wheel event carries no usable delta or the view can't change.
+ */
+export function zoomTimelineFromWheel(
+  event: Pick<WheelEvent, 'deltaX' | 'deltaY' | 'deltaMode' | 'clientX'>,
+  lane: { left: number; width: number },
+  view: TimelineView & { duration: number; maxZoom: number }
+): TimelineView | null {
+  const { duration, maxZoom, zoom, viewStart } = view;
+  if (duration <= 0 || lane.width <= 0) return null;
+  const rawDelta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+  const delta = event.deltaMode === 1 ? rawDelta * WHEEL_LINE_HEIGHT_PX : rawDelta;
+  if (delta === 0) return null;
+
+  const visibleDuration = duration / zoom;
+  const ratio = clamp((event.clientX - lane.left) / lane.width, 0, 1);
+  const anchorTime = viewStart + ratio * visibleDuration;
+  const nextZoom = clamp(zoom * Math.exp(delta / TIMELINE_WHEEL_ZOOM_DISTANCE), 1, Math.max(1, maxZoom));
+  const nextVisibleDuration = duration / nextZoom;
+  const nextViewStart = clamp(anchorTime - ratio * nextVisibleDuration, 0, Math.max(0, duration - nextVisibleDuration));
+  if (nextZoom === zoom && nextViewStart === viewStart) return null;
+  return { zoom: nextZoom, viewStart: nextViewStart };
+}
+
 // Clip-edit clamp policy — one place, shared by every gesture/consumer.
 export function clampClipMove(at: number, duration: number, timelineDuration: number): number {
   return clamp(round2(at), 0, Math.max(0, timelineDuration - duration));

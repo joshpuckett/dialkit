@@ -9,8 +9,9 @@ export {
   seekFromKey,
   startClipDrag,
   startScrubGesture,
+  wheelTimeline,
 } from './adapter';
-export type { ClipDragOptions, DialTimelineOptions, TimelineActions } from './adapter';
+export type { ClipDragOptions, DialTimelineOptions, TimelineActions, TimelineWheelOptions } from './adapter';
 
 export {
   clampClipMove,
@@ -26,11 +27,14 @@ export {
   formatRulerSeconds,
   formatSeconds,
   formatStepLabel,
+  isTimelineWheelZoom,
   normalizeTimelineValuesForCopy,
   parseTimelineConfig,
   timelinePopoverDisplayValues,
   transitionToCss,
+  zoomTimelineFromWheel,
   TIMELINE_MIN_CLIP_DURATION,
+  TIMELINE_WHEEL_ZOOM_DISTANCE,
 } from '../timeline-core';
 export type {
   DialTimelineValues,
@@ -50,6 +54,7 @@ export type {
   TimelineStepStatic,
   TimelineStepValues,
   TimelineTrackStatic,
+  TimelineView,
 } from '../timeline-core';
 
 export {

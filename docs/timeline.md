@@ -193,6 +193,7 @@ The toolbar includes play/pause, replay, presets, Copy, and collapse. When `Dial
 | Drag the ruler or playhead | Seek; pause during the drag and resume afterward if previously playing |
 | Drag the collapsed overview | Scrub the full timeline |
 | Alt/Option + drag the ruler | Zoom around the starting point |
+| Cmd/Ctrl + scroll over the timeline | Zoom around the pointer; scroll down to zoom in |
 | Shift + drag | Reset to the full timescale and seek |
 | Horizontal scroll while zoomed | Pan the visible range |
 | Drag a clip | Change its start time |

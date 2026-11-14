@@ -31,7 +31,7 @@ import { clamp } from '../../../transition-math';
 import { buildCopyInstruction, copyText } from '../../../copy-instruction';
 import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../../../dropdown-position';
 import { startPointerGesture, type StopGesture } from '../../../pointer-gesture';
-import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../../../timeline/adapter';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture, wheelTimeline } from '../../../timeline/adapter';
 import { isDevDefault } from '../../../env';
 import {
   ICON_CHEVRON,
@@ -486,16 +486,18 @@ const TimelineSection = defineComponent({
       );
     };
     const handleTimelineWheel = (event: WheelEvent) => {
-      const scroller = horizontalScrollRef.value;
-      if (!scroller || zoom.value <= 1) return;
-      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.shiftKey
-          ? event.deltaY
-          : 0;
-      if (delta === 0) return;
-      event.preventDefault();
-      scroller.scrollLeft += delta;
+      wheelTimeline(event, {
+        duration: props.meta.duration,
+        maxZoom: maxZoom.value,
+        zoom: zoom.value,
+        viewStart: safeViewStart.value,
+        lane: laneAreaRef.value,
+        scroller: horizontalScrollRef.value,
+        setView(view) {
+          zoom.value = view.zoom;
+          viewStart.value = view.viewStart;
+        },
+      });
     };
 
     // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
@@ -809,7 +811,7 @@ const TimelineSection = defineComponent({
           h('div', {
             ref: laneAreaRef,
             class: 'dialkit-timeline-ruler',
-            title: 'Drag to seek · Option-drag to zoom · Shift-drag to reset zoom',
+            title: 'Drag to seek · Option-drag or Cmd-scroll to zoom · Shift-drag to reset zoom',
             onPointerdown: handleRulerPointerDown,
           }, [
             ...ticks.value.fine.map((time) => h('div', { key: `fine:${time}`, class: 'dialkit-timeline-tick dialkit-timeline-tick-fine', style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),

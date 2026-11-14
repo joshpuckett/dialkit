@@ -30,7 +30,7 @@ import { clamp } from '../../../transition-math';
 import { buildCopyInstruction, copyText } from '../../../copy-instruction';
 import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../../../dropdown-position';
 import { startPointerGesture, type StopGesture } from '../../../pointer-gesture';
-import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../../../timeline/adapter';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture, wheelTimeline } from '../../../timeline/adapter';
 import { isDevDefault } from '../../../env';
 import {
   ICON_CHEVRON,
@@ -460,15 +460,18 @@ function TimelineSection(props: {
     ));
   };
   const handleTimelineWheel: JSX.EventHandler<HTMLDivElement, WheelEvent> = (event) => {
-    if (!horizontalScrollRef || zoom() <= 1) return;
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      ? event.deltaX
-      : event.shiftKey
-        ? event.deltaY
-        : 0;
-    if (delta === 0) return;
-    event.preventDefault();
-    horizontalScrollRef.scrollLeft += delta;
+    wheelTimeline(event, {
+      duration: props.meta.duration,
+      maxZoom: maxZoom(),
+      zoom: zoom(),
+      viewStart: safeViewStart(),
+      lane: laneAreaRef,
+      scroller: horizontalScrollRef,
+      setView(view) {
+        setZoom(view.zoom);
+        setViewStart(view.viewStart);
+      },
+    });
   };
 
   // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
@@ -882,7 +885,7 @@ function TimelineSection(props: {
                 ref={laneAreaRef}
                 class="dialkit-timeline-ruler"
                 onPointerDown={handleRulerPointerDown}
-                title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
+                title="Drag to seek · Option-drag or Cmd-scroll to zoom · Shift-drag to reset zoom"
               >
                 <For each={ticks().fine}>{(time) => <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style={{ left: `${(time - safeViewStart()) * pxPerSecond()}px` }} />}</For>
                 <For each={ticks().medium}>{(time) => <div class="dialkit-timeline-tick dialkit-timeline-tick-medium" style={{ left: `${(time - safeViewStart()) * pxPerSecond()}px` }} />}</For>
