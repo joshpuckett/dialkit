@@ -12,10 +12,13 @@ import {
   clampStepResize,
   clampTrackDelay,
   computeClipState,
+  isTimelineWheelZoom,
+  zoomTimelineFromWheel,
   type DialTimelineValues,
   type ParsedTimeline,
   type TimelineClipStatic,
   type TimelineConfig,
+  type TimelineView,
 } from '../timeline-core';
 
 export interface DialTimelineOptions {
@@ -125,6 +128,44 @@ export function startScrubGesture(
   endScrub = TimelineStore.beginScrub(id);
   seek(event.clientX);
   return stop;
+}
+
+export type TimelineWheelOptions = TimelineView & {
+  duration: number;
+  maxZoom: number;
+  /** The ruler, whose span maps pointer x to time. */
+  lane: HTMLElement | null | undefined;
+  /** The horizontal scroller, present while zoomed. */
+  scroller: HTMLElement | null | undefined;
+  setView(view: TimelineView): void;
+};
+
+/**
+ * Wheel over the timeline body. Cmd/Ctrl + scroll zooms around the pointer;
+ * horizontal (or Shift) scroll pans while zoomed. Needs a non-passive listener.
+ */
+export function wheelTimeline(event: WheelEvent, options: TimelineWheelOptions): void {
+  if (isTimelineWheelZoom(event)) {
+    // Keep the page and the track list still, and keep browser zoom and
+    // modifier-scroll slider shortcuts from also handling this wheel.
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = options.lane?.getBoundingClientRect();
+    if (!rect) return;
+    const next = zoomTimelineFromWheel(event, rect, options);
+    if (next) options.setView(next);
+    return;
+  }
+  const { scroller } = options;
+  if (!scroller || options.zoom <= 1) return;
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+    ? event.deltaX
+    : event.shiftKey
+      ? event.deltaY
+      : 0;
+  if (delta === 0) return;
+  event.preventDefault();
+  scroller.scrollLeft += delta;
 }
 
 type TimelineKeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'preventDefault'>;

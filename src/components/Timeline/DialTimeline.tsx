@@ -21,7 +21,7 @@ import { clamp } from '../../transition-math';
 import { buildCopyInstruction, copyText } from '../../copy-instruction';
 import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../../dropdown-position';
 import { startPointerGesture, type StopGesture } from '../../pointer-gesture';
-import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../../timeline/adapter';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture, wheelTimeline } from '../../timeline/adapter';
 import { isDevDefault } from '../../env';
 import { ICON_CHEVRON, ICON_CHECK, ICON_CLIPBOARD_PLAIN, ICON_PAUSE, ICON_PLAY, ICON_REPLAY } from '../../icons';
 import { findControl } from '../../shortcut-utils';
@@ -526,18 +526,36 @@ const TimelineSection = memo(function TimelineSection({
     ));
   }, [meta.duration, pxPerSecond, visibleDuration]);
 
-  const handleTimelineWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const scroller = horizontalScrollRef.current;
-    if (!scroller || zoom <= 1) return;
-    const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY)
-      ? e.deltaX
-      : e.shiftKey
-        ? e.deltaY
-        : 0;
-    if (horizontalDelta === 0) return;
-    e.preventDefault();
-    scroller.scrollLeft += horizontalDelta;
-  }, [zoom]);
+  // React's onWheel is passive, so Cmd-scroll zoom needs a native listener to
+  // keep the page and track list from scrolling. Wheel events can outpace
+  // renders, so each one builds on the last view it set.
+  const timelineBodyRef = useRef<HTMLDivElement>(null);
+  const wheelViewRef = useRef({ zoom, viewStart: safeViewStart });
+  wheelViewRef.current = { zoom, viewStart: safeViewStart };
+  const handleTimelineWheel = (e: WheelEvent) => {
+    wheelTimeline(e, {
+      ...wheelViewRef.current,
+      duration: meta.duration,
+      maxZoom,
+      lane: laneAreaRef.current,
+      scroller: horizontalScrollRef.current,
+      setView(view) {
+        wheelViewRef.current = view;
+        setZoom(view.zoom);
+        setViewStart(view.viewStart);
+      },
+    });
+  };
+  const handleTimelineWheelRef = useRef(handleTimelineWheel);
+  handleTimelineWheelRef.current = handleTimelineWheel;
+
+  useEffect(() => {
+    const body = timelineBodyRef.current;
+    if (!open || !body) return;
+    const listener = (e: WheelEvent) => handleTimelineWheelRef.current(e);
+    body.addEventListener('wheel', listener, { passive: false });
+    return () => body.removeEventListener('wheel', listener);
+  }, [open]);
 
   // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
   // Shift-drag first restores the full 1x range.
@@ -947,8 +965,8 @@ const TimelineSection = memo(function TimelineSection({
 
       {open && (
         <div
+          ref={timelineBodyRef}
           className="dialkit-timeline-body"
-          onWheel={handleTimelineWheel}
           onPointerDown={handleTrackPointerDown}
         >
           <div className="dialkit-timeline-grid">
@@ -958,7 +976,7 @@ const TimelineSection = memo(function TimelineSection({
                 ref={laneAreaRef}
                 className="dialkit-timeline-ruler"
                 onPointerDown={handleRulerPointerDown}
-                title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
+                title="Drag to seek · Option-drag or Cmd-scroll to zoom · Shift-drag to reset zoom"
               >
                 {fineTicks.map((t) => (
                   <div key={`fine:${t}`} className="dialkit-timeline-tick dialkit-timeline-tick-fine" style={{ left: (t - safeViewStart) * pxPerSecond }} />

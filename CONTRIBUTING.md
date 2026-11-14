@@ -14,6 +14,8 @@ After `npm run build`, run `node scripts/build-toolbar-fixtures.mjs` and serve `
 
 With Playwright and Chrome installed, run `node scripts/test-toolbar-browser.mjs` to check version creation, selection, deletion, numbering, and keyboard focus. `DIALKIT_PLAYWRIGHT` can point to an existing Playwright installation, and `DIALKIT_FIXTURE_URL` overrides the server URL.
 
+Run `node scripts/test-timeline-zoom-browser.mjs` to check Cmd/Ctrl-scroll zoom on the timeline dock in all five frameworks: it zooms around the pointer, blocks page scrolling, and leaves Shift-scroll panning working.
+
 Run `node scripts/test-versions-browser.mjs` to check the version gallery (capture flash, thumbnails, rename, and the all-versions grid) in the plain-HTML bundle and, when the fixtures are served, all five frameworks.
 
 For sticky headers, run `node scripts/build-control-fixtures.mjs` and open `/control-fixtures/react.html?multiple&scroll` in the example app (or use `solid`, `vue`, `svelte`, or `vanilla`). Open the panel, then scroll through both sections: the root header stays visible, each section's title and toolbar pin below it, and the next section pushes the previous one away. Ordinary property folders scroll normally. Append `&inline` to check an embedded panel in the page's scroll area.

@@ -265,7 +265,7 @@ Controls support keyboard navigation without assigned shortcuts. Tab to a slider
 
 ## Timeline
 
-Define animation clips in code. Use the timeline dock to scrub, move, and resize them, or edit their values and curves.
+Define animation clips in code. Use the timeline dock to scrub, zoom, move, and resize them, or edit their values and curves.
 
 ```tsx
 import { DialTimeline, useDialTimeline } from "dialkit";

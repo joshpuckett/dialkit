@@ -7,7 +7,7 @@ import { findControl } from '../shortcut-utils';
 import { clipAnchorRect, isFloatingControlTarget, returnFocusToClip, type AnchorRect } from '../dropdown-position';
 import { buildCopyInstruction, copyText } from '../copy-instruction';
 import { startPointerGesture, type StopGesture } from '../pointer-gesture';
-import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture } from '../timeline/adapter';
+import { clampDockHeight, isTimeInView, pressClipFromKey, resizeDockFromKey, seekFromKey, startClipDrag, startScrubGesture, wheelTimeline } from '../timeline/adapter';
 import { ICON_CHEVRON, ICON_PLAY, ICON_PAUSE, ICON_REPLAY, ICON_CLIPBOARD_PLAIN, ICON_CHECK } from '../icons';
 import { mountControlRenderer } from './ControlRenderer';
 import { mountPresetManager } from './menus';
@@ -245,7 +245,7 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
   const grid = element('div', 'dialkit-timeline-grid');
   const rulerRow = element('div', 'dialkit-timeline-row dialkit-timeline-ruler-row');
   const ruler = element('div', 'dialkit-timeline-ruler');
-  ruler.title = 'Drag to seek · Option-drag to zoom · Shift-drag to reset zoom';
+  ruler.title = 'Drag to seek · Option-drag or Cmd-scroll to zoom · Shift-drag to reset zoom';
   rulerRow.append(element('div', 'dialkit-timeline-label'), ruler);
   grid.append(rulerRow);
   const playhead = element('div', 'dialkit-timeline-playhead-control');
@@ -445,11 +445,19 @@ function mountSection(host: HTMLElement, initial: TimelineMeta, options: DialTim
     render();
   });
   body.addEventListener('wheel', event => {
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
-    if (zoom > 1 && delta) {
-      event.preventDefault();
-      scroll.scrollLeft += delta;
-    }
+    wheelTimeline(event, {
+      duration: meta.duration,
+      maxZoom: maxZoom(),
+      zoom,
+      viewStart,
+      lane: ruler,
+      scroller: scroll,
+      setView(view) {
+        zoom = view.zoom;
+        viewStart = view.viewStart;
+        render();
+      },
+    });
   }, { passive: false });
   function toggleTracks(clipKey: string) {
     if (!tracks.delete(clipKey))

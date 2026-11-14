@@ -11,6 +11,7 @@
     normalizeTimelineValuesForCopy,
     seekFromKey,
     startScrubGesture,
+    wheelTimeline,
   } from 'dialkit/timeline';
   import type {
     TimelineClipMeta,
@@ -354,15 +355,18 @@
   }
 
   function handleTimelineWheel(event: WheelEvent) {
-    if (!horizontalScrollElement || zoom <= 1) return;
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-      ? event.deltaX
-      : event.shiftKey
-        ? event.deltaY
-        : 0;
-    if (delta === 0) return;
-    event.preventDefault();
-    horizontalScrollElement.scrollLeft += delta;
+    wheelTimeline(event, {
+      duration: meta.duration,
+      maxZoom,
+      zoom,
+      viewStart: safeViewStart,
+      lane: laneArea,
+      scroller: horizontalScrollElement,
+      setView(view) {
+        zoom = view.zoom;
+        viewStart = view.viewStart;
+      },
+    });
   }
 
   // Dragging scrubs. Option/Alt-drag preserves detailed zooming, while
@@ -630,7 +634,7 @@
             bind:this={laneArea}
             class="dialkit-timeline-ruler"
             onpointerdown={handleRulerPointerDown}
-            title="Drag to seek · Option-drag to zoom · Shift-drag to reset zoom"
+            title="Drag to seek · Option-drag or Cmd-scroll to zoom · Shift-drag to reset zoom"
           >
             {#each ticks.fine as time}
               <div class="dialkit-timeline-tick dialkit-timeline-tick-fine" style:left={`${(time - safeViewStart) * pxPerSecond}px`}></div>
